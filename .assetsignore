@@ -1,0 +1,14 @@
+**/node_modules
+**/.git
+**/.github
+supabase
+src
+.env*
+.gitignore
+.assetsignore
+cloudflare-worker.js
+package.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
+wrangler.jsonc
+README.md

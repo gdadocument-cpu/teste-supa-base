@@ -1,5 +1,5 @@
-import "@supabase/functions-js/edge-runtime.d.ts"
-import { withSupabase } from "@supabase/server"
+import "jsr:@supabase/functions-js@2.111.0/edge-runtime.d.ts"
+import { createClient } from "npm:@supabase/supabase-js@2"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,8 +10,17 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: corsHeaders })
 
-const authenticated = withSupabase({ auth: "user" }, async (_req, ctx) => {
-  const { data: authData, error: authError } = await ctx.supabase.auth.getUser()
+const authenticated = async (req: Request) => {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? ""
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+  const authorization = req.headers.get("Authorization") ?? ""
+  const userClient = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: authorization } },
+    auth: { persistSession: false },
+  })
+  const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } })
+  const { data: authData, error: authError } = await userClient.auth.getUser()
   if (authError || !authData.user) return json({ success: false, error: "Session invalide." }, 401)
 
   const discordIdentity = authData.user.identities?.find((identity) => identity.provider === "discord")
@@ -21,7 +30,6 @@ const authenticated = withSupabase({ auth: "user" }, async (_req, ctx) => {
     return json({ success: false, error: "Le compte Discord n’est pas vérifiable." }, 403)
   }
 
-  const admin = ctx.supabaseAdmin
   const { data: existing, error: profileError } = await admin
     .from("profiles")
     .select("id,auth_user_id,member_id,display_name,discord_id,access_level,active")
@@ -68,10 +76,15 @@ const authenticated = withSupabase({ auth: "user" }, async (_req, ctx) => {
     profile = updated
   }
 
-  const [{ data: grants }, { data: rosterMember }] = await Promise.all([
+  const [{ data: grants }, { data: rosterMember }, { data: defcon }] = await Promise.all([
     admin.from("profile_permissions").select("permission_code").eq("profile_id", profile.id),
-    admin.from("current_gda_roster").select("matricule,grade,steam_id,discord_id,sanction").eq("discord_id", discordId).maybeSingle(),
+    admin.from("current_gda_roster").select("matricule,grade,steam_id,discord_id,sanction,specializations").eq("discord_id", discordId).maybeSingle(),
+    admin.from("defcon_state").select("level").eq("singleton", true).maybeSingle(),
   ])
+
+  const accessLevel = String(rosterMember?.matricule ?? profile.display_name).toUpperCase() === "MILO"
+    ? "owner"
+    : profile.access_level
 
   return json({
     success: true,
@@ -82,11 +95,13 @@ const authenticated = withSupabase({ auth: "user" }, async (_req, ctx) => {
       discordId,
       steamId: rosterMember?.steam_id ?? null,
       sanction: rosterMember?.sanction || "Clean",
-      accessLevel: profile.access_level,
+      specialisations: rosterMember?.specializations ?? [],
+      accessLevel,
       permissions: grants?.map((grant) => grant.permission_code) ?? [],
     },
+    defcon: defcon?.level ?? 0,
   })
-})
+}
 
 export default {
   fetch(req: Request) {

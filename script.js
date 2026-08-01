@@ -1,5 +1,5 @@
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbwQ1OJoI3wgBkViyxMEMmYC5jbxqfHevWf4cuEnewi5er5pPSWovSJM2UgoddhrB955kA/exec";
+  "https://hiothrwlpmulpcwwjxqf.supabase.co/functions/v1/gda-api";
 
 const username = document.getElementById("username");
 const loginForm = document.getElementById("login");
@@ -736,7 +736,14 @@ async function securiserReponseJsonGDA(reponse) {
 
 function fetchApiAvecDelaiGDA(ressource, options) {
   const controleur = new AbortController();
+  const sessionToken = sessionStorage.getItem("sessionTokenDiscord") || "";
+  const entetes = new Headers((options && options.headers) || {});
+  if (window.gdaSupabase && window.gdaSupabase.publishableKey) {
+    entetes.set("apikey", window.gdaSupabase.publishableKey);
+  }
+  if (sessionToken) entetes.set("Authorization", "Bearer " + sessionToken);
   const optionsFinales = Object.assign({}, options || {}, {
+    headers: entetes,
     signal: controleur.signal
   });
   const signalExterne = options && options.signal;
@@ -829,7 +836,7 @@ window.fetch = function(ressource, options) {
   if (adresse && adresse.startsWith(API_URL) && sessionToken) {
     hydraterCacheSessionGDA(sessionToken);
     const url = new URL(adresse);
-    url.searchParams.set("sessionToken", sessionToken);
+    url.searchParams.delete("sessionToken");
     // L'identité provient exclusivement de la session Discord. Retirer ce
     // paramètre rend les URLs de préchargement et d'ouverture strictement
     // identiques, donc réellement partageables par le cache.
@@ -1048,6 +1055,42 @@ function prechargerDonneesGDA() {
 loginForm.addEventListener("submit", async function(e) {
   e.preventDefault();
 
+  {
+    const identifiantSupabase = username.value.trim();
+    if (!identifiantSupabase) {
+      alert("Veuillez saisir votre matricule.");
+      return;
+    }
+    if (!window.gdaSupabase) {
+      alert("Le client Supabase n’est pas disponible.");
+      return;
+    }
+    sessionStorage.setItem("gdaMatriculeConnexion", identifiantSupabase);
+    sessionStorage.setItem(
+      "gdaResterConnecte",
+      rememberDiscord.checked ? "1" : "0"
+    );
+    try {
+      loginButton.disabled = true;
+      username.disabled = true;
+      rememberDiscord.disabled = true;
+      loading.style.display = "block";
+      bar.style.display = "none";
+      percent.style.display = "none";
+      bootText.textContent = "Ouverture de la connexion Discord…";
+      const redirectTo = new URL("index.html", window.location.href).href;
+      await window.gdaSupabase.connexionDiscord(redirectTo);
+      return;
+    } catch (erreur) {
+      loginButton.disabled = false;
+      username.disabled = false;
+      rememberDiscord.disabled = false;
+      loading.style.display = "none";
+      alert(erreur.message || "Impossible d’ouvrir la connexion Discord.");
+      return;
+    }
+  }
+
   const identifiant = username.value.trim();
 
   if (!identifiant) {
@@ -1125,6 +1168,56 @@ loginForm.addEventListener("submit", async function(e) {
 });
 
 async function tenterRestaurationDiscord() {
+  if (window.gdaSupabase) {
+    try {
+      const session = await window.gdaSupabase.session();
+      if (!session) return;
+      const resultatProfil = await window.gdaSupabase.profil();
+      const profil = resultatProfil.profile || {};
+      const matriculeDemande = sessionStorage.getItem("gdaMatriculeConnexion") || "";
+      if (
+        matriculeDemande &&
+        String(matriculeDemande).trim().toLocaleLowerCase("fr") !==
+          String(profil.matricule || "").trim().toLocaleLowerCase("fr")
+      ) {
+        await window.gdaSupabase.deconnexion();
+        afficherAccesRefuse(
+          matriculeDemande,
+          "Discord non vérifié",
+          "Ce compte Discord correspond au matricule " +
+            (profil.matricule || "inconnu") + "."
+        );
+        return;
+      }
+      sessionStorage.removeItem("gdaMatriculeConnexion");
+      terminerConnexionDiscord({
+        success: true,
+        nom: profil.matricule,
+        matricule: profil.matricule,
+        grade: profil.grade,
+        gradeAffiche: profil.grade,
+        specialisation: Array.isArray(profil.specialisations)
+          ? profil.specialisations.join(", ")
+          : "",
+        sessionToken: session.access_token,
+        permissions: Array.isArray(profil.permissions) ? profil.permissions : [],
+        proprietaire: profil.accessLevel === "owner",
+        coproprietaire: profil.coproprietaire === true,
+        defcon: resultatProfil.defcon
+      }, profil.matricule || "");
+      return;
+    } catch (erreur) {
+      console.error("Connexion Supabase refusée :", erreur);
+      try { await window.gdaSupabase.deconnexion(); } catch (_) { /* rien */ }
+      afficherAccesRefuse(
+        username.value.trim() || "Compte Discord",
+        "Accès refusé",
+        erreur.message || "Profil GDA introuvable."
+      );
+      return;
+    }
+  }
+
   let souvenir;
   try {
     souvenir = JSON.parse(localStorage.getItem(CLE_SOUVENIR_DISCORD) || "null");

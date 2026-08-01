@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "build": "esbuild src/supabase-test.js --bundle --minify --format=iife --outfile=supabase-test.bundle.js",
+    "build": "esbuild src/supabase-test.js --bundle --minify --format=iife --outfile=supabase-test.bundle.js && esbuild src/supabase-app.js --bundle --minify --format=iife --outfile=supabase-app.bundle.js",
     "supabase": "supabase",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",

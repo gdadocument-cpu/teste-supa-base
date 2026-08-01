@@ -58,9 +58,14 @@ export default {
       });
     }
 
+    const requestUrl = new URL(request.url);
+    if (requestUrl.pathname === "/") {
+      return Response.redirect(new URL("/supabase-test.html", requestUrl), 302);
+    }
+
     const asset = await env.ASSETS.fetch(request);
     const headers = new Headers(asset.headers);
-    const url = new URL(request.url);
+    const url = requestUrl;
 
     for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
       headers.set(name, value);

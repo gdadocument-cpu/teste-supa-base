@@ -4,7 +4,7 @@ const SECURITY_HEADERS = {
     "script-src 'self' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
-    "connect-src 'self' https://script.google.com https://script.googleusercontent.com https://opensheet.elk.sh",
+    "connect-src 'self' https://hiothrwlpmulpcwwjxqf.supabase.co wss://hiothrwlpmulpcwwjxqf.supabase.co https://script.google.com https://script.googleusercontent.com https://opensheet.elk.sh",
     "frame-src 'self' https://dashboardmdcgda.github.io https://docs.google.com https://sites.google.com",
     "base-uri 'self'",
     "form-action 'self'",

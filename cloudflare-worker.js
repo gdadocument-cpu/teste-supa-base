@@ -59,10 +59,6 @@ export default {
     }
 
     const requestUrl = new URL(request.url);
-    if (requestUrl.pathname === "/") {
-      return Response.redirect(new URL("/index.html", requestUrl), 302);
-    }
-
     const asset = await env.ASSETS.fetch(request);
     const headers = new Headers(asset.headers);
     const url = requestUrl;

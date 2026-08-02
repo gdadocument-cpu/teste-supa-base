@@ -50,9 +50,9 @@ async function chargerEffectifPublicGDA(forcer, silencieux) {
       );
     }
 
-    effectifPublicMembres = Array.isArray(resultat.membres)
-      ? resultat.membres
-      : [];
+    effectifPublicMembres = typeof trierMembresEffectif === "function"
+      ? trierMembresEffectif(resultat.membres)
+      : (Array.isArray(resultat.membres) ? resultat.membres : []);
     effectifPublicProchaineActualisation = Number(
       resultat.prochaineActualisation || 0
     );

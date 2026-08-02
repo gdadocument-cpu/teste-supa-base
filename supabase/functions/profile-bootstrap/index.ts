@@ -76,8 +76,9 @@ const authenticated = async (req: Request) => {
     profile = updated
   }
 
-  const [{ data: grants }, { data: rosterMember }, { data: defcon }] = await Promise.all([
+  const [{ data: grants }, { data: allPermissions }, { data: rosterMember }, { data: defcon }] = await Promise.all([
     admin.from("profile_permissions").select("permission_code").eq("profile_id", profile.id),
+    admin.from("permissions").select("code"),
     admin.from("current_gda_roster").select("matricule,grade,steam_id,discord_id,sanction,specializations").eq("discord_id", discordId).maybeSingle(),
     admin.from("defcon_state").select("level").eq("singleton", true).maybeSingle(),
   ])
@@ -85,6 +86,10 @@ const authenticated = async (req: Request) => {
   const accessLevel = String(rosterMember?.matricule ?? profile.display_name).toUpperCase() === "MILO"
     ? "owner"
     : profile.access_level
+  const grantedCodes = grants?.map((grant) => grant.permission_code) ?? []
+  const permissionCodes = accessLevel === "owner"
+    ? (allPermissions?.map((permission) => permission.code) ?? grantedCodes)
+    : grantedCodes
 
   return json({
     success: true,
@@ -97,7 +102,8 @@ const authenticated = async (req: Request) => {
       sanction: rosterMember?.sanction || "Clean",
       specialisations: rosterMember?.specializations ?? [],
       accessLevel,
-      permissions: grants?.map((grant) => grant.permission_code) ?? [],
+      coproprietaire: accessLevel !== "owner" && permissionCodes.includes("role_staff_total"),
+      permissions: permissionCodes,
     },
     defcon: defcon?.level ?? 0,
   })

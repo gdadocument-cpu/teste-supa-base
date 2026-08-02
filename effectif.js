@@ -1101,7 +1101,7 @@ function ouvrirFicheMembre(index) {
 
 
 function ouvrirEditionMembre(membre, index) {
-  if (!effectifPeutModifier || !membre) {
+  if (!membre) {
     return;
   }
 

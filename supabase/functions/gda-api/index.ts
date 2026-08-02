@@ -133,11 +133,9 @@ const authenticated = async (req: Request) => {
       return data
     }
 
-    const suiviAttribueAuProfil = (row: any) => {
-      if (row.instructor_profile_id === profile.id || row.manager_profile_id === profile.id) return true
-      if (normalise(row.instructor_snapshot) === normalise(actorName)) return true
-      return normalise(matriculeDepuisLibelleGerant(row.manager_snapshot)) === normalise(actorName)
-    }
+    const suiviAttribueAInstructeur = (row: any) => row.instructor_profile_id
+      ? row.instructor_profile_id === profile.id
+      : normalise(row.instructor_snapshot) === normalise(actorName)
 
     const audit = async (libelle: string, cible = "", details = "") => {
       await admin.from("audit_logs").insert({
@@ -1119,7 +1117,7 @@ const authenticated = async (req: Request) => {
           row.end_after_absence_on = absence.dateFinApresAbsence
         }))
         const rows = action === "recupererMesSuivisInstructeur"
-          ? (data ?? []).filter(suiviAttribueAuProfil)
+          ? (data ?? []).filter(suiviAttribueAInstructeur)
           : (data ?? [])
         const actifs = rows.filter((row: any) => !!row.end_on)
         const nouveaux = rows.filter((row: any) => !row.end_on)
@@ -1184,7 +1182,7 @@ const authenticated = async (req: Request) => {
         query = /^\d+$/.test(suiviId) ? query.eq("id", Number(suiviId)) : query.eq("external_id", suiviId)
         const { data: suivi, error } = await query.maybeSingle()
         if (error || !suivi) throw new Error("Suivi introuvable.")
-        if (!owner && !suiviAttribueAuProfil(suivi)) throw new Error("Ce suivi ne vous appartient pas.")
+        if (!suiviAttribueAInstructeur(suivi)) throw new Error("Ce suivi appartient uniquement à l’instructeur désigné.")
         const { error: updateError } = await admin.from("training_followups").update({ comment: texte(payload.commentaire) || null, service_count: Math.max(0, nombre(payload.prisesService)) }).eq("id", suivi.id)
         if (updateError) throw updateError
         return json({ success: true, message: "Suivi enregistré." })

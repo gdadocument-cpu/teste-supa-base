@@ -7,13 +7,13 @@ let gerantsDisponiblesSuivi = [];
 let gerantConnecteSuivi = "";
 let suivisFormationPeutModifier = false;
 let suivisFormationInstructeurCharges = false;
-const CACHE_SUIVIS_FORMATION_INSTRUCTEUR = "gdaSuivisFormationInstructeurV2:";
+const CACHE_SUIVIS_FORMATION_INSTRUCTEUR = "gdaSuivisFormationInstructeurV3:";
 const DUREE_CACHE_SUIVIS_FORMATION_INSTRUCTEUR = 5 * 60 * 1000;
 let suivisFormationInstructeurChargesLe = 0;
 let chargementPostItsInstructeur = 0;
 let relancePostItsInstructeur = null;
 let nombreRelancesPostItsInstructeur = 0;
-const CACHE_POST_ITS_INSTRUCTEUR = "gdaPostItsInstructeur:";
+const CACHE_POST_ITS_INSTRUCTEUR = "gdaPostItsInstructeurV2:";
 const DUREE_CACHE_POST_ITS_INSTRUCTEUR = 2 * 60 * 1000;
 let cachePostItsInstructeurValide = false;
 let cachePostItsInstructeurDate = 0;
@@ -409,7 +409,9 @@ function afficherAccueilSuivisFormationInstructeur() {
     });
   });
   document.querySelectorAll("[data-modifier-suivi]").forEach(function (bouton) {
-    bouton.addEventListener("click", function () {
+    bouton.addEventListener("click", function (evenement) {
+      evenement.preventDefault();
+      evenement.stopPropagation();
       const suivi = suivisFormationInstructeur.find(function (element) {
         return element.id === bouton.dataset.modifierSuivi;
       });
@@ -671,7 +673,9 @@ function afficherListeSuivisFormationInstructeur() {
     });
   });
   document.querySelectorAll("[data-modifier-suivi]").forEach(function (bouton) {
-    bouton.addEventListener("click", function () {
+    bouton.addEventListener("click", function (evenement) {
+      evenement.preventDefault();
+      evenement.stopPropagation();
       const suivi = suivisFormationInstructeur.find(function (element) {
         return element.id === bouton.dataset.modifierSuivi;
       });
@@ -751,7 +755,7 @@ function creerActionsSuiviInstructeur(suivi) {
 }
 
 function afficherModificationSuiviInstructeur(suivi) {
-  if (!suivisFormationPeutModifier) return;
+  if (!suivi) return;
   const workspace = document.getElementById("workspace");
   const options = instructeursDisponiblesSuivi.map(function (instructeur) {
     const selectionne = normaliserValeurRapportInstructeur(instructeur.nom) ===

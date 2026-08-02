@@ -129,6 +129,24 @@ const authenticated = async (req: Request) => {
       })
     }
 
+    const synchroniserPresenceMembre = async (memberId: number | null | undefined) => {
+      if (!memberId) return
+      const today = aujourdHui()
+      const { count, error: countError } = await admin
+        .from("absences")
+        .select("id", { count: "exact", head: true })
+        .eq("member_id", memberId)
+        .eq("active", true)
+        .lte("starts_on", today)
+        .gte("ends_on", today)
+      if (countError) throw countError
+      const { error: updateError } = await admin
+        .from("members")
+        .update({ presence: (count ?? 0) > 0 ? "Absent" : "Présent" })
+        .eq("id", memberId)
+      if (updateError) throw updateError
+    }
+
     const membreClient = (member: any, publicOnly = false) => {
       const roster = delayedById.get(member.id) ?? delayedByName.get(normalise(member.matricule))
       const gradeGda = roster?.grade ?? member.grade
@@ -204,8 +222,8 @@ const authenticated = async (req: Request) => {
           ligne: row.id,
           nom: row.matricule_snapshot,
           grade: row.grade_snapshot,
-          dateDebut: dateFr(row.starts_on),
-          dateFin: dateFr(row.ends_on),
+          dateDebut: isoDate(row.starts_on) || "",
+          dateFin: isoDate(row.ends_on) || "",
           raison: row.reason,
           statut: actif ? "ACTIF" : "TERMINE",
           auteur: row.profiles?.display_name || "",
@@ -227,15 +245,15 @@ const authenticated = async (req: Request) => {
           id: row.external_id,
           nom: row.matricule_snapshot,
           grade: row.grade_snapshot,
-          dateCreation: dateHeureFr(row.created_at),
-          dateModification: dateHeureFr(row.updated_at),
-          dateDebut: dateFr(row.starts_on),
-          dateFin: dateFr(row.ends_on),
+          dateCreation: row.created_at || "",
+          dateModification: row.updated_at || "",
+          dateDebut: isoDate(row.starts_on) || "",
+          dateFin: isoDate(row.ends_on) || "",
           raison: row.reason,
           statut,
           statutBase: base,
           decidePar: row.profiles?.display_name || "",
-          dateDecision: dateHeureFr(row.decided_at),
+          dateDecision: row.decided_at || "",
           motifRefus: row.refusal_reason || "",
           notificationLue: row.notification_read === true,
           notificationSupprimee: row.notification_deleted === true,
@@ -255,7 +273,7 @@ const authenticated = async (req: Request) => {
         historiques: absences.filter((absence: any) => absence.statut !== "ACTIF"),
         demandesEnAttente: demandes.filter((demande: any) => demande.statutBase === "EN_ATTENTE"),
         peutGerer: has("absences_gerer"),
-        peutModifier: officer,
+        peutModifier: has("absences_gerer") || has("disponibilites_modifier_supprimer"),
         peutSupprimer: has("disponibilites_modifier_supprimer"),
       }
     }
@@ -594,15 +612,22 @@ const authenticated = async (req: Request) => {
           if (row.status !== "EN_ATTENTE") throw new Error("Cette demande n’est plus modifiable.")
           const debut = isoDate(payload.dateDebut), fin = isoDate(payload.dateFin)
           if (!debut || !fin || fin < debut) throw new Error("Dates d’absence invalides.")
-          await admin.from("absence_requests").update({ starts_on: debut, ends_on: fin, reason: texte(payload.raison) }).eq("id", row.id)
+          const { error } = await admin.from("absence_requests").update({ starts_on: debut, ends_on: fin, reason: texte(payload.raison) }).eq("id", row.id)
+          if (error) throw error
         } else if (action === "supprimerDemandeAbsence") {
           if (!['EN_ATTENTE', 'REFUSEE', 'TERMINEE'].includes(row.status)) throw new Error("Cette absence validée est encore active.")
-          await admin.from("absence_requests").delete().eq("id", row.id)
+          const { error } = await admin.from("absence_requests").delete().eq("id", row.id)
+          if (error) throw error
         } else {
           if (row.status !== "VALIDEE") throw new Error("Seule une absence validée peut être terminée.")
           const today = aujourdHui()
-          await admin.from("absence_requests").update({ status: "TERMINEE", ends_on: today }).eq("id", row.id)
-          if (row.absence_id) await admin.from("absences").update({ ends_on: today, active: false }).eq("id", row.absence_id)
+          const { error } = await admin.from("absence_requests").update({ status: "TERMINEE", ends_on: today }).eq("id", row.id)
+          if (error) throw error
+          if (row.absence_id) {
+            const { error: absenceError } = await admin.from("absences").update({ ends_on: today, active: false }).eq("id", row.absence_id)
+            if (absenceError) throw absenceError
+          }
+          await synchroniserPresenceMembre(row.member_id)
         }
         await audit(action, actorName)
         return json({ success: true, message: "Demande mise à jour.", nom: actorName, grade: actorGrade, demandes: await demandesClient(true) })
@@ -621,7 +646,9 @@ const authenticated = async (req: Request) => {
           if (error) throw error
           absenceId = absence.id
         }
-        await admin.from("absence_requests").update({ status: accepter ? "VALIDEE" : "REFUSEE", decided_by_profile_id: profile.id, decided_at: new Date().toISOString(), refusal_reason: accepter ? null : texte(payload.motifRefus), absence_id: absenceId, notification_read: false, notification_deleted: false }).eq("id", row.id)
+        const { error: requestError } = await admin.from("absence_requests").update({ status: accepter ? "VALIDEE" : "REFUSEE", decided_by_profile_id: profile.id, decided_at: new Date().toISOString(), refusal_reason: accepter ? null : texte(payload.motifRefus), absence_id: absenceId, notification_read: false, notification_deleted: false }).eq("id", row.id)
+        if (requestError) throw requestError
+        if (accepter) await synchroniserPresenceMembre(row.member_id)
         await audit(accepter ? "Demande d’absence acceptée" : "Demande d’absence refusée", row.matricule_snapshot)
         return json(await disponibilites(accepter ? "Demande d’absence acceptée." : "Demande d’absence refusée."))
       }
@@ -629,10 +656,12 @@ const authenticated = async (req: Request) => {
         requirePermission("absences_gerer")
         const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(payload.nom))
         const roster = member ? delayedById.get(member.id) : delayedByName.get(normalise(payload.nom))
+        if (!member && !roster) throw new Error("Membre introuvable.")
         const debut = isoDate(payload.dateDebut), fin = isoDate(payload.dateFin)
         if (!debut || !fin || fin < debut) throw new Error("Dates d’absence invalides.")
         const { error } = await admin.from("absences").insert({ external_id: idExterne(), member_id: member?.id ?? null, matricule_snapshot: roster?.matricule ?? member?.matricule ?? texte(payload.nom), grade_snapshot: roster?.grade ?? member?.grade ?? "Non renseigné", starts_on: debut, ends_on: fin, reason: texte(payload.raison), active: true, declared_by_profile_id: profile.id })
         if (error) throw error
+        await synchroniserPresenceMembre(member?.id)
         await audit("Absence ajoutée", roster?.matricule ?? member?.matricule ?? texte(payload.nom))
         return json(await disponibilites("Absence ajoutée."))
       }
@@ -642,13 +671,21 @@ const authenticated = async (req: Request) => {
         if (action === "supprimerAbsence") requirePermission("disponibilites_modifier_supprimer")
         else requirePermission("absences_gerer")
         const id = nombre(payload.ligne)
-        if (action === "supprimerAbsence") await admin.from("absences").delete().eq("id", id)
-        else if (action === "retourAnticipe") await admin.from("absences").update({ ends_on: aujourdHui(), active: false }).eq("id", id)
-        else {
+        const { data: absence, error: findError } = await admin.from("absences").select("id,member_id").eq("id", id).maybeSingle()
+        if (findError || !absence) throw new Error("Absence introuvable.")
+        if (action === "supprimerAbsence") {
+          const { error } = await admin.from("absences").delete().eq("id", id)
+          if (error) throw error
+        } else if (action === "retourAnticipe") {
+          const { error } = await admin.from("absences").update({ ends_on: aujourdHui(), active: false }).eq("id", id)
+          if (error) throw error
+        } else {
           const debut = isoDate(payload.dateDebut), fin = isoDate(payload.dateFin)
           if (!debut || !fin || fin < debut) throw new Error("Dates d’absence invalides.")
-          await admin.from("absences").update({ starts_on: debut, ends_on: fin, reason: texte(payload.raison), active: fin >= aujourdHui() }).eq("id", id)
+          const { error } = await admin.from("absences").update({ starts_on: debut, ends_on: fin, reason: texte(payload.raison), active: fin >= aujourdHui() }).eq("id", id)
+          if (error) throw error
         }
+        await synchroniserPresenceMembre(absence.member_id)
         await audit(action)
         return json(await disponibilites("Absence mise à jour."))
       }

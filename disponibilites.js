@@ -1802,7 +1802,17 @@ function repartirAbsencesSelonDates(
         absence.dateFin
       );
 
+    const statutServeur = String(absence.statut || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toUpperCase();
+
+    const estExplicitementTerminee =
+      statutServeur.includes("TERMINE") ||
+      statutServeur.includes("RETOUR");
+
     const estActive =
+      !estExplicitementTerminee &&
       Boolean(dateDebut && dateFin) &&
       dateDebut.getTime() <=
         aujourdHui.getTime() &&

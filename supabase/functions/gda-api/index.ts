@@ -396,12 +396,16 @@ const authenticated = async (req: Request) => {
       case "enregistrerNote":
       case "modifierMembreEffectif": { // effectif officier instantané uniquement
         requirePermission("effectif_modifier")
-        const cible = texte(payload.nom || payload.matricule)
+        const cible = texte(payload.personne || payload.nom || payload.matricule)
         const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(cible))
         if (!member) throw new Error("Membre introuvable.")
         const patch: Record<string, unknown> = {}
         if (action === "enregistrerNote") patch.notes = texte(payload.note || payload.notes)
         else {
+          const nouveauMatricule = texte(payload.nom) || member.matricule
+          const homonyme = (members ?? []).find((item: any) => item.id !== member.id && normalise(item.matricule) === normalise(nouveauMatricule))
+          if (homonyme) throw new Error("Ce nom ou matricule est déjà utilisé.")
+          patch.matricule = nouveauMatricule
           const fields: Record<string, string> = {
             grade: "grade", steamId: "steam_id", discordId: "discord_id", presence: "presence",
             nombreRapports: "reports_count", observation: "observation", datePromotionRetro: "promotion_changed_on",
@@ -411,10 +415,21 @@ const authenticated = async (req: Request) => {
           if (payload.specialisation !== undefined) patch.specializations = texte(payload.specialisation).split(/[;,]/).map(texte).filter(Boolean)
           if (payload.medaille !== undefined) patch.medals = texte(payload.medaille).split(";").map(texte).filter(Boolean)
         }
-        const { error } = await admin.from("members").update(patch).eq("id", member.id)
+        const { data: updated, error } = await admin.from("members").update(patch).eq("id", member.id).select("*").single()
         if (error) throw error
-        await audit(action === "enregistrerNote" ? "Note modifiée" : "Effectif officier modifié", member.matricule)
-        return json({ success: true, message: "Modification enregistrée dans l’effectif officier." })
+        await audit(action === "enregistrerNote" ? "Note modifiée" : "Effectif officier modifié", updated.matricule)
+        const auteurModifie = profile.member_id === member.id
+        return json({
+          success: true,
+          message: "Modification enregistrée dans l’effectif officier.",
+          membre: membreClient(updated),
+          peutModifier: has("effectif_modifier"),
+          gradeAuteur: auteurModifie ? actorGrade : "",
+          specialisationAuteur: auteurModifie ? (updated.specializations ?? []).join("; ") : undefined,
+          nouvelIdentifiantAuteur: auteurModifie && normalise(updated.matricule) !== normalise(member.matricule)
+            ? updated.matricule
+            : "",
+        })
       }
       case "ajouterMembreEffectif": {
         if (!owner) throw new Error("Ajout réservé au propriétaire.")

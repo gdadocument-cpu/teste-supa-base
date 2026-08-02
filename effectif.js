@@ -1562,6 +1562,9 @@ async function enregistrerModificationsEffectif(
     if (resultat.membre) {
       effectifMembres[index] =
         preparerMembreEffectifOfficier(resultat.membre);
+      memoriserCacheLocalEffectif(
+        sessionStorage.getItem("identifiantUtilisateur") || ""
+      );
     }
 
     ouvrirFicheMembre(index);

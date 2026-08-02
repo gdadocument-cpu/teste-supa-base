@@ -91,6 +91,7 @@ function lireCachePostItsInstructeurGDA() {
     cachePostItsInstructeurValide = !!(
       cache &&
       Array.isArray(cache.suivis) &&
+      cache.suivis.length > 0 &&
       Date.now() - cachePostItsInstructeurDate < DUREE_CACHE_POST_ITS_INSTRUCTEUR
     );
     if (!cachePostItsInstructeurValide) {
@@ -198,6 +199,12 @@ window.addEventListener("load", function () {
       chargerPostItsInstructeurGDA();
     }
   }, 250);
+});
+
+window.addEventListener("focus", function () {
+  if (!sessionStorage.getItem("sessionTokenDiscord")) return;
+  cachePostItsInstructeurValide = false;
+  chargerPostItsInstructeurGDA();
 });
 
 function creerPostItInstructeurGDA(suivi) {

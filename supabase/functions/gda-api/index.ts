@@ -117,6 +117,23 @@ const authenticated = async (req: Request) => {
       modifieLe: defcon?.updated_at ?? "",
     }
 
+    const profilActifParMatricule = async (nom: unknown) => {
+      const matricule = texte(nom)
+      if (!matricule) return null
+      const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(matricule))
+      let query = admin.from("profiles").select("id,member_id,display_name").eq("active", true)
+      query = member ? query.eq("member_id", member.id) : query.ilike("display_name", matricule)
+      const { data, error } = await query.maybeSingle()
+      if (error) throw error
+      return data
+    }
+
+    const suiviAttribueAuProfil = (row: any) => {
+      if (row.instructor_profile_id === profile.id || row.manager_profile_id === profile.id) return true
+      if (normalise(row.instructor_snapshot) === normalise(actorName)) return true
+      return normalise(matriculeDepuisLibelleGerant(row.manager_snapshot)) === normalise(actorName)
+    }
+
     const audit = async (libelle: string, cible = "", details = "") => {
       await admin.from("audit_logs").insert({
         actor_profile_id: profile.id,
@@ -1006,11 +1023,13 @@ const authenticated = async (req: Request) => {
       case "recupererSuivisFormationInstructeur":
       case "recupererMesSuivisInstructeur": {
         let query = admin.from("training_followups").select("*").eq("status", "EN_ATTENTE").order("updated_at", { ascending: false })
-        if (action === "recupererMesSuivisInstructeur") query = query.or(`instructor_profile_id.eq.${profile.id},manager_profile_id.eq.${profile.id}`)
         const { data, error } = await query
         if (error) throw error
-        const actifs = (data ?? []).filter((row: any) => !!row.end_on)
-        const nouveaux = (data ?? []).filter((row: any) => !row.end_on)
+        const rows = action === "recupererMesSuivisInstructeur"
+          ? (data ?? []).filter(suiviAttribueAuProfil)
+          : (data ?? [])
+        const actifs = rows.filter((row: any) => !!row.end_on)
+        const nouveaux = rows.filter((row: any) => !row.end_on)
         if (action === "recupererMesSuivisInstructeur") {
           return json({ success: true, suivis: actifs.map(suiviInstructeurClient) })
         }
@@ -1072,7 +1091,7 @@ const authenticated = async (req: Request) => {
         query = /^\d+$/.test(suiviId) ? query.eq("id", Number(suiviId)) : query.eq("external_id", suiviId)
         const { data: suivi, error } = await query.maybeSingle()
         if (error || !suivi) throw new Error("Suivi introuvable.")
-        if (!owner && suivi.instructor_profile_id !== profile.id && suivi.manager_profile_id !== profile.id) throw new Error("Ce suivi ne vous appartient pas.")
+        if (!owner && !suiviAttribueAuProfil(suivi)) throw new Error("Ce suivi ne vous appartient pas.")
         const { error: updateError } = await admin.from("training_followups").update({ comment: texte(payload.commentaire) || null, service_count: Math.max(0, nombre(payload.prisesService)) }).eq("id", suivi.id)
         if (updateError) throw updateError
         return json({ success: true, message: "Suivi enregistré." })
@@ -1127,13 +1146,22 @@ const authenticated = async (req: Request) => {
         requireInstructor()
         const matricule = texte(payload.matricule)
         const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(matricule))
+        const instructeurNom = texte(payload.instructeur) || actorName
+        const membreInstructeur = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(instructeurNom))
+        if (!membreInstructeur || !(membreInstructeur.specializations ?? []).some((item: string) => normalise(item).includes("INSTRUCTEUR"))) {
+          throw new Error("La personne choisie ne possède pas la spécialisation Instructeur.")
+        }
+        const profilInstructeur = await profilActifParMatricule(instructeurNom)
+        if (!profilInstructeur) throw new Error("Le profil de l’instructeur choisi est introuvable.")
+        const gerantNom = texte(payload.gerant)
+        const profilGerant = gerantNom ? await profilActifParMatricule(matriculeDepuisLibelleGerant(gerantNom)) : null
         const fin = new Date(`${aujourdHui()}T12:00:00Z`); fin.setUTCDate(fin.getUTCDate() + 7)
         const { error } = await admin.from("training_followups").insert({
           external_id: idExterne(), member_id: member?.id ?? null, matricule_snapshot: member?.matricule ?? matricule,
           steam_id: texte(payload.steamId) || member?.steam_id || null, discord_id: texte(payload.discordId) || member?.discord_id || null,
           reports_count: Math.max(0, nombre(payload.nombreRapports)), service_count: Math.max(0, nombre(payload.prisesService)),
-          initial_end_on: fin.toISOString().slice(0, 10), end_on: fin.toISOString().slice(0, 10), instructor_profile_id: profile.id,
-          instructor_snapshot: texte(payload.instructeur) || actorName, manager_snapshot: texte(payload.gerant) || null,
+          initial_end_on: fin.toISOString().slice(0, 10), end_on: fin.toISOString().slice(0, 10), instructor_profile_id: profilInstructeur.id,
+          instructor_snapshot: instructeurNom, manager_profile_id: profilGerant?.id ?? null, manager_snapshot: gerantNom || null,
           comment: texte(payload.commentaire) || null, sanction: texte(payload.sanction) || "Rien", status: "EN_ATTENTE", source: "SITE",
         })
         if (error) throw error
@@ -1177,11 +1205,17 @@ const authenticated = async (req: Request) => {
           })
           if (archiveError) throw archiveError
         } else {
+          const instructeurNom = texte(payload.instructeur) || row.instructor_snapshot
+          const profilInstructeur = await profilActifParMatricule(instructeurNom)
+          if (!profilInstructeur) throw new Error("Le profil de l’instructeur choisi est introuvable.")
+          const gerantNom = texte(payload.gerant) || row.manager_snapshot
+          const profilGerant = gerantNom ? await profilActifParMatricule(matriculeDepuisLibelleGerant(gerantNom)) : null
           const { error: updateError } = await admin.from("training_followups").update({
             matricule_snapshot: texte(payload.matricule) || row.matricule_snapshot, steam_id: texte(payload.steamId) || null,
             discord_id: texte(payload.discordId) || null, reports_count: Math.max(0, nombre(payload.nombreRapports)),
-            service_count: Math.max(0, nombre(payload.prisesService)), instructor_snapshot: texte(payload.instructeur) || row.instructor_snapshot,
-            manager_snapshot: texte(payload.gerant) || row.manager_snapshot, comment: texte(payload.commentaire) || null,
+            service_count: Math.max(0, nombre(payload.prisesService)), instructor_profile_id: profilInstructeur.id,
+            instructor_snapshot: instructeurNom, manager_profile_id: profilGerant?.id ?? row.manager_profile_id,
+            manager_snapshot: gerantNom, comment: texte(payload.commentaire) || null,
             sanction: texte(payload.sanction) || "Rien",
           }).eq("id", row.id)
           if (updateError) throw updateError

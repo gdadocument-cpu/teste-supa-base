@@ -1020,6 +1020,20 @@ const authenticated = async (req: Request) => {
         if (error) throw error
         return json({ success: true, rapports: (data ?? []).map(rapportInstructeurClient), peutAdministrer: officer || instructor, peutModifier: officer || instructor, peutSupprimer: owner })
       }
+      case "verifierMatriculeRapportTestInstructeur": {
+        requireInstructor()
+        const matricule = texte(payload.matricule)
+        if (!matricule) throw new Error("Le matricule définitif est obligatoire.")
+        const existe = (members ?? []).some((member: any) => normalise(member.matricule) === normalise(matricule))
+        return json({
+          success: true,
+          matricule,
+          disponible: !existe,
+          message: existe
+            ? "Ce matricule est déjà présent dans l’effectif."
+            : "Ce matricule est disponible.",
+        })
+      }
       case "recupererSuivisFormationInstructeur":
       case "recupererMesSuivisInstructeur": {
         let query = admin.from("training_followups").select("*").eq("status", "EN_ATTENTE").order("updated_at", { ascending: false })
@@ -1102,6 +1116,7 @@ const authenticated = async (req: Request) => {
         const isTest = action === "enregistrerRapportTestInstructeur"
         const matricule = texte(payload.matricule)
         const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(matricule))
+        if (isTest && member) throw new Error("Ce matricule est déjà présent dans l’effectif. Vérifiez-en un autre.")
         const score = isTest ? nombre(payload.note) : null
         const row = {
           external_id: idExterne(), created_by_profile_id: profile.id, instructor_snapshot: actorName,

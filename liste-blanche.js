@@ -118,7 +118,7 @@ function creerPanneauListeBlancheGDA() {
     return `<label class="liste-blanche-permission ${staff ? "role-staff" : ""} ${visiteur ? "role-visiteur" : ""}">
       <input type="checkbox" data-permission="${echapperListeBlancheGDA(permission.cle)}"
         ${staff ? "data-role-staff-total" : ""} ${visiteur ? "data-role-visiteur" : ""} ${accordees.includes(permission.cle) ? "checked" : ""}>
-      <span>${echapperListeBlancheGDA(permission.libelle)}</span>
+      <span>${echapperListeBlancheGDA(permission.libelle || permission.nom || permission.cle)}</span>
     </label>`;
   }).join("");
   const peutSupprimer = utilisateurPeutSupprimerListeBlancheGDA();

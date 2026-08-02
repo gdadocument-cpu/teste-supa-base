@@ -715,7 +715,7 @@ const authenticated = async (req: Request) => {
           const assigned = linked ? (grantRows ?? []).filter((grant: any) => grant.profile_id === linked.id).map((grant: any) => grant.permission_code) : []
           return { id: row.external_id, identifiant: row.login_identifier, discordId: row.discord_id, actif: row.active, permissions: assigned, roleStaff: assigned.includes("role_staff_total"), roleVisiteur: assigned.includes("role_visiteur"), creeLe: dateHeureFr(row.created_at), modifieLe: dateHeureFr(row.updated_at) }
         })
-        return json({ success: true, personnes, permissions: (permissionRows ?? []).map((item: any) => ({ cle: item.code, nom: item.label })), peutModifier: true, peutSupprimer: owner })
+        return json({ success: true, personnes, permissions: (permissionRows ?? []).map((item: any) => ({ cle: item.code, libelle: item.label })), peutModifier: true, peutSupprimer: owner })
       }
       case "ajouterListeBlanche":
       case "modifierListeBlanche":
@@ -774,7 +774,7 @@ const authenticated = async (req: Request) => {
         ])
         return json({
           success: true, auteurProprietaire: owner, auteurCoproprietaire: !owner && permissions.has("role_staff_total"), proprietaireNom: (allProfiles ?? []).find((item: any) => item.access_level === "owner")?.display_name || "Milo",
-          permissions: (allPermissions ?? []).map((item: any) => ({ cle: item.code, nom: item.label })),
+          permissions: (allPermissions ?? []).map((item: any) => ({ cle: item.code, libelle: item.label })),
           utilisateurs: (allProfiles ?? []).map((item: any) => ({
             id: item.id, nom: item.display_name, grade: delayedById.get(item.member_id)?.grade ?? memberById.get(item.member_id)?.grade ?? "Visiteur",
             discordId: item.discord_id, niveauAcces: item.access_level, actif: item.active,

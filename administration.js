@@ -223,7 +223,7 @@ function creerCarteAdministration(utilisateur) {
           ${cochee ? "checked" : ""}
           ${accesPermanent ? "disabled" : ""}
         >
-        <span>${echapperHTMLAdministration(permission.libelle)}</span>
+        <span>${echapperHTMLAdministration(permission.libelle || permission.nom || permission.cle)}</span>
       </label>
     `;
   }).join("");

@@ -18,6 +18,17 @@ const SPECIALISATIONS = [
   "Responsable INST", "CO-Responsable INST", "Instructeur en chef", "Instructeur",
   "Médecin", "Instructeur et Médecin",
 ]
+const DUREES_BLACKLIST = [
+  "1 semaine", "2 semaines", "3 semaines", "1 mois",
+  "2 mois", "3 mois", "6 mois", "Permanent",
+]
+const MEDAILLES = [
+  "🏅 | Croix de la Bravoure", "🏅 | Médaille du Mérite",
+  "🏅 | Médaille de l'Activité", "🏅 | Médaille de l'Ancienneté",
+  "🏅 | Médaille du Vétéran", "🏅 | Médaille de la Défense",
+  "🏅 | Insigne Médecin", "🏅 | Insigne GSPR", "🏅 | Insigne Instructeur",
+  "⚜️ | Ancien Gérant",
+]
 
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: corsHeaders })
@@ -31,6 +42,25 @@ const isoDate = (value: unknown) => {
   if (!input) return null
   const fr = input.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
   return fr ? `${fr[3]}-${fr[2]}-${fr[1]}` : input.slice(0, 10)
+}
+const typeDepartNormalise = (value: unknown) => {
+  const type = normalise(value)
+  if (type === "DEPART") return "DEPART"
+  if (type === "LICENCIEMENT") return "LICENCIEMENT"
+  if (type === "BLACKLIST" || type.includes("BLACKLIST") || /^BL(?:\s|-|$)/.test(type)) return "BLACKLIST"
+  return ""
+}
+const finBlacklist = (debut: string, duree: unknown) => {
+  const valeur = normalise(duree)
+  if (valeur === "PERMANENT" || valeur.includes("PERM")) return null
+  const quantite = Number.parseInt(valeur, 10)
+  if (!quantite || (!valeur.includes("SEMAINE") && !valeur.includes("MOIS"))) {
+    throw new Error("Durée de blacklist invalide.")
+  }
+  const date = new Date(`${debut}T12:00:00Z`)
+  if (valeur.includes("SEMAINE")) date.setUTCDate(date.getUTCDate() + quantite * 7)
+  else date.setUTCMonth(date.getUTCMonth() + quantite)
+  return date.toISOString().slice(0, 10)
 }
 const dateFr = (value: unknown) => {
   const input = texte(value)
@@ -324,22 +354,67 @@ const authenticated = async (req: Request) => {
     const departsDonnees = async (message = "") => {
       const { data, error } = await admin.from("departures").select("*,profiles!departures_decided_by_profile_id_fkey(display_name)").order("starts_on", { ascending: false })
       if (error) throw error
-      const entries = (data ?? []).map((row: any) => ({
+      const entries = (data ?? []).map((row: any) => {
+        const typeNormalise = typeDepartNormalise(row.departure_type)
+        return ({
         ligne: row.id, id: row.external_id, nom: row.matricule_snapshot, grade: row.grade_snapshot,
-        type: row.departure_type, steamId: row.steam_id_snapshot || "", discordId: row.discord_id_snapshot || "",
+        type: typeNormalise === "DEPART" ? "Départ" : typeNormalise === "LICENCIEMENT" ? "Licenciement" : typeNormalise === "BLACKLIST" ? "Blacklist" : row.departure_type,
+        steamId: row.steam_id_snapshot || "", discordId: row.discord_id_snapshot || "",
         dateDepart: dateFr(row.starts_on), dateRetour: dateFr(row.ends_on), raison: row.reason || "",
         peutRevenir: !!row.ends_on && row.ends_on <= aujourdHui(), decision: row.profiles?.display_name || "",
-        statut: row.status, permanent: row.status === "PERMANENT" || !row.ends_on,
+        statut: row.status, permanent: row.status === "PERMANENT" || (typeNormalise === "BLACKLIST" && (normalise(row.departure_type).includes("PERM") || !row.ends_on)),
         medailles: (row.medals_snapshot ?? []).join("; "), medaillesRestaureesLe: dateHeureFr(row.medals_restored_at),
         joursRestants: joursRestants(row.ends_on),
-      }))
+        typeNormalise,
+      })})
       return {
         success: true, message,
         membres: membresPublic.map((m: any) => ({ nom: m.nom, grade: m.grade })),
-        departs: entries.filter((e: any) => normalise(e.type) === "DEPART"),
-        licenciements: entries.filter((e: any) => normalise(e.type) === "LICENCIEMENT"),
-        blacklists: entries.filter((e: any) => normalise(e.type) === "BLACKLIST"),
+        departs: entries.filter((e: any) => e.typeNormalise === "DEPART"),
+        licenciements: entries.filter((e: any) => e.typeNormalise === "LICENCIEMENT"),
+        blacklists: entries.filter((e: any) => e.typeNormalise === "BLACKLIST"),
         peutGerer: has("departs_gerer"),
+      }
+    }
+
+    const gestionPersonnelDonnees = async (message = "") => {
+      const { data, error } = await admin.from("personnel_history")
+        .select("*,profiles!personnel_history_performed_by_profile_id_fkey(display_name)")
+        .order("occurred_at", { ascending: false })
+      if (error) throw error
+      const logs = (data ?? []).map((row: any) => ({
+        ligne: row.id, date: dateHeureFr(row.occurred_at), personne: row.matricule_snapshot,
+        grade: row.grade_snapshot || "", type: row.action_type, choix: row.choice || "",
+        raison: row.reason || "", auteur: row.profiles?.display_name || "",
+      }))
+      const specialisationsAuteur = normalise((ownMember?.specializations ?? []).join(";"))
+      const privilegie = owner || permissions.has("role_staff_total")
+      const rangAuteur = GRADES.findIndex((grade) => normalise(grade) === normalise(actorGrade))
+      const rangCapitaine = GRADES.findIndex((grade) => normalise(grade) === "CAPITAINE")
+      const modifiables = new Set(["Instructeur", "Médecin", "Instructeur et Médecin"])
+      if (privilegie || (rangAuteur >= 0 && rangAuteur <= rangCapitaine)) {
+        ["Responsable MDC", "CO-Responsable MDC", "Responsable INST", "CO-Responsable INST", "Instructeur en chef"].forEach((item) => modifiables.add(item))
+      }
+      if (specialisationsAuteur.includes("RESPONSABLE MDC")) modifiables.add("CO-Responsable MDC")
+      if (specialisationsAuteur.includes("RESPONSABLE INST")) {
+        modifiables.add("CO-Responsable INST")
+        modifiables.add("Instructeur en chef")
+      }
+      if (specialisationsAuteur.includes("CO-RESPONSABLE INST")) modifiables.add("Instructeur en chef")
+      if (specialisationsAuteur.includes("GERANT GDA")) modifiables.add("CO-Gérant GDA")
+      if (privilegie) modifiables.add("Gérant GDA")
+      return {
+        success: true, message,
+        membres: membresClient.map((membre: any) => ({
+          ...membre,
+          medailles: texte(membre.medaille).split(";").map(texte).filter(Boolean),
+          specialisations: texte(membre.specialisation).split(";").map(texte).filter(Boolean),
+        })),
+        logs, grades: GRADES, sanctions: SANCTIONS, dureesBlacklist: DUREES_BLACKLIST,
+        medailles: MEDAILLES, specialisations: SPECIALISATIONS,
+        specialisationsModifiables: [...modifiables],
+        peutModifierHistorique: has("personnel_historique_modifier"),
+        peutSupprimerHistorique: has("personnel_historique_supprimer"),
       }
     }
 
@@ -801,11 +876,9 @@ const authenticated = async (req: Request) => {
         requirePermission("departs_gerer")
         const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(payload.nom))
         if (!member) throw new Error("Membre introuvable.")
-        const type = normalise(payload.type) || "DEPART"
+        const type = typeDepartNormalise(payload.type) || "DEPART"
         const start = isoDate(payload.dateDepart) ?? aujourdHui()
-        let end = isoDate(payload.dateRetour)
-        const duration = nombre(payload.duree)
-        if (!end && duration > 0) { const date = new Date(`${start}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + duration); end = date.toISOString().slice(0, 10) }
+        const end = type === "BLACKLIST" ? finBlacklist(start, payload.duree) : isoDate(payload.dateRetour)
         const { error } = await admin.from("departures").insert({
           external_id: idExterne(), member_id: member.id, matricule_snapshot: member.matricule,
           grade_snapshot: delayedById.get(member.id)?.grade ?? member.grade, steam_id_snapshot: member.steam_id,
@@ -826,7 +899,7 @@ const authenticated = async (req: Request) => {
           if (error) throw error
         } else {
           const { error } = await admin.from("departures").update({
-            departure_type: normalise(payload.type), starts_on: isoDate(payload.dateDepart), ends_on: isoDate(payload.dateRetour),
+            departure_type: typeDepartNormalise(payload.type) || normalise(payload.type), starts_on: isoDate(payload.dateDepart), ends_on: isoDate(payload.dateRetour),
             status: texte(payload.statut) || (isoDate(payload.dateRetour) ? "TEMPORAIRE" : "PERMANENT"), reason: texte(payload.raison) || null,
           }).eq("id", id)
           if (error) throw error
@@ -882,10 +955,7 @@ const authenticated = async (req: Request) => {
       }
       case "recupererGestionPersonnel": {
         requireOfficer()
-        const { data, error } = await admin.from("personnel_history").select("*,profiles!personnel_history_performed_by_profile_id_fkey(display_name)").order("occurred_at", { ascending: false })
-        if (error) throw error
-        const historique = (data ?? []).map((row: any) => ({ ligne: row.id, date: dateHeureFr(row.occurred_at), personne: row.matricule_snapshot, grade: row.grade_snapshot || "", type: row.action_type, choix: row.choice || "", raison: row.reason || "", auteur: row.profiles?.display_name || "" }))
-        return json({ success: true, membres: membresPublic.map((m: any) => ({ nom: m.nom, grade: m.grade })), historique, peutModifier: has("personnel_historique_modifier"), peutSupprimer: has("personnel_historique_supprimer") })
+        return json(await gestionPersonnelDonnees())
       }
       case "appliquerGestionPersonnel": {
         requirePermission("personnel_historique_modifier")
@@ -911,12 +981,14 @@ const authenticated = async (req: Request) => {
           if (error) throw error
         }
         if (["DEPART", "LICENCIEMENT", "BLACKLIST"].includes(normalizedType)) {
+          const startsOn = isoDate(payload.dateDepart) ?? aujourdHui()
+          const endsOn = normalizedType === "BLACKLIST" ? finBlacklist(startsOn, choix) : isoDate(payload.dateRetour)
           const { error } = await admin.from("departures").insert({
             external_id: idExterne(), member_id: member.id, matricule_snapshot: member.matricule,
             grade_snapshot: delayedById.get(member.id)?.grade ?? member.grade, steam_id_snapshot: member.steam_id,
-            discord_id_snapshot: member.discord_id, departure_type: normalizedType, starts_on: isoDate(payload.dateDepart) ?? aujourdHui(),
-            ends_on: isoDate(payload.dateRetour), reason: texte(payload.raison) || null,
-            status: isoDate(payload.dateRetour) ? "TEMPORAIRE" : "PERMANENT", decided_by_profile_id: profile.id,
+            discord_id_snapshot: member.discord_id, departure_type: normalizedType, starts_on: startsOn,
+            ends_on: endsOn, reason: texte(payload.raison) || null,
+            status: endsOn ? "TEMPORAIRE" : "PERMANENT", decided_by_profile_id: profile.id,
             medals_snapshot: member.medals ?? [],
           })
           if (error) throw error
@@ -929,7 +1001,38 @@ const authenticated = async (req: Request) => {
         })
         if (historyError) throw historyError
         await audit(type, member.matricule, choix)
-        return json({ success: true, message: "Action enregistrée.", effectif: membresClient })
+        const gestion = await gestionPersonnelDonnees("Action enregistrée.")
+        const departs = await departsDonnees()
+        return json({ ...departs, ...gestion, message: "Action enregistrée.", effectif: membresClient })
+      }
+      case "modifierLogGestionPersonnel": {
+        requirePermission("personnel_historique_modifier")
+        const id = nombre(payload.ligne)
+        const membre = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(payload.personne))
+        const auteur = await profilActifParMatricule(payload.auteur)
+        const dateDemandee = texte(payload.date)
+        const date = dateDemandee ? new Date(dateDemandee) : null
+        const { error } = await admin.from("personnel_history").update({
+          member_id: membre?.id ?? null,
+          matricule_snapshot: texte(payload.personne),
+          grade_snapshot: texte(payload.grade) || null,
+          action_type: texte(payload.type),
+          choice: texte(payload.choix) || null,
+          reason: texte(payload.raison) || null,
+          performed_by_profile_id: auteur?.id ?? null,
+          occurred_at: date && !Number.isNaN(date.getTime()) ? date.toISOString() : new Date().toISOString(),
+        }).eq("id", id)
+        if (error) throw error
+        await audit("Historique du personnel modifié", String(id))
+        return json(await gestionPersonnelDonnees("Historique mis à jour."))
+      }
+      case "supprimerLogGestionPersonnel": {
+        requirePermission("personnel_historique_supprimer")
+        const id = nombre(payload.ligne)
+        const { error } = await admin.from("personnel_history").delete().eq("id", id)
+        if (error) throw error
+        await audit("Historique du personnel supprimé", String(id))
+        return json(await gestionPersonnelDonnees("Ligne supprimée."))
       }
       case "recupererListeBlanche": {
         requirePermission("administration_permissions")

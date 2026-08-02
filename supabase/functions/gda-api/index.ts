@@ -105,6 +105,8 @@ const authenticated = async (req: Request) => {
     const delayedByName = new Map((delayed ?? []).map((member: any) => [normalise(member.matricule), member]))
     const ownMember = profile.member_id ? memberById.get(profile.member_id) : null
     const ownDelayed = profile.member_id ? delayedById.get(profile.member_id) : delayedByName.get(normalise(profile.display_name))
+    const instructor = owner || (ownMember?.specializations ?? []).some((item: string) => normalise(item).includes("INSTRUCTEUR"))
+    const requireInstructor = () => { if (!instructor) throw new Error("Accès réservé aux instructeurs.") }
     const actorName = ownDelayed?.matricule ?? ownMember?.matricule ?? profile.display_name
     const actorGrade = ownDelayed?.grade ?? ownMember?.grade ?? "Visiteur"
 
@@ -249,6 +251,28 @@ const authenticated = async (req: Request) => {
       }
     }
 
+    const departsDonnees = async (message = "") => {
+      const { data, error } = await admin.from("departures").select("*,profiles!departures_decided_by_profile_id_fkey(display_name)").order("starts_on", { ascending: false })
+      if (error) throw error
+      const entries = (data ?? []).map((row: any) => ({
+        ligne: row.id, id: row.external_id, nom: row.matricule_snapshot, grade: row.grade_snapshot,
+        type: row.departure_type, steamId: row.steam_id_snapshot || "", discordId: row.discord_id_snapshot || "",
+        dateDepart: dateFr(row.starts_on), dateRetour: dateFr(row.ends_on), raison: row.reason || "",
+        peutRevenir: !!row.ends_on && row.ends_on <= aujourdHui(), decision: row.profiles?.display_name || "",
+        statut: row.status, permanent: row.status === "PERMANENT" || !row.ends_on,
+        medailles: (row.medals_snapshot ?? []).join("; "), medaillesRestaureesLe: dateHeureFr(row.medals_restored_at),
+        joursRestants: joursRestants(row.ends_on),
+      }))
+      return {
+        success: true, message,
+        membres: membresPublic.map((m: any) => ({ nom: m.nom, grade: m.grade })),
+        departs: entries.filter((e: any) => normalise(e.type) === "DEPART"),
+        licenciements: entries.filter((e: any) => normalise(e.type) === "LICENCIEMENT"),
+        blacklists: entries.filter((e: any) => normalise(e.type) === "BLACKLIST"),
+        peutGerer: has("departs_gerer"),
+      }
+    }
+
     const rapportParPayload = async () => {
       let query = admin.from("reports").select("*")
       if (texte(payload.rapportId)) query = query.eq("external_id", texte(payload.rapportId))
@@ -257,6 +281,53 @@ const authenticated = async (req: Request) => {
       if (error || !data) throw new Error("Rapport introuvable.")
       return data
     }
+
+    const rapportInstructeurClient = (row: any) => ({
+      ligne: row.id,
+      id: row.external_id,
+      creeLe: dateHeureFr(row.submitted_at),
+      dateEnvoi: dateHeureFr(row.submitted_at),
+      auteur: row.instructor_snapshot,
+      type: row.report_type,
+      date: dateFr(row.event_on),
+      dateEvenement: dateFr(row.event_on),
+      personneFormee: row.trainee_name,
+      matricule: row.final_matricule || "",
+      matriculeDefinitif: row.final_matricule || "",
+      steamId: row.steam_id || "",
+      discordId: row.discord_id || "",
+      note: row.score,
+      resultat: row.result || "",
+      remarque: row.remark || "",
+      commentaire: row.comment || "",
+      dossierId: row.folder_external_id || "",
+      actif: row.active,
+    })
+
+    const suiviInstructeurClient = (row: any) => ({
+      ligne: row.id,
+      id: row.external_id,
+      matricule: row.matricule_snapshot,
+      steamId: row.steam_id || "",
+      discordId: row.discord_id || "",
+      nombreRapports: row.reports_count,
+      rapports: row.reports_count,
+      prisesService: row.service_count,
+      dateFin: dateFr(row.end_on),
+      dateFinInitiale: dateFr(row.initial_end_on),
+      dateFinApresAbsence: dateFr(row.end_after_absence_on),
+      joursRestants: joursRestants(row.end_on),
+      instructeur: row.instructor_snapshot || "",
+      gerant: row.manager_snapshot || "",
+      commentaire: row.comment || "",
+      sanction: row.sanction || "Rien",
+      statut: row.status,
+      source: row.source || "",
+      creeLe: dateHeureFr(row.created_at),
+      modifieLe: dateHeureFr(row.updated_at),
+      peutDecider: has("suivis_decider_tous"),
+      peutTransferer: owner || row.manager_profile_id === profile.id,
+    })
 
     switch (action) {
       case "recupererVersionDonnees":
@@ -493,10 +564,44 @@ const authenticated = async (req: Request) => {
         return json({ success: true, notifications: [], nonLues: 0 })
       case "recupererDeparts": {
         requireOfficer()
-        const { data, error } = await admin.from("departures").select("*,profiles!departures_decided_by_profile_id_fkey(display_name)").order("starts_on", { ascending: false })
+        return json(await departsDonnees())
+      }
+      case "ajouterDepart": {
+        requirePermission("departs_gerer")
+        const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(payload.nom))
+        if (!member) throw new Error("Membre introuvable.")
+        const type = normalise(payload.type) || "DEPART"
+        const start = isoDate(payload.dateDepart) ?? aujourdHui()
+        let end = isoDate(payload.dateRetour)
+        const duration = nombre(payload.duree)
+        if (!end && duration > 0) { const date = new Date(`${start}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + duration); end = date.toISOString().slice(0, 10) }
+        const { error } = await admin.from("departures").insert({
+          external_id: idExterne(), member_id: member.id, matricule_snapshot: member.matricule,
+          grade_snapshot: delayedById.get(member.id)?.grade ?? member.grade, steam_id_snapshot: member.steam_id,
+          discord_id_snapshot: member.discord_id, departure_type: type, starts_on: start, ends_on: end,
+          reason: texte(payload.raison) || null, status: end ? "TEMPORAIRE" : "PERMANENT",
+          decided_by_profile_id: profile.id, medals_snapshot: member.medals ?? [],
+        })
         if (error) throw error
-        const entries = (data ?? []).map((row: any) => ({ ligne: row.id, id: row.external_id, nom: row.matricule_snapshot, grade: row.grade_snapshot, type: row.departure_type, steamId: row.steam_id_snapshot || "", discordId: row.discord_id_snapshot || "", dateDepart: dateHeureFr(row.starts_on), dateRetour: dateHeureFr(row.ends_on), raison: row.reason || "", peutRevenir: !!row.ends_on && row.ends_on < aujourdHui(), decision: row.profiles?.display_name || "", statut: row.status, permanent: row.status === "PERMANENT" || !row.ends_on, medailles: (row.medals_snapshot ?? []).join("; "), medaillesRestaureesLe: dateHeureFr(row.medals_restored_at), joursRestants: joursRestants(row.ends_on) }))
-        return json({ success: true, membres: membresPublic.map((m: any) => ({ nom: m.nom, grade: m.grade })), departs: entries.filter((e: any) => normalise(e.type) === "DEPART"), licenciements: entries.filter((e: any) => normalise(e.type) === "LICENCIEMENT"), blacklists: entries.filter((e: any) => normalise(e.type) === "BLACKLIST"), peutGerer: has("departs_gerer") })
+        await audit("Dossier de départ ajouté", member.matricule, type)
+        return json(await departsDonnees("Dossier enregistré."))
+      }
+      case "modifierDepart":
+      case "supprimerDepart": {
+        requirePermission("departs_gerer")
+        const id = nombre(payload.ligne)
+        if (action === "supprimerDepart") {
+          const { error } = await admin.from("departures").delete().eq("id", id)
+          if (error) throw error
+        } else {
+          const { error } = await admin.from("departures").update({
+            departure_type: normalise(payload.type), starts_on: isoDate(payload.dateDepart), ends_on: isoDate(payload.dateRetour),
+            status: texte(payload.statut) || (isoDate(payload.dateRetour) ? "TEMPORAIRE" : "PERMANENT"), reason: texte(payload.raison) || null,
+          }).eq("id", id)
+          if (error) throw error
+        }
+        await audit(action === "supprimerDepart" ? "Dossier de départ supprimé" : "Dossier de départ modifié", String(id))
+        return json(await departsDonnees(action === "supprimerDepart" ? "Dossier supprimé." : "Dossier modifié."))
       }
       case "recupererRecommandationsObservations": {
         requireOfficer()
@@ -505,6 +610,45 @@ const authenticated = async (req: Request) => {
         const historique = (data ?? []).map((row: any) => ({ id: row.external_id, date: dateFr(row.occurred_on), personne: row.matricule_snapshot, grade: row.grade_snapshot || "", type: row.entry_type, nature: row.nature || "", emetteur: row.transmitted_by || "", raison: row.reason || "", enregistrePar: row.profiles?.display_name || "", creeLe: dateHeureFr(row.created_at) }))
         return json({ success: true, membres: membresPublic.map((m: any) => ({ nom: m.nom, grade: m.grade, recommandations: m.recommandation, observations: m.observation })), historique, peutPurger: owner })
       }
+      case "ajouterRecommandationObservation":
+      case "modifierRecommandationObservation": {
+        requireOfficer()
+        const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(payload.personne))
+        if (!member) throw new Error("Membre introuvable.")
+        const type = normalise(payload.type) === "OBSERVATION" ? "OBSERVATION" : "RECOMMANDATION"
+        const transmittedBy = normalise(payload.emetteur) === "AUTRE" ? texte(payload.emetteurAutre) : texte(payload.emetteur)
+        const reason = normalise(payload.raisonType) === "AUTRE" || type === "OBSERVATION" ? texte(payload.raison) : texte(payload.raisonType)
+        const values = {
+          member_id: member.id, matricule_snapshot: member.matricule,
+          grade_snapshot: delayedById.get(member.id)?.grade ?? member.grade,
+          entry_type: type, nature: texte(payload.nature) || null,
+          transmitted_by: transmittedBy || null, reason: reason || null,
+          recorded_by_profile_id: profile.id, recorder_grade_snapshot: actorGrade,
+          occurred_on: isoDate(payload.date) ?? aujourdHui(),
+        }
+        if (action === "ajouterRecommandationObservation") {
+          const { error } = await admin.from("recommendations_observations").insert({ external_id: idExterne(), ...values })
+          if (error) throw error
+        } else {
+          const { error } = await admin.from("recommendations_observations").update(values).eq("external_id", texte(payload.id))
+          if (error) throw error
+        }
+        const [{ count: recs }, { count: obs }] = await Promise.all([
+          admin.from("recommendations_observations").select("id", { count: "exact", head: true }).eq("member_id", member.id).eq("entry_type", "RECOMMANDATION"),
+          admin.from("recommendations_observations").select("id", { count: "exact", head: true }).eq("member_id", member.id).eq("entry_type", "OBSERVATION"),
+        ])
+        await admin.from("members").update({ recommendation: String(recs ?? 0), observation: String(obs ?? 0) }).eq("id", member.id)
+        await audit(type === "OBSERVATION" ? "Observation enregistrée" : "Recommandation enregistrée", member.matricule)
+        return json({ success: true, message: "Élément enregistré." })
+      }
+      case "purgerRecommandationsObservations": {
+        if (!owner) throw new Error("Purge réservée au propriétaire.")
+        const { error } = await admin.from("recommendations_observations").delete().gt("id", 0)
+        if (error) throw error
+        await admin.from("members").update({ recommendation: "0", observation: "0" }).eq("active", true)
+        await audit("Nouvelle semaine recommandations/observations")
+        return json({ success: true, message: "Les compteurs ont été remis à zéro." })
+      }
       case "recupererGestionPersonnel": {
         requireOfficer()
         const { data, error } = await admin.from("personnel_history").select("*,profiles!personnel_history_performed_by_profile_id_fkey(display_name)").order("occurred_at", { ascending: false })
@@ -512,11 +656,99 @@ const authenticated = async (req: Request) => {
         const historique = (data ?? []).map((row: any) => ({ ligne: row.id, date: dateHeureFr(row.occurred_at), personne: row.matricule_snapshot, grade: row.grade_snapshot || "", type: row.action_type, choix: row.choice || "", raison: row.reason || "", auteur: row.profiles?.display_name || "" }))
         return json({ success: true, membres: membresPublic.map((m: any) => ({ nom: m.nom, grade: m.grade })), historique, peutModifier: has("personnel_historique_modifier"), peutSupprimer: has("personnel_historique_supprimer") })
       }
+      case "appliquerGestionPersonnel": {
+        requirePermission("personnel_historique_modifier")
+        const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(payload.personne))
+        if (!member) throw new Error("Membre introuvable.")
+        const type = texte(payload.type)
+        const choix = texte(payload.choix)
+        const patch: Record<string, unknown> = {}
+        const normalizedType = normalise(type)
+        if (["PROMOTION", "RETROGRADATION"].includes(normalizedType)) {
+          patch.grade = choix
+          patch.promotion_changed_on = aujourdHui()
+        } else if (normalizedType === "SANCTION") patch.sanction = choix || "Clean"
+        else if (normalizedType === "SPECIALISATION") patch.specializations = choix.split(/[;,]/).map(texte).filter(Boolean)
+        else if (normalizedType === "MEDAILLE") {
+          const medals = new Set<string>(member.medals ?? [])
+          if (normalise(choix).startsWith("RETIR")) medals.delete(choix.replace(/^Retir[^:]*:\s*/i, ""))
+          else medals.add(choix.replace(/^Donn[^:]*:\s*/i, ""))
+          patch.medals = [...medals].filter(Boolean)
+        }
+        if (Object.keys(patch).length) {
+          const { error } = await admin.from("members").update(patch).eq("id", member.id)
+          if (error) throw error
+        }
+        if (["DEPART", "LICENCIEMENT", "BLACKLIST"].includes(normalizedType)) {
+          const { error } = await admin.from("departures").insert({
+            external_id: idExterne(), member_id: member.id, matricule_snapshot: member.matricule,
+            grade_snapshot: delayedById.get(member.id)?.grade ?? member.grade, steam_id_snapshot: member.steam_id,
+            discord_id_snapshot: member.discord_id, departure_type: normalizedType, starts_on: isoDate(payload.dateDepart) ?? aujourdHui(),
+            ends_on: isoDate(payload.dateRetour), reason: texte(payload.raison) || null,
+            status: isoDate(payload.dateRetour) ? "TEMPORAIRE" : "PERMANENT", decided_by_profile_id: profile.id,
+            medals_snapshot: member.medals ?? [],
+          })
+          if (error) throw error
+        }
+        const { error: historyError } = await admin.from("personnel_history").insert({
+          member_id: member.id, matricule_snapshot: member.matricule,
+          grade_snapshot: delayedById.get(member.id)?.grade ?? member.grade,
+          action_type: type, choice: choix || null, reason: texte(payload.raison) || null,
+          performed_by_profile_id: profile.id, occurred_at: new Date().toISOString(),
+        })
+        if (historyError) throw historyError
+        await audit(type, member.matricule, choix)
+        return json({ success: true, message: "Action enregistrée.", effectif: membresClient })
+      }
       case "recupererListeBlanche": {
         requirePermission("administration_permissions")
-        const { data, error } = await admin.from("whitelist").select("*").order("created_at", { ascending: false })
+        const [{ data, error }, { data: permissionRows }, { data: profileRows }, { data: grantRows }] = await Promise.all([
+          admin.from("whitelist").select("*").order("created_at", { ascending: false }),
+          admin.from("permissions").select("code,label").order("code"),
+          admin.from("profiles").select("id,discord_id,access_level,active"),
+          admin.from("profile_permissions").select("profile_id,permission_code"),
+        ])
         if (error) throw error
-        return json({ success: true, entrees: (data ?? []).map((row: any) => ({ id: row.external_id, identifiant: row.login_identifier, discordId: row.discord_id, actif: row.active, creeLe: dateHeureFr(row.created_at), modifieLe: dateHeureFr(row.updated_at) })), peutModifier: true })
+        const profileByDiscord = new Map((profileRows ?? []).map((item: any) => [item.discord_id, item]))
+        const personnes = (data ?? []).map((row: any) => {
+          const linked = profileByDiscord.get(row.discord_id)
+          const assigned = linked ? (grantRows ?? []).filter((grant: any) => grant.profile_id === linked.id).map((grant: any) => grant.permission_code) : []
+          return { id: row.external_id, identifiant: row.login_identifier, discordId: row.discord_id, actif: row.active, permissions: assigned, roleStaff: assigned.includes("role_staff_total"), roleVisiteur: assigned.includes("role_visiteur"), creeLe: dateHeureFr(row.created_at), modifieLe: dateHeureFr(row.updated_at) }
+        })
+        return json({ success: true, personnes, permissions: (permissionRows ?? []).map((item: any) => ({ cle: item.code, nom: item.label })), peutModifier: true, peutSupprimer: owner })
+      }
+      case "ajouterListeBlanche":
+      case "modifierListeBlanche":
+      case "supprimerListeBlanche": {
+        requirePermission("administration_permissions")
+        const externalId = texte(payload.id)
+        if (action === "supprimerListeBlanche") {
+          const { data: row } = await admin.from("whitelist").select("discord_id,login_identifier").eq("external_id", externalId).maybeSingle()
+          const { error } = await admin.from("whitelist").delete().eq("external_id", externalId)
+          if (error) throw error
+          if (row) await admin.from("profiles").update({ active: false }).eq("discord_id", row.discord_id)
+          await audit("Accès liste blanche supprimé", row?.login_identifier || externalId)
+          return json({ success: true, message: "Accès retiré de la liste blanche." })
+        }
+        const identifier = texte(payload.nouvelIdentifiant)
+        const discordId = texte(payload.discordId)
+        if (!identifier || !/^\d{15,22}$/.test(discordId)) throw new Error("Identifiant ou Discord ID invalide.")
+        if (action === "ajouterListeBlanche") {
+          const { error } = await admin.from("whitelist").insert({ external_id: idExterne(), login_identifier: identifier, discord_id: discordId, active: true })
+          if (error) throw error
+        } else {
+          const { error } = await admin.from("whitelist").update({ login_identifier: identifier, discord_id: discordId, active: true }).eq("external_id", externalId)
+          if (error) throw error
+          await admin.from("profiles").update({ display_name: identifier, discord_id: discordId, active: true }).eq("discord_id", discordId)
+        }
+        const requested = texte(payload.permissions).split(",").map(texte).filter(Boolean)
+        const { data: linked } = await admin.from("profiles").select("id").eq("discord_id", discordId).maybeSingle()
+        if (linked && requested.length) {
+          await admin.from("profile_permissions").delete().eq("profile_id", linked.id)
+          await admin.from("profile_permissions").insert(requested.map((code) => ({ profile_id: linked.id, permission_code: code, granted_by_profile_id: profile.id })))
+        }
+        await audit(action === "ajouterListeBlanche" ? "Accès liste blanche ajouté" : "Accès liste blanche modifié", identifier)
+        return json({ success: true, message: action === "ajouterListeBlanche" ? "Personne ajoutée à la liste blanche." : "Liste blanche modifiée." })
       }
       case "recupererJournalActions": {
         requirePermission("administration_logs")
@@ -524,11 +756,62 @@ const authenticated = async (req: Request) => {
         if (error) throw error
         return json({ success: true, logs: (data ?? []).map((row: any) => ({ ligne: row.id, date: dateHeureFr(row.occurred_at), auteur: row.actor_name_snapshot || "", grade: row.actor_grade_snapshot || "", action: row.action, cible: row.target || "", details: row.details || "" })), peutSupprimer: owner })
       }
+      case "supprimerJournalAction":
+      case "viderJournalActions": {
+        if (!owner) throw new Error("Suppression des logs réservée au propriétaire.")
+        const { error } = action === "viderJournalActions"
+          ? await admin.from("audit_logs").delete().gt("id", 0)
+          : await admin.from("audit_logs").delete().eq("id", nombre(payload.ligne))
+        if (error) throw error
+        return json({ success: true, message: action === "viderJournalActions" ? "Journal vidé." : "Ligne supprimée." })
+      }
       case "recupererAdministration": {
         requirePermission("administration_permissions")
-        const { data: allProfiles } = await admin.from("profiles").select("id,display_name,discord_id,access_level,active")
-        const { data: allGrants } = await admin.from("profile_permissions").select("profile_id,permission_code")
-        return json({ success: true, auteurProprietaire: owner, auteurCoproprietaire: false, proprietaireNom: "Milo", permissions: [...permissions], membres: (allProfiles ?? []).map((item: any) => ({ id: item.id, nom: item.display_name, discordId: item.discord_id, niveauAcces: item.access_level, actif: item.active, proprietaire: normalise(item.display_name) === "MILO", coproprietaire: false, permissions: (allGrants ?? []).filter((grant: any) => grant.profile_id === item.id).map((grant: any) => grant.permission_code) })) })
+        const [{ data: allProfiles }, { data: allGrants }, { data: allPermissions }] = await Promise.all([
+          admin.from("profiles").select("id,member_id,display_name,discord_id,access_level,active"),
+          admin.from("profile_permissions").select("profile_id,permission_code"),
+          admin.from("permissions").select("code,label").order("code"),
+        ])
+        return json({
+          success: true, auteurProprietaire: owner, auteurCoproprietaire: !owner && permissions.has("role_staff_total"), proprietaireNom: (allProfiles ?? []).find((item: any) => item.access_level === "owner")?.display_name || "Milo",
+          permissions: (allPermissions ?? []).map((item: any) => ({ cle: item.code, nom: item.label })),
+          utilisateurs: (allProfiles ?? []).map((item: any) => ({
+            id: item.id, nom: item.display_name, grade: delayedById.get(item.member_id)?.grade ?? memberById.get(item.member_id)?.grade ?? "Visiteur",
+            discordId: item.discord_id, niveauAcces: item.access_level, actif: item.active,
+            proprietaire: item.access_level === "owner" || normalise(item.display_name) === "MILO", coproprietaire: item.access_level !== "owner" && (allGrants ?? []).some((grant: any) => grant.profile_id === item.id && grant.permission_code === "role_staff_total"),
+            permissions: (allGrants ?? []).filter((grant: any) => grant.profile_id === item.id).map((grant: any) => grant.permission_code),
+          })),
+        })
+      }
+      case "enregistrerPermissions":
+      case "definirCoproprietaire":
+      case "transfererPropriete": {
+        if (!owner && !permissions.has("role_staff_total")) throw new Error("Action réservée à la propriété.")
+        const { data: target, error } = await admin.from("profiles").select("id,display_name,access_level").ilike("display_name", texte(payload.personne)).maybeSingle()
+        if (error || !target) throw new Error("Utilisateur introuvable.")
+        if (action === "enregistrerPermissions") {
+          const requested = texte(payload.permissions).split(",").map(texte).filter(Boolean)
+          await admin.from("profile_permissions").delete().eq("profile_id", target.id)
+          if (requested.length) {
+            const { error: grantError } = await admin.from("profile_permissions").insert(requested.map((code) => ({ profile_id: target.id, permission_code: code, granted_by_profile_id: profile.id })))
+            if (grantError) throw grantError
+          }
+          await audit("Permissions modifiées", target.display_name, requested.join(", "))
+          return json({ success: true, message: "Permissions enregistrées.", permissions: requested })
+        }
+        if (action === "definirCoproprietaire") {
+          const active = bool(payload.actif)
+          if (active) {
+            await admin.from("profile_permissions").upsert({ profile_id: target.id, permission_code: "role_staff_total", granted_by_profile_id: profile.id })
+          } else {
+            await admin.from("profile_permissions").delete().eq("profile_id", target.id).eq("permission_code", "role_staff_total")
+          }
+          return json({ success: true, message: active ? "Co-propriétaire nommé." : "Co-propriétaire retiré.", coproprietaire: active, permissions: [] })
+        }
+        if (!owner) throw new Error("Transfert réservé au propriétaire.")
+        await admin.from("profiles").update({ access_level: "officer" }).eq("id", profile.id)
+        await admin.from("profiles").update({ access_level: "owner" }).eq("id", target.id)
+        return json({ success: true, message: `Propriété transférée à ${target.display_name}.`, permissionsAuteur: [...permissions] })
       }
       case "recupererArchivesInstructeur": {
         const { data, error } = await admin.from("instructor_archives").select("*").order("created_at", { ascending: false })
@@ -538,7 +821,7 @@ const authenticated = async (req: Request) => {
       case "recupererRapportsInstructeur": {
         const { data, error } = await admin.from("instructor_reports").select("*").order("submitted_at", { ascending: false })
         if (error) throw error
-        return json({ success: true, rapports: (data ?? []).map((row: any) => ({ ligne: row.id, id: row.external_id, creeLe: dateHeureFr(row.submitted_at), auteur: row.instructor_snapshot, type: row.report_type, dateEvenement: dateFr(row.event_on), personneFormee: row.trainee_name, matriculeDefinitif: row.final_matricule || "", steamId: row.steam_id || "", discordId: row.discord_id || "", note: row.score, resultat: row.result || "", remarque: row.remark || "", commentaire: row.comment || "", dossierId: row.folder_external_id || "", actif: row.active })), peutModifier: true, peutSupprimer: owner })
+        return json({ success: true, rapports: (data ?? []).map(rapportInstructeurClient), peutAdministrer: officer || instructor, peutModifier: officer || instructor, peutSupprimer: owner })
       }
       case "recupererSuivisFormationInstructeur":
       case "recupererMesSuivisInstructeur": {
@@ -546,7 +829,130 @@ const authenticated = async (req: Request) => {
         if (action === "recupererMesSuivisInstructeur") query = query.or(`instructor_profile_id.eq.${profile.id},manager_profile_id.eq.${profile.id}`)
         const { data, error } = await query
         if (error) throw error
-        return json({ success: true, suivis: (data ?? []).map((row: any) => ({ ligne: row.id, id: row.external_id, matricule: row.matricule_snapshot, steamId: row.steam_id || "", discordId: row.discord_id || "", rapports: row.reports_count, prisesService: row.service_count, dateFin: dateFr(row.end_on), dateFinInitiale: dateFr(row.initial_end_on), dateFinApresAbsence: dateFr(row.end_after_absence_on), instructeur: row.instructor_snapshot || "", gerant: row.manager_snapshot || "", commentaire: row.comment || "", sanction: row.sanction || "Rien", statut: row.status, source: row.source || "", creeLe: dateHeureFr(row.created_at), modifieLe: dateHeureFr(row.updated_at) })), peutDeciderTous: has("suivis_decider_tous") })
+        return json({ success: true, suivis: (data ?? []).map(suiviInstructeurClient), peutModifier: instructor || officer, peutDeciderTous: has("suivis_decider_tous") })
+      }
+      case "mettreAJourMonSuiviInstructeur": {
+        const suiviId = texte(payload.suiviId)
+        let query = admin.from("training_followups").select("*")
+        query = /^\d+$/.test(suiviId) ? query.eq("id", Number(suiviId)) : query.eq("external_id", suiviId)
+        const { data: suivi, error } = await query.maybeSingle()
+        if (error || !suivi) throw new Error("Suivi introuvable.")
+        if (!owner && suivi.instructor_profile_id !== profile.id && suivi.manager_profile_id !== profile.id) throw new Error("Ce suivi ne vous appartient pas.")
+        const { error: updateError } = await admin.from("training_followups").update({ comment: texte(payload.commentaire) || null, service_count: Math.max(0, nombre(payload.prisesService)) }).eq("id", suivi.id)
+        if (updateError) throw updateError
+        return json({ success: true, message: "Suivi enregistré." })
+      }
+      case "enregistrerRapportTestInstructeur":
+      case "enregistrerRapportFormationInstructeur": {
+        requireInstructor()
+        const isTest = action === "enregistrerRapportTestInstructeur"
+        const matricule = texte(payload.matricule)
+        const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(matricule))
+        const score = isTest ? nombre(payload.note) : null
+        const row = {
+          external_id: idExterne(), created_by_profile_id: profile.id, instructor_snapshot: actorName,
+          report_type: isTest ? "TEST" : "FORMATION", event_on: isoDate(isTest ? payload.dateTest : payload.dateFormation) ?? aujourdHui(),
+          trainee_name: isTest ? texte(payload.personneFormee) : (member?.matricule ?? matricule), final_matricule: matricule || null,
+          steam_id: texte(payload.steamId) || null, discord_id: texte(payload.discordId) || null,
+          score, result: isTest ? (score >= 14 ? "ACCEPTE" : "REFUSE") : "ACCEPTE",
+          remark: texte(payload.remarque) || null, comment: texte(payload.commentaire) || null,
+        }
+        const { data: created, error } = await admin.from("instructor_reports").insert(row).select("*").single()
+        if (error) throw error
+        await audit(isTest ? "Rapport Test enregistré" : "Rapport Formation enregistré", matricule)
+        return json({ success: true, message: "Rapport Instructeur enregistré.", rapport: rapportInstructeurClient(created) })
+      }
+      case "modifierRapportInstructeur": {
+        if (!officer && !instructor) throw new Error("Permission insuffisante.")
+        const id = texte(payload.rapportId)
+        let query = admin.from("instructor_reports").select("*")
+        query = /^\d+$/.test(id) ? query.eq("id", Number(id)) : query.eq("external_id", id)
+        const { data: row, error } = await query.maybeSingle()
+        if (error || !row) throw new Error("Rapport Instructeur introuvable.")
+        const score = payload.note === undefined ? row.score : nombre(payload.note)
+        const { data: updated, error: updateError } = await admin.from("instructor_reports").update({
+          event_on: isoDate(payload.date) ?? row.event_on, trainee_name: texte(payload.personneFormee) || row.trainee_name,
+          final_matricule: texte(payload.matricule) || null, steam_id: texte(payload.steamId) || null,
+          discord_id: texte(payload.discordId) || null, score, result: row.report_type === "TEST" ? (score >= 14 ? "ACCEPTE" : "REFUSE") : row.result,
+          remark: texte(payload.remarque) || null, comment: texte(payload.commentaire) || null,
+        }).eq("id", row.id).select("*").single()
+        if (updateError) throw updateError
+        return json({ success: true, message: "Rapport Instructeur modifié.", rapport: rapportInstructeurClient(updated) })
+      }
+      case "supprimerRapportInstructeur": {
+        if (!owner) throw new Error("Suppression réservée au propriétaire.")
+        const id = texte(payload.rapportId)
+        const query = admin.from("instructor_reports").delete()
+        const { error } = /^\d+$/.test(id) ? await query.eq("id", Number(id)) : await query.eq("external_id", id)
+        if (error) throw error
+        return json({ success: true, message: "Rapport Instructeur supprimé." })
+      }
+      case "ajouterSuiviFormationInstructeur":
+      case "demarrerSuiviFormationInstructeur": {
+        requireInstructor()
+        const matricule = texte(payload.matricule)
+        const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(matricule))
+        const fin = new Date(`${aujourdHui()}T12:00:00Z`); fin.setUTCDate(fin.getUTCDate() + 7)
+        const { error } = await admin.from("training_followups").insert({
+          external_id: idExterne(), member_id: member?.id ?? null, matricule_snapshot: member?.matricule ?? matricule,
+          steam_id: texte(payload.steamId) || member?.steam_id || null, discord_id: texte(payload.discordId) || member?.discord_id || null,
+          reports_count: Math.max(0, nombre(payload.nombreRapports)), service_count: Math.max(0, nombre(payload.prisesService)),
+          initial_end_on: fin.toISOString().slice(0, 10), end_on: fin.toISOString().slice(0, 10), instructor_profile_id: profile.id,
+          instructor_snapshot: texte(payload.instructeur) || actorName, manager_snapshot: texte(payload.gerant) || null,
+          comment: texte(payload.commentaire) || null, sanction: texte(payload.sanction) || "Rien", status: "EN_ATTENTE", source: "SITE",
+        })
+        if (error) throw error
+        return json({ success: true, message: "Suivi de formation ajouté." })
+      }
+      case "modifierSuiviFormationInstructeur":
+      case "transfererGeranceSuiviFormationInstructeur":
+      case "deciderSuiviFormationInstructeur":
+      case "supprimerSuiviFormationInstructeur": {
+        if (action === "deciderSuiviFormationInstructeur") requirePermission("suivis_decider_tous")
+        else requireInstructor()
+        const id = texte(payload.suiviId)
+        let query = admin.from("training_followups").select("*")
+        query = /^\d+$/.test(id) ? query.eq("id", Number(id)) : query.eq("external_id", id)
+        const { data: row, error } = await query.maybeSingle()
+        if (error || !row) throw new Error("Suivi introuvable.")
+        if (action === "supprimerSuiviFormationInstructeur") {
+          const { error: deleteError } = await admin.from("training_followups").delete().eq("id", row.id)
+          if (deleteError) throw deleteError
+        } else if (action === "transfererGeranceSuiviFormationInstructeur") {
+          const nom = texte(payload.nouveauGerant)
+          const { data: manager } = await admin.from("profiles").select("id,display_name").ilike("display_name", nom).maybeSingle()
+          const { error: updateError } = await admin.from("training_followups").update({ manager_profile_id: manager?.id ?? null, manager_snapshot: manager?.display_name ?? nom }).eq("id", row.id)
+          if (updateError) throw updateError
+        } else if (action === "deciderSuiviFormationInstructeur") {
+          const decision = normalise(payload.decision) === "ACCEPTE" ? "ACCEPTE" : "REFUSE"
+          const { error: updateError } = await admin.from("training_followups").update({ status: decision, comment: texte(payload.raison) || row.comment }).eq("id", row.id)
+          if (updateError) throw updateError
+          const { error: archiveError } = await admin.from("instructor_archives").insert({
+            external_id: idExterne(), matricule_snapshot: row.matricule_snapshot, steam_id: row.steam_id, discord_id: row.discord_id,
+            reports_count: row.reports_count, service_count: row.service_count, ended_on: aujourdHui(), instructor_snapshot: row.instructor_snapshot,
+            manager_snapshot: row.manager_snapshot, comment: row.comment, sanction: row.sanction, result: decision,
+            reason: texte(payload.raison) || null, imported_at: new Date().toISOString(), source: "SITE",
+          })
+          if (archiveError) throw archiveError
+        } else {
+          const { error: updateError } = await admin.from("training_followups").update({
+            matricule_snapshot: texte(payload.matricule) || row.matricule_snapshot, steam_id: texte(payload.steamId) || null,
+            discord_id: texte(payload.discordId) || null, reports_count: Math.max(0, nombre(payload.nombreRapports)),
+            service_count: Math.max(0, nombre(payload.prisesService)), instructor_snapshot: texte(payload.instructeur) || row.instructor_snapshot,
+            manager_snapshot: texte(payload.gerant) || row.manager_snapshot, comment: texte(payload.commentaire) || null,
+            sanction: texte(payload.sanction) || "Rien",
+          }).eq("id", row.id)
+          if (updateError) throw updateError
+        }
+        return json({ success: true, message: "Suivi de formation mis à jour." })
+      }
+      case "supprimerArchiveInstructeur": {
+        if (!owner) throw new Error("Suppression réservée au propriétaire.")
+        const id = texte(payload.archiveId)
+        const query = admin.from("instructor_archives").delete()
+        const { error } = /^\d+$/.test(id) ? await query.eq("id", Number(id)) : await query.eq("external_id", id)
+        if (error) throw error
+        return json({ success: true, message: "Archive supprimée." })
       }
       case "definirDefcon":
         if (!owner) throw new Error("Modification DEFCON réservée au propriétaire.")

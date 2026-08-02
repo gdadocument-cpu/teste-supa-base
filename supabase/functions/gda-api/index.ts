@@ -237,6 +237,8 @@ const authenticated = async (req: Request) => {
           decidePar: row.profiles?.display_name || "",
           dateDecision: dateHeureFr(row.decided_at),
           motifRefus: row.refusal_reason || "",
+          notificationLue: row.notification_read === true,
+          notificationSupprimee: row.notification_deleted === true,
           modifiable: base === "EN_ATTENTE",
           supprimableHistorique: base === "REFUSEE" || statut === "TERMINEE",
           peutTerminer: base === "VALIDEE" && row.starts_on <= today && row.ends_on >= today,
@@ -255,6 +257,28 @@ const authenticated = async (req: Request) => {
         peutGerer: has("absences_gerer"),
         peutModifier: officer,
         peutSupprimer: has("disponibilites_modifier_supprimer"),
+      }
+    }
+
+    const notificationsAbsenceClient = async () => {
+      if (!profile.member_id) return { success: true, notifications: [], nonLues: 0 }
+      const demandes = await demandesClient(true)
+      const notifications = demandes
+        .filter((item: any) => ["VALIDEE", "REFUSEE"].includes(item.statutBase) && !item.notificationSupprimee)
+        .map((item: any) => ({
+          id: item.id,
+          titre: item.statutBase === "VALIDEE" ? "Demande d’absence acceptée" : "Demande d’absence refusée",
+          message: item.statutBase === "VALIDEE"
+            ? `Votre demande du ${item.dateDebut} au ${item.dateFin} a été acceptée.`
+            : `Votre demande a été refusée : ${item.motifRefus || "motif non renseigné"}`,
+          date: item.dateDecision,
+          lue: item.notificationLue === true,
+          type: item.statutBase === "VALIDEE" ? "succes" : "refus",
+        }))
+      return {
+        success: true,
+        notifications,
+        nonLues: notifications.filter((notification: any) => !notification.lue).length,
       }
     }
 
@@ -599,16 +623,29 @@ const authenticated = async (req: Request) => {
         return json(await disponibilites("Absence mise à jour."))
       }
       case "recupererNotifications": {
-        const demandes = await demandesClient(true)
-        const notifications = demandes.filter((item: any) => ["VALIDEE", "REFUSEE"].includes(item.statutBase)).map((item: any) => ({ id: item.id, titre: item.statutBase === "VALIDEE" ? "Demande d’absence acceptée" : "Demande d’absence refusée", message: item.statutBase === "VALIDEE" ? `Votre demande du ${item.dateDebut} au ${item.dateFin} a été acceptée.` : `Votre demande a été refusée : ${item.motifRefus || "motif non renseigné"}`, date: item.dateDecision, lue: false, type: item.statutBase === "VALIDEE" ? "succes" : "refus" }))
-        return json({ success: true, notifications, nonLues: notifications.length })
+        return json(await notificationsAbsenceClient())
       }
-      case "marquerNotificationsLues":
-        await admin.from("absence_requests").update({ notification_read: true }).eq("member_id", profile.member_id)
-        return json({ success: true, notifications: [], nonLues: 0 })
-      case "effacerNotifications":
-        await admin.from("absence_requests").update({ notification_deleted: true }).eq("member_id", profile.member_id)
-        return json({ success: true, notifications: [], nonLues: 0 })
+      case "marquerNotificationsLues": {
+        if (profile.member_id) {
+          const { error } = await admin.from("absence_requests")
+            .update({ notification_read: true })
+            .eq("member_id", profile.member_id)
+            .in("status", ["VALIDEE", "REFUSEE"])
+            .eq("notification_deleted", false)
+          if (error) throw error
+        }
+        return json(await notificationsAbsenceClient())
+      }
+      case "effacerNotifications": {
+        if (profile.member_id) {
+          const { error } = await admin.from("absence_requests")
+            .update({ notification_deleted: true })
+            .eq("member_id", profile.member_id)
+            .in("status", ["VALIDEE", "REFUSEE"])
+          if (error) throw error
+        }
+        return json(await notificationsAbsenceClient())
+      }
       case "recupererDeparts": {
         requireOfficer()
         return json(await departsDonnees())

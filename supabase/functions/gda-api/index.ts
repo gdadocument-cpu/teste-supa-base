@@ -733,22 +733,51 @@ const authenticated = async (req: Request) => {
         const identifier = texte(payload.nouvelIdentifiant)
         const discordId = texte(payload.discordId)
         if (!identifier || !/^\d{15,22}$/.test(discordId)) throw new Error("Identifiant ou Discord ID invalide.")
+        let ancienDiscordId = ""
         if (action === "ajouterListeBlanche") {
           const { error } = await admin.from("whitelist").insert({ external_id: idExterne(), login_identifier: identifier, discord_id: discordId, active: true })
           if (error) throw error
         } else {
+          const { data: ancienneEntree, error: lectureError } = await admin.from("whitelist").select("discord_id").eq("external_id", externalId).maybeSingle()
+          if (lectureError || !ancienneEntree) throw lectureError ?? new Error("Personne introuvable dans la liste blanche.")
+          ancienDiscordId = texte(ancienneEntree.discord_id)
           const { error } = await admin.from("whitelist").update({ login_identifier: identifier, discord_id: discordId, active: true }).eq("external_id", externalId)
           if (error) throw error
-          await admin.from("profiles").update({ display_name: identifier, discord_id: discordId, active: true }).eq("discord_id", discordId)
         }
         const requested = texte(payload.permissions).split(",").map(texte).filter(Boolean)
-        const { data: linked } = await admin.from("profiles").select("id").eq("discord_id", discordId).maybeSingle()
-        if (linked && requested.length) {
-          await admin.from("profile_permissions").delete().eq("profile_id", linked.id)
-          await admin.from("profile_permissions").insert(requested.map((code) => ({ profile_id: linked.id, permission_code: code, granted_by_profile_id: profile.id })))
+        let { data: linked, error: profilError } = await admin.from("profiles").select("id,access_level").eq("discord_id", discordId).maybeSingle()
+        if (profilError) throw profilError
+        if (!linked && ancienDiscordId && ancienDiscordId !== discordId) {
+          const resultatAncienProfil = await admin.from("profiles").select("id,access_level").eq("discord_id", ancienDiscordId).maybeSingle()
+          if (resultatAncienProfil.error) throw resultatAncienProfil.error
+          linked = resultatAncienProfil.data
+        }
+        if (!linked) {
+          const resultatProfilNom = await admin.from("profiles").select("id,access_level").ilike("display_name", identifier).maybeSingle()
+          if (resultatProfilNom.error) throw resultatProfilNom.error
+          linked = resultatProfilNom.data
+        }
+        if (!linked) {
+          const resultatCreation = await admin.from("profiles").insert({ display_name: identifier, discord_id: discordId, access_level: "visitor", active: true }).select("id,access_level").single()
+          if (resultatCreation.error) throw resultatCreation.error
+          linked = resultatCreation.data
+        } else {
+          const miseAJourProfil: Record<string, unknown> = { active: true }
+          if (linked.access_level === "visitor") {
+            miseAJourProfil.display_name = identifier
+            miseAJourProfil.discord_id = discordId
+          }
+          const { error: miseAJourError } = await admin.from("profiles").update(miseAJourProfil).eq("id", linked.id)
+          if (miseAJourError) throw miseAJourError
+        }
+        const { error: suppressionPermissionsError } = await admin.from("profile_permissions").delete().eq("profile_id", linked.id)
+        if (suppressionPermissionsError) throw suppressionPermissionsError
+        if (requested.length) {
+          const { error: ajoutPermissionsError } = await admin.from("profile_permissions").insert(requested.map((code) => ({ profile_id: linked.id, permission_code: code, granted_by_profile_id: profile.id })))
+          if (ajoutPermissionsError) throw ajoutPermissionsError
         }
         await audit(action === "ajouterListeBlanche" ? "Accès liste blanche ajouté" : "Accès liste blanche modifié", identifier)
-        return json({ success: true, message: action === "ajouterListeBlanche" ? "Personne ajoutée à la liste blanche." : "Liste blanche modifiée." })
+        return json({ success: true, message: action === "ajouterListeBlanche" ? "Personne ajoutée à la liste blanche." : "Liste blanche et permissions modifiées.", permissions: requested })
       }
       case "recupererJournalActions": {
         requirePermission("administration_logs")

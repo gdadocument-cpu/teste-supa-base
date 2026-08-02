@@ -1110,6 +1110,35 @@ const authenticated = async (req: Request) => {
         if (updateError) throw updateError
         return json({ success: true, message: "Suivi enregistré." })
       }
+      case "recupererCandidatsRapportFormationInstructeur": {
+        requireInstructor()
+        const { data: suivis, error: suivisError } = await admin
+          .from("training_followups")
+          .select("external_id,matricule_snapshot,steam_id,discord_id")
+          .eq("status", "EN_ATTENTE")
+          .is("end_on", null)
+          .order("created_at", { ascending: false })
+        if (suivisError) throw suivisError
+        const dossiers = (suivis ?? []).map((suivi: any) => suivi.external_id)
+        const { data: formations, error: formationsError } = dossiers.length
+          ? await admin.from("instructor_reports")
+            .select("folder_external_id")
+            .eq("active", true)
+            .eq("report_type", "FORMATION")
+            .in("folder_external_id", dossiers)
+          : { data: [], error: null }
+        if (formationsError) throw formationsError
+        const dossiersFormes = new Set((formations ?? []).map((rapport: any) => rapport.folder_external_id))
+        const candidats = (suivis ?? [])
+          .filter((suivi: any) => !dossiersFormes.has(suivi.external_id))
+          .map((suivi: any) => ({
+            matricule: suivi.matricule_snapshot,
+            steamId: suivi.steam_id || "",
+            discordId: suivi.discord_id || "",
+          }))
+          .sort((a: any, b: any) => normalise(a.matricule).localeCompare(normalise(b.matricule)))
+        return json({ success: true, candidats })
+      }
       case "enregistrerRapportTestInstructeur":
       case "enregistrerRapportFormationInstructeur": {
         requireInstructor()
@@ -1117,19 +1146,90 @@ const authenticated = async (req: Request) => {
         const matricule = texte(payload.matricule)
         const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(matricule))
         if (isTest && member) throw new Error("Ce matricule est déjà présent dans l’effectif. Vérifiez-en un autre.")
-        const score = isTest ? nombre(payload.note) : null
+        const personneFormee = texte(payload.personneFormee)
+        const steamId = texte(payload.steamId)
+        const discordId = texte(payload.discordId).replace(/\D/g, "")
+        const score = isTest ? Number(texte(payload.note).replace(",", ".")) : null
+        if (!matricule) throw new Error("Le matricule définitif est obligatoire.")
+        if (isTest && !personneFormee) throw new Error("La personne formée est obligatoire.")
+        if (!steamId) throw new Error("Le Steam ID est obligatoire.")
+        if (!/^\d{15,22}$/.test(discordId)) throw new Error("Le Discord ID doit contenir entre 15 et 22 chiffres.")
+        if (isTest && (!Number.isFinite(score) || score < 0 || score > 20)) throw new Error("La note doit être comprise entre 0 et 20.")
+        const accepted = !isTest || Number(score) >= 14
+        const reportExternalId = idExterne()
+        let folderExternalId = reportExternalId
+        let suiviExistant: any = null
+        if (isTest && accepted) {
+          const { data, error } = await admin.from("training_followups")
+            .select("id,external_id")
+            .eq("status", "EN_ATTENTE")
+            .ilike("matricule_snapshot", matricule)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (error) throw error
+          suiviExistant = data
+          if (suiviExistant?.external_id) folderExternalId = suiviExistant.external_id
+        } else if (!isTest) {
+          const { data: suivi, error: suiviError } = await admin.from("training_followups")
+            .select("id,external_id")
+            .eq("status", "EN_ATTENTE")
+            .is("end_on", null)
+            .ilike("matricule_snapshot", matricule)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (suiviError) throw suiviError
+          if (!suivi) throw new Error("Cette personne n’est plus en attente de formation. Actualisez la page.")
+          folderExternalId = suivi.external_id
+          const { data: formationExistante, error: formationError } = await admin.from("instructor_reports")
+            .select("id")
+            .eq("active", true)
+            .eq("report_type", "FORMATION")
+            .eq("folder_external_id", folderExternalId)
+            .limit(1)
+            .maybeSingle()
+          if (formationError) throw formationError
+          if (formationExistante) throw new Error("Un rapport Formation existe déjà pour cette personne.")
+        }
         const row = {
-          external_id: idExterne(), created_by_profile_id: profile.id, instructor_snapshot: actorName,
+          external_id: reportExternalId, created_by_profile_id: profile.id, instructor_snapshot: actorName,
           report_type: isTest ? "TEST" : "FORMATION", event_on: isoDate(isTest ? payload.dateTest : payload.dateFormation) ?? aujourdHui(),
-          trainee_name: isTest ? texte(payload.personneFormee) : (member?.matricule ?? matricule), final_matricule: matricule || null,
-          steam_id: texte(payload.steamId) || null, discord_id: texte(payload.discordId) || null,
-          score, result: isTest ? (score >= 14 ? "ACCEPTE" : "REFUSE") : "ACCEPTE",
+          trainee_name: isTest ? personneFormee : (member?.matricule ?? matricule), final_matricule: matricule,
+          steam_id: steamId, discord_id: discordId,
+          score, result: accepted ? "ACCEPTE" : "REFUSE", folder_external_id: folderExternalId,
           remark: texte(payload.remarque) || null, comment: texte(payload.commentaire) || null,
         }
         const { data: created, error } = await admin.from("instructor_reports").insert(row).select("*").single()
         if (error) throw error
+        if (isTest && accepted && !suiviExistant) {
+          const { error: suiviError } = await admin.from("training_followups").insert({
+            external_id: folderExternalId,
+            matricule_snapshot: matricule,
+            steam_id: steamId,
+            discord_id: discordId,
+            reports_count: 0,
+            service_count: 0,
+            instructor_profile_id: null,
+            instructor_snapshot: null,
+            manager_profile_id: null,
+            manager_snapshot: null,
+            status: "EN_ATTENTE",
+            source: `Rapport Instructeur TEST / Dossier ${folderExternalId} / Rapport ${reportExternalId}`,
+          })
+          if (suiviError) {
+            await admin.from("instructor_reports").delete().eq("id", created.id)
+            throw suiviError
+          }
+        }
         await audit(isTest ? "Rapport Test enregistré" : "Rapport Formation enregistré", matricule)
-        return json({ success: true, message: "Rapport Instructeur enregistré.", rapport: rapportInstructeurClient(created) })
+        return json({
+          success: true,
+          message: isTest
+            ? `Rapport Test enregistré et classé « ${accepted ? "Accepté" : "Refusé"} ».`
+            : `Rapport Formation enregistré pour ${matricule}.`,
+          rapport: rapportInstructeurClient(created),
+        })
       }
       case "modifierRapportInstructeur": {
         if (!officer && !instructor) throw new Error("Permission insuffisante.")

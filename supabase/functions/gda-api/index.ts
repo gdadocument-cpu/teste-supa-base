@@ -87,11 +87,13 @@ const authenticated = async (req: Request) => {
       .maybeSingle()
     if (profileError || !profile) return json({ success: false, message: "Profil GDA non autorisé." }, 403)
 
-    const [{ data: grants }, { data: members }, { data: delayed }, { data: defcon }] = await Promise.all([
+    const [{ data: grants }, { data: members }, { data: delayed }, { data: defcon }, { data: suivisProbatoires }, { data: absencesSuivis }] = await Promise.all([
       admin.from("profile_permissions").select("permission_code").eq("profile_id", profile.id),
       admin.from("members").select("*").eq("active", true),
       admin.from("current_gda_roster").select("*"),
       admin.from("defcon_state").select("level,updated_at").eq("singleton", true).maybeSingle(),
+      admin.from("training_followups").select("*").eq("status", "EN_ATTENTE"),
+      admin.from("absences").select("member_id,matricule_snapshot,starts_on,ends_on"),
     ])
 
     const permissions = new Set((grants ?? []).map((grant: any) => grant.permission_code))
@@ -111,6 +113,9 @@ const authenticated = async (req: Request) => {
     const actorGrade = ownDelayed?.grade ?? ownMember?.grade ?? "Visiteur"
     const actorGradeNormalise = normalise(actorGrade).replace(/[^A-Z]/g, "")
     const peutGererDefcon = owner || permissions.has("role_staff_total") || ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(actorGradeNormalise)
+    const suivisProbatoiresActifs = (suivisProbatoires ?? []).filter((suivi: any) => !!suivi.end_on)
+    const probatoiresParMembre = new Set(suivisProbatoiresActifs.map((suivi: any) => suivi.member_id).filter(Boolean))
+    const probatoiresParMatricule = new Set(suivisProbatoiresActifs.map((suivi: any) => normalise(suivi.matricule_snapshot)))
     const defconClient = {
       niveau: Math.max(0, Math.min(4, nombre(defcon?.level))),
       modifiePar: "",
@@ -185,6 +190,7 @@ const authenticated = async (req: Request) => {
         recommandation: nombre(base.recommendation),
         observation: nombre(base.observation),
         notes: base.notes || "",
+        enPeriodeProbatoire: probatoiresParMembre.has(member?.id) || probatoiresParMatricule.has(normalise(base.matricule)),
       }
     }
 
@@ -387,7 +393,63 @@ const authenticated = async (req: Request) => {
       return `Gérant — ${member?.matricule ?? ""}`
     }
 
-    const suiviInstructeurClient = (row: any) => ({
+    const ajouterJoursIso = (dateIso: unknown, jours: number) => {
+      const valeur = isoDate(dateIso)
+      if (!valeur) return null
+      const date = new Date(`${valeur}T12:00:00Z`)
+      date.setUTCDate(date.getUTCDate() + Math.trunc(jours || 0))
+      return date.toISOString().slice(0, 10)
+    }
+    const joursSanctionSuivi = (sanction: unknown) => normalise(sanction) === "P1" ? 4 : normalise(sanction) === "P2" ? 6 : 0
+    const ajustementsAbsenceSuivi = (row: any) => {
+      if (!row.end_on) return { ecoules: 0, planifies: 0, absent: false, dateFinApresAbsence: null, dateFinCompteur: null }
+      const aujourdHuiIso = aujourdHui()
+      const aujourdHuiMs = new Date(`${aujourdHuiIso}T12:00:00Z`).getTime()
+      const debutSuiviIso = ajouterJoursIso(row.initial_end_on || row.end_on, -7) || isoDate(row.created_at) || aujourdHuiIso
+      const debutSuiviMs = new Date(`${debutSuiviIso}T12:00:00Z`).getTime()
+      const planifies: Array<{ debut: number, fin: number }> = []
+      const ecoules: Array<{ debut: number, fin: number }> = []
+      let absent = false
+      for (const absence of absencesSuivis ?? []) {
+        const correspond = row.member_id && absence.member_id
+          ? row.member_id === absence.member_id
+          : normalise(row.matricule_snapshot) === normalise(absence.matricule_snapshot)
+        if (!correspond) continue
+        const debutIso = isoDate(absence.starts_on), finIso = isoDate(absence.ends_on)
+        if (!debutIso || !finIso || debutIso > aujourdHuiIso) continue
+        const debut = Math.max(debutSuiviMs, new Date(`${debutIso}T12:00:00Z`).getTime())
+        const finInclusive = new Date(`${finIso}T12:00:00Z`).getTime()
+        const fin = finInclusive + 86400000
+        if (fin <= debut) continue
+        planifies.push({ debut, fin })
+        const borneEcoulee = Math.min(fin, aujourdHuiMs)
+        if (borneEcoulee > debut) ecoules.push({ debut, fin: borneEcoulee })
+        if (debutIso <= aujourdHuiIso && finIso >= aujourdHuiIso) absent = true
+      }
+      const totalJours = (intervalles: Array<{ debut: number, fin: number }>) => {
+        if (!intervalles.length) return 0
+        const tries = [...intervalles].sort((a, b) => a.debut - b.debut)
+        let debut = tries[0].debut, fin = tries[0].fin, total = 0
+        for (const intervalle of tries.slice(1)) {
+          if (intervalle.debut <= fin) fin = Math.max(fin, intervalle.fin)
+          else { total += Math.round((fin - debut) / 86400000); debut = intervalle.debut; fin = intervalle.fin }
+        }
+        return total + Math.round((fin - debut) / 86400000)
+      }
+      const joursEcoules = totalJours(ecoules)
+      const joursPlanifies = totalJours(planifies)
+      return {
+        ecoules: joursEcoules,
+        planifies: joursPlanifies,
+        absent,
+        dateFinApresAbsence: ajouterJoursIso(row.end_on, joursPlanifies),
+        dateFinCompteur: ajouterJoursIso(row.end_on, joursEcoules),
+      }
+    }
+
+    const suiviInstructeurClient = (row: any) => {
+      const absence = ajustementsAbsenceSuivi(row)
+      return {
       ligne: row.id,
       id: row.external_id,
       matricule: row.matricule_snapshot,
@@ -398,8 +460,10 @@ const authenticated = async (req: Request) => {
       prisesService: row.service_count,
       dateFin: dateFr(row.end_on),
       dateFinInitiale: dateFr(row.initial_end_on),
-      dateFinApresAbsence: dateFr(row.end_after_absence_on),
-      joursRestants: joursRestants(row.end_on),
+      dateFinApresAbsence: dateFr(absence.dateFinApresAbsence),
+      joursAbsencePlanifies: absence.planifies,
+      joursRestants: joursRestants(absence.dateFinCompteur),
+      absent: absence.absent,
       instructeur: row.instructor_snapshot || "",
       gerant: row.manager_snapshot || "",
       commentaire: row.comment || "",
@@ -410,7 +474,8 @@ const authenticated = async (req: Request) => {
       modifieLe: dateHeureFr(row.updated_at),
       peutDecider: has("suivis_decider_tous") || estGerantSuivi(row),
       peutTransferer: has("role_staff_total") || estGerantSuivi(row),
-    })
+      }
+    }
 
     switch (action) {
       case "recupererVersionDonnees":
@@ -1039,6 +1104,20 @@ const authenticated = async (req: Request) => {
         let query = admin.from("training_followups").select("*").eq("status", "EN_ATTENTE").order("updated_at", { ascending: false })
         const { data, error } = await query
         if (error) throw error
+        await Promise.all((data ?? []).filter((row: any) => !!row.end_on).map(async (row: any) => {
+          const absence = ajustementsAbsenceSuivi(row)
+          if (nombre(row.compensated_absence_days) === absence.ecoules &&
+              isoDate(row.end_after_absence_on) === isoDate(absence.dateFinApresAbsence)) return
+          const { error: syncError } = await admin.from("training_followups").update({
+            compensated_absence_days: absence.ecoules,
+            end_after_absence_on: absence.dateFinApresAbsence,
+            last_manual_freeze_at: null,
+            manual_freeze_days: 0,
+          }).eq("id", row.id)
+          if (syncError) throw syncError
+          row.compensated_absence_days = absence.ecoules
+          row.end_after_absence_on = absence.dateFinApresAbsence
+        }))
         const rows = action === "recupererMesSuivisInstructeur"
           ? (data ?? []).filter(suiviAttribueAuProfil)
           : (data ?? [])
@@ -1259,8 +1338,69 @@ const authenticated = async (req: Request) => {
       case "ajouterSuiviFormationInstructeur":
       case "demarrerSuiviFormationInstructeur": {
         requireInstructor()
+        if (action === "demarrerSuiviFormationInstructeur") {
+          const suiviId = texte(payload.suiviId)
+          let suiviQuery = admin.from("training_followups").select("*")
+          suiviQuery = /^\d+$/.test(suiviId) ? suiviQuery.eq("id", Number(suiviId)) : suiviQuery.eq("external_id", suiviId)
+          const { data: suivi, error: suiviError } = await suiviQuery.maybeSingle()
+          if (suiviError || !suivi) throw new Error("Suivi introuvable. Actualisez la page.")
+          if (normalise(suivi.status) !== "EN_ATTENTE" || suivi.end_on) throw new Error("Ce suivi a déjà été pris en charge.")
+          const matricule = texte(payload.matricule) || suivi.matricule_snapshot
+          const steamId = texte(payload.steamId) || suivi.steam_id
+          const discordId = texte(payload.discordId || suivi.discord_id).replace(/\D/g, "")
+          if (!matricule || !steamId) throw new Error("Le matricule et le Steam ID sont obligatoires.")
+          if (!/^\d{15,22}$/.test(discordId)) throw new Error("Le Discord ID doit contenir entre 15 et 22 chiffres.")
+          if ((members ?? []).some((item: any) => normalise(item.matricule) === normalise(matricule))) throw new Error("Ce matricule est déjà présent dans l’effectif.")
+          if ((members ?? []).some((item: any) => normalise(item.steam_id) === normalise(steamId))) throw new Error("Ce Steam ID est déjà présent dans l’effectif.")
+          if ((members ?? []).some((item: any) => normalise(item.discord_id) === normalise(discordId))) throw new Error("Ce Discord ID est déjà présent dans l’effectif.")
+          if ((members ?? []).length >= 35) throw new Error("L’effectif a atteint sa limite de 35 GDA.")
+          const { data: formation, error: formationError } = await admin.from("instructor_reports")
+            .select("id,steam_id,discord_id").eq("active", true).eq("report_type", "FORMATION")
+            .eq("folder_external_id", suivi.external_id).order("submitted_at", { ascending: false }).limit(1).maybeSingle()
+          if (formationError) throw formationError
+          if (!formation) throw new Error("La prise en charge reste bloquée tant que le rapport Formation n’est pas enregistré.")
+          const idsDifferents = normalise(suivi.steam_id) !== normalise(formation.steam_id) || normalise(suivi.discord_id) !== normalise(formation.discord_id)
+          if (idsDifferents && !bool(payload.identifiantsConfirmes)) throw new Error("Les identifiants Test et Formation diffèrent : confirmez les identifiants définitifs.")
+          const instructeurNom = texte(payload.instructeur)
+          const membreInstructeur = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(instructeurNom))
+          if (!membreInstructeur || !(membreInstructeur.specializations ?? []).some((item: string) => normalise(item).includes("INSTRUCTEUR"))) {
+            throw new Error("La personne choisie ne possède pas la spécialisation Instructeur.")
+          }
+          const profilInstructeur = await profilActifParMatricule(instructeurNom)
+          if (!profilInstructeur) throw new Error("Le profil de l’instructeur choisi est introuvable.")
+          const sanction = ["P1", "P2"].includes(normalise(payload.sanction)) ? normalise(payload.sanction) : "Rien"
+          const dateFinInitiale = ajouterJoursIso(aujourdHui(), 7)
+          const dateFin = ajouterJoursIso(dateFinInitiale, joursSanctionSuivi(sanction))
+          const { data: membreCree, error: membreError } = await admin.from("members").insert({
+            matricule, grade: "Caporal", steam_id: steamId, discord_id: discordId, presence: "Présent",
+            reports_count: 0, observation: "0", joined_on: aujourdHui(), sanction: "Clean",
+            recommendation: "0", specializations: [], medals: [], active: true,
+          }).select("id").single()
+          if (membreError) throw membreError
+          const { error: updateError } = await admin.from("training_followups").update({
+            member_id: membreCree.id, matricule_snapshot: matricule, steam_id: steamId, discord_id: discordId,
+            initial_end_on: dateFinInitiale, end_on: dateFin, end_after_absence_on: dateFin,
+            instructor_profile_id: profilInstructeur.id, instructor_snapshot: instructeurNom,
+            manager_profile_id: profile.id, manager_snapshot: libelleGerantMembre(ownMember ?? { matricule: actorName, specializations: [] }),
+            sanction, status: "EN_ATTENTE",
+          }).eq("id", suivi.id)
+          if (updateError) {
+            await admin.from("members").delete().eq("id", membreCree.id)
+            throw updateError
+          }
+          await audit("Période probatoire démarrée", matricule, `Rapport Formation ${formation.id}`)
+          return json({ success: true, message: `La période probatoire de ${matricule} a été démarrée et le membre a été ajouté à l’effectif comme Caporal.` })
+        }
         const matricule = texte(payload.matricule)
         const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(matricule))
+        const steamId = texte(payload.steamId)
+        const discordId = texte(payload.discordId).replace(/\D/g, "")
+        if (!matricule || !steamId) throw new Error("Le matricule et le Steam ID sont obligatoires.")
+        if (!/^\d{15,22}$/.test(discordId)) throw new Error("Le Discord ID doit contenir entre 15 et 22 chiffres.")
+        if (member) throw new Error("Ce matricule est déjà présent dans l’effectif.")
+        if ((members ?? []).some((item: any) => normalise(item.steam_id) === normalise(steamId))) throw new Error("Ce Steam ID est déjà présent dans l’effectif.")
+        if ((members ?? []).some((item: any) => normalise(item.discord_id) === normalise(discordId))) throw new Error("Ce Discord ID est déjà présent dans l’effectif.")
+        if ((members ?? []).length >= 35) throw new Error("L’effectif a atteint sa limite de 35 GDA.")
         const instructeurNom = texte(payload.instructeur) || actorName
         const membreInstructeur = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(instructeurNom))
         if (!membreInstructeur || !(membreInstructeur.specializations ?? []).some((item: string) => normalise(item).includes("INSTRUCTEUR"))) {
@@ -1270,17 +1410,28 @@ const authenticated = async (req: Request) => {
         if (!profilInstructeur) throw new Error("Le profil de l’instructeur choisi est introuvable.")
         const gerantNom = texte(payload.gerant)
         const profilGerant = gerantNom ? await profilActifParMatricule(matriculeDepuisLibelleGerant(gerantNom)) : null
-        const fin = new Date(`${aujourdHui()}T12:00:00Z`); fin.setUTCDate(fin.getUTCDate() + 7)
+        const sanction = ["P1", "P2"].includes(normalise(payload.sanction)) ? normalise(payload.sanction) : "Rien"
+        const finInitiale = new Date(`${aujourdHui()}T12:00:00Z`); finInitiale.setUTCDate(finInitiale.getUTCDate() + 7)
+        const fin = new Date(finInitiale); fin.setUTCDate(fin.getUTCDate() + joursSanctionSuivi(sanction))
+        const { data: membreCree, error: membreError } = await admin.from("members").insert({
+          matricule, grade: "Caporal", steam_id: steamId, discord_id: discordId, presence: "Présent",
+          reports_count: 0, observation: "0", joined_on: aujourdHui(), sanction: "Clean",
+          recommendation: "0", specializations: [], medals: [], active: true,
+        }).select("id").single()
+        if (membreError) throw membreError
         const { error } = await admin.from("training_followups").insert({
-          external_id: idExterne(), member_id: member?.id ?? null, matricule_snapshot: member?.matricule ?? matricule,
-          steam_id: texte(payload.steamId) || member?.steam_id || null, discord_id: texte(payload.discordId) || member?.discord_id || null,
+          external_id: idExterne(), member_id: membreCree.id, matricule_snapshot: matricule,
+          steam_id: steamId, discord_id: discordId,
           reports_count: Math.max(0, nombre(payload.nombreRapports)), service_count: Math.max(0, nombre(payload.prisesService)),
-          initial_end_on: fin.toISOString().slice(0, 10), end_on: fin.toISOString().slice(0, 10), instructor_profile_id: profilInstructeur.id,
+          initial_end_on: finInitiale.toISOString().slice(0, 10), end_on: fin.toISOString().slice(0, 10), end_after_absence_on: fin.toISOString().slice(0, 10), instructor_profile_id: profilInstructeur.id,
           instructor_snapshot: instructeurNom, manager_profile_id: profilGerant?.id ?? null, manager_snapshot: gerantNom || null,
-          comment: texte(payload.commentaire) || null, sanction: texte(payload.sanction) || "Rien", status: "EN_ATTENTE", source: "SITE",
+          comment: texte(payload.commentaire) || null, sanction, status: "EN_ATTENTE", source: "SITE",
         })
-        if (error) throw error
-        return json({ success: true, message: "Suivi de formation ajouté." })
+        if (error) {
+          await admin.from("members").delete().eq("id", membreCree.id)
+          throw error
+        }
+        return json({ success: true, message: `Le suivi de ${matricule} a été ajouté et le membre est entré dans l’effectif comme Caporal.` })
       }
       case "modifierSuiviFormationInstructeur":
       case "transfererGeranceSuiviFormationInstructeur":
@@ -1310,28 +1461,78 @@ const authenticated = async (req: Request) => {
           if (updateError) throw updateError
         } else if (action === "deciderSuiviFormationInstructeur") {
           const decision = normalise(payload.decision) === "ACCEPTE" ? "ACCEPTE" : "REFUSE"
-          const { error: updateError } = await admin.from("training_followups").update({ status: decision, comment: texte(payload.raison) || row.comment }).eq("id", row.id)
-          if (updateError) throw updateError
-          const { error: archiveError } = await admin.from("instructor_archives").insert({
+          const raison = texte(payload.raison)
+          if (decision === "REFUSE" && !raison) throw new Error("La raison du refus est obligatoire.")
+          const { data: archiveCreee, error: archiveError } = await admin.from("instructor_archives").insert({
             external_id: idExterne(), matricule_snapshot: row.matricule_snapshot, steam_id: row.steam_id, discord_id: row.discord_id,
             reports_count: row.reports_count, service_count: row.service_count, ended_on: aujourdHui(), instructor_snapshot: row.instructor_snapshot,
             manager_snapshot: row.manager_snapshot, comment: row.comment, sanction: row.sanction, result: decision,
-            reason: texte(payload.raison) || null, imported_at: new Date().toISOString(), source: "SITE",
-          })
+            reason: raison || null, imported_at: new Date().toISOString(), source: "SITE",
+          }).select("id").single()
           if (archiveError) throw archiveError
+          let departCreeId: number | null = null
+          try {
+            let membreSuivi: any = null
+            if (row.member_id) {
+              const { data } = await admin.from("members").select("*").eq("id", row.member_id).maybeSingle()
+              membreSuivi = data
+            }
+            if (!membreSuivi) {
+              const { data } = await admin.from("members").select("*").ilike("matricule", row.matricule_snapshot).maybeSingle()
+              membreSuivi = data
+            }
+            if (decision === "REFUSE") {
+              const dateRetour = ajouterJoursIso(aujourdHui(), 7)
+              const { data: departCree, error: departError } = await admin.from("departures").insert({
+                external_id: idExterne(), member_id: membreSuivi?.id ?? row.member_id ?? null,
+                matricule_snapshot: row.matricule_snapshot, grade_snapshot: membreSuivi?.grade || "Caporal",
+                steam_id_snapshot: row.steam_id, discord_id_snapshot: row.discord_id,
+                departure_type: "LICENCIEMENT", starts_on: aujourdHui(), ends_on: dateRetour,
+                reason: raison, status: "TEMPORAIRE", decided_by_profile_id: profile.id,
+                medals_snapshot: membreSuivi?.medals ?? [],
+              }).select("id").single()
+              if (departError) throw departError
+              departCreeId = departCree.id
+            }
+            const { error: updateError } = await admin.from("training_followups").update({ status: decision, comment: raison || row.comment }).eq("id", row.id)
+            if (updateError) throw updateError
+            const { error: rapportsError } = await admin.from("instructor_reports").update({ active: false }).eq("folder_external_id", row.external_id)
+            if (rapportsError) throw rapportsError
+            if (decision === "REFUSE" && membreSuivi?.id) {
+              const { error: membreError } = await admin.from("members").delete().eq("id", membreSuivi.id)
+              if (membreError) throw membreError
+            }
+          } catch (decisionError) {
+            await admin.from("training_followups").update({ status: "EN_ATTENTE", comment: row.comment }).eq("id", row.id)
+            await admin.from("instructor_reports").update({ active: true }).eq("folder_external_id", row.external_id)
+            if (departCreeId) await admin.from("departures").delete().eq("id", departCreeId)
+            await admin.from("instructor_archives").delete().eq("id", archiveCreee.id)
+            throw decisionError
+          }
+          await audit(decision === "ACCEPTE" ? "Période probatoire acceptée" : "Période probatoire refusée", row.matricule_snapshot, raison)
+          return json({
+            success: true,
+            message: decision === "ACCEPTE"
+              ? `${row.matricule_snapshot} a été accepté et conservé dans l’effectif.`
+              : `${row.matricule_snapshot} a été refusé, licencié et retiré de l’effectif.`,
+          })
         } else {
           const instructeurNom = texte(payload.instructeur) || row.instructor_snapshot
           const profilInstructeur = await profilActifParMatricule(instructeurNom)
           if (!profilInstructeur) throw new Error("Le profil de l’instructeur choisi est introuvable.")
           const gerantNom = texte(payload.gerant) || row.manager_snapshot
           const profilGerant = gerantNom ? await profilActifParMatricule(matriculeDepuisLibelleGerant(gerantNom)) : null
+          const sanction = ["P1", "P2"].includes(normalise(payload.sanction)) ? normalise(payload.sanction) : "Rien"
+          const dateFinInitiale = isoDate(row.initial_end_on) || ajouterJoursIso(row.end_on, -joursSanctionSuivi(row.sanction)) || ajouterJoursIso(aujourdHui(), 7)
+          const dateFin = ajouterJoursIso(dateFinInitiale, joursSanctionSuivi(sanction))
           const { error: updateError } = await admin.from("training_followups").update({
             matricule_snapshot: texte(payload.matricule) || row.matricule_snapshot, steam_id: texte(payload.steamId) || null,
             discord_id: texte(payload.discordId) || null, reports_count: Math.max(0, nombre(payload.nombreRapports)),
             service_count: Math.max(0, nombre(payload.prisesService)), instructor_profile_id: profilInstructeur.id,
             instructor_snapshot: instructeurNom, manager_profile_id: profilGerant?.id ?? row.manager_profile_id,
             manager_snapshot: gerantNom, comment: texte(payload.commentaire) || null,
-            sanction: texte(payload.sanction) || "Rien",
+            sanction, initial_end_on: dateFinInitiale, end_on: dateFin,
+            end_after_absence_on: ajouterJoursIso(dateFin, ajustementsAbsenceSuivi({ ...row, end_on: dateFin, initial_end_on: dateFinInitiale }).planifies),
           }).eq("id", row.id)
           if (updateError) throw updateError
         }

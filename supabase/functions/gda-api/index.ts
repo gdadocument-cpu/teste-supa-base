@@ -380,16 +380,46 @@ const authenticated = async (req: Request) => {
     switch (action) {
       case "recupererVersionDonnees":
         return json({ success: true, revision: Date.now(), action: "supabase", defcon: defconClient })
-      case "presenceEnLigne":
+      case "presenceEnLigne": {
+        const maintenant = new Date()
+        const expiration = new Date(maintenant.getTime() - 45000).toISOString()
+        const { error: presenceError } = await admin.from("online_presence").upsert({
+          profile_id: profile.id,
+          member_id: profile.member_id,
+          name_snapshot: actorName,
+          grade_snapshot: actorGrade,
+          last_seen_at: maintenant.toISOString(),
+        }, { onConflict: "profile_id" })
+        if (presenceError) throw presenceError
+
+        await admin.from("online_presence").delete().lt("last_seen_at", expiration)
+        const { data: presences, error: lecturePresenceError } = await admin
+          .from("online_presence")
+          .select("profile_id,member_id,name_snapshot,grade_snapshot,last_seen_at")
+          .gte("last_seen_at", expiration)
+          .order("name_snapshot", { ascending: true })
+        if (lecturePresenceError) throw lecturePresenceError
+
+        const utilisateurs = (presences ?? []).map((presence: any) => {
+          const roster = presence.member_id
+            ? delayedById.get(presence.member_id)
+            : delayedByName.get(normalise(presence.name_snapshot))
+          return {
+            nom: roster?.matricule ?? presence.name_snapshot,
+            grade: roster?.grade ?? presence.grade_snapshot,
+          }
+        })
         return json({
           success: true,
-          total: 1,
+          total: utilisateurs.length,
+          permissions: [...permissions],
           proprietaire: owner,
           coproprietaire: !owner && permissions.has("role_staff_total"),
           peutGererDefcon,
-          utilisateurs: [{ nom: actorName, grade: actorGrade }],
+          utilisateurs,
           defcon: defconClient,
         })
+      }
       case "recupererEffectif":
         return json({
           success: true,

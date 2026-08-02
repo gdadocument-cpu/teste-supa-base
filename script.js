@@ -1622,6 +1622,11 @@ function obtenirPermissionsUtilisateur() {
 
 function utilisateurAPermission(permission) {
   const permissions = obtenirPermissionsUtilisateur();
+  if (
+    sessionStorage.getItem("proprietaireUtilisateur") === "true" ||
+    sessionStorage.getItem("coproprietaireUtilisateur") === "true" ||
+    permissions.includes("role_staff_total")
+  ) return true;
   if (permissions.includes(permission)) return true;
   return permissions.includes("administration") && [
     "administration_staff",

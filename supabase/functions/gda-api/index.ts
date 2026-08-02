@@ -311,6 +311,23 @@ const authenticated = async (req: Request) => {
       actif: row.active,
     })
 
+    const matriculeDepuisLibelleGerant = (value: unknown) => texte(value)
+      .replace(/^g[ée]rant\s*/i, "")
+      .replace(/^(?:co[-\s]*resp(?:onsable)?|resp(?:onsable)?)\b\s*/i, "")
+      .replace(/^(?:—|–|-|:|\|)\s*/, "")
+      .trim()
+    const estGerantSuivi = (row: any) =>
+      row.manager_profile_id === profile.id ||
+      normalise(matriculeDepuisLibelleGerant(row.manager_snapshot)) === normalise(actorName)
+    const libelleGerantMembre = (member: any) => {
+      const specialisations = normalise((member?.specializations ?? []).join("; "))
+      if (specialisations.includes("CO-RESPONSABLE INST") || specialisations.includes("CO RESPONSABLE INST")) {
+        return `Co-Resp ${member.matricule}`
+      }
+      if (specialisations.includes("RESPONSABLE INST")) return `Resp ${member.matricule}`
+      return `Gérant — ${member?.matricule ?? ""}`
+    }
+
     const suiviInstructeurClient = (row: any) => ({
       ligne: row.id,
       id: row.external_id,
@@ -328,12 +345,12 @@ const authenticated = async (req: Request) => {
       gerant: row.manager_snapshot || "",
       commentaire: row.comment || "",
       sanction: row.sanction || "Rien",
-      statut: row.status,
+      statut: normalise(row.status) === "EN_ATTENTE" ? "" : row.status,
       source: row.source || "",
       creeLe: dateHeureFr(row.created_at),
       modifieLe: dateHeureFr(row.updated_at),
-      peutDecider: has("suivis_decider_tous"),
-      peutTransferer: owner || row.manager_profile_id === profile.id,
+      peutDecider: has("suivis_decider_tous") || estGerantSuivi(row),
+      peutTransferer: has("role_staff_total") || estGerantSuivi(row),
     })
 
     switch (action) {
@@ -869,11 +886,66 @@ const authenticated = async (req: Request) => {
       }
       case "recupererSuivisFormationInstructeur":
       case "recupererMesSuivisInstructeur": {
-        let query = admin.from("training_followups").select("*").order("updated_at", { ascending: false })
+        let query = admin.from("training_followups").select("*").eq("status", "EN_ATTENTE").order("updated_at", { ascending: false })
         if (action === "recupererMesSuivisInstructeur") query = query.or(`instructor_profile_id.eq.${profile.id},manager_profile_id.eq.${profile.id}`)
         const { data, error } = await query
         if (error) throw error
-        return json({ success: true, suivis: (data ?? []).map(suiviInstructeurClient), peutModifier: instructor || officer, peutDeciderTous: has("suivis_decider_tous") })
+        const actifs = (data ?? []).filter((row: any) => !!row.end_on)
+        const nouveaux = (data ?? []).filter((row: any) => !row.end_on)
+        if (action === "recupererMesSuivisInstructeur") {
+          return json({ success: true, suivis: actifs.map(suiviInstructeurClient) })
+        }
+
+        const [{ data: profilsActifs }, { data: droitsProfils }, { data: rapportsFormation }] = await Promise.all([
+          admin.from("profiles").select("id,member_id,display_name,access_level").eq("active", true),
+          admin.from("profile_permissions").select("profile_id,permission_code"),
+          nouveaux.length
+            ? admin.from("instructor_reports").select("folder_external_id,final_matricule,steam_id,discord_id").eq("active", true).eq("report_type", "FORMATION")
+            : Promise.resolve({ data: [] }),
+        ])
+        const droitsParProfil = new Map<number, Set<string>>()
+        for (const droit of droitsProfils ?? []) {
+          if (!droitsParProfil.has(droit.profile_id)) droitsParProfil.set(droit.profile_id, new Set())
+          droitsParProfil.get(droit.profile_id)?.add(droit.permission_code)
+        }
+        const profilParMembre = new Map((profilsActifs ?? []).filter((p: any) => p.member_id).map((p: any) => [p.member_id, p]))
+        const instructeurs = (members ?? [])
+          .filter((member: any) => (member.specializations ?? []).some((item: string) => normalise(item).includes("INSTRUCTEUR")))
+          .map((member: any) => ({ nom: member.matricule, specialisation: (member.specializations ?? []).join("; ") }))
+          .sort((a: any, b: any) => normalise(a.nom).localeCompare(normalise(b.nom)))
+        const gerants = (members ?? [])
+          .filter((member: any) => {
+            const specialisations = normalise((member.specializations ?? []).join("; "))
+            const profil: any = profilParMembre.get(member.id)
+            const droits = profil ? droitsParProfil.get(profil.id) : null
+            return specialisations.includes("RESPONSABLE INST") || specialisations.includes("INSTRUCTEUR EN CHEF") ||
+              profil?.access_level === "owner" || droits?.has("role_staff_total") || droits?.has("suivis_decider_tous")
+          })
+          .map((member: any) => ({ nom: member.matricule, libelle: libelleGerantMembre(member), grade: member.grade || "" }))
+          .sort((a: any, b: any) => normalise(a.nom).localeCompare(normalise(b.nom)))
+        const nouveauxClients = nouveaux.map((row: any) => {
+          const formation = (rapportsFormation ?? []).find((rapport: any) =>
+            (rapport.folder_external_id && rapport.folder_external_id === row.external_id) ||
+            (!rapport.folder_external_id && normalise(rapport.final_matricule) === normalise(row.matricule_snapshot)))
+          return {
+            ...suiviInstructeurClient(row),
+            formationEffectuee: !!formation,
+            steamIdFormation: formation?.steam_id || "",
+            discordIdFormation: formation?.discord_id || "",
+            identifiantsConformes: !!formation && normalise(row.steam_id) === normalise(formation.steam_id) &&
+              normalise(row.discord_id) === normalise(formation.discord_id),
+          }
+        })
+        return json({
+          success: true,
+          suivis: actifs.map(suiviInstructeurClient),
+          nouveauxArrivants: nouveauxClients,
+          instructeurs,
+          gerants,
+          gerantConnecte: libelleGerantMembre(ownMember ?? { matricule: actorName, specializations: [] }),
+          peutModifier: instructor,
+          peutDeciderTous: has("suivis_decider_tous"),
+        })
       }
       case "mettreAJourMonSuiviInstructeur": {
         const suiviId = texte(payload.suiviId)
@@ -952,20 +1024,27 @@ const authenticated = async (req: Request) => {
       case "transfererGeranceSuiviFormationInstructeur":
       case "deciderSuiviFormationInstructeur":
       case "supprimerSuiviFormationInstructeur": {
-        if (action === "deciderSuiviFormationInstructeur") requirePermission("suivis_decider_tous")
-        else requireInstructor()
+        if (action !== "deciderSuiviFormationInstructeur") requireInstructor()
         const id = texte(payload.suiviId)
         let query = admin.from("training_followups").select("*")
         query = /^\d+$/.test(id) ? query.eq("id", Number(id)) : query.eq("external_id", id)
         const { data: row, error } = await query.maybeSingle()
         if (error || !row) throw new Error("Suivi introuvable.")
+        if (normalise(row.status) !== "EN_ATTENTE") throw new Error("Ce suivi est déjà terminé et se trouve dans les archives.")
+        if (action === "deciderSuiviFormationInstructeur" && !has("suivis_decider_tous") && !estGerantSuivi(row)) {
+          throw new Error("Seul le gérant de ce suivi peut prendre cette décision.")
+        }
         if (action === "supprimerSuiviFormationInstructeur") {
           const { error: deleteError } = await admin.from("training_followups").delete().eq("id", row.id)
           if (deleteError) throw deleteError
         } else if (action === "transfererGeranceSuiviFormationInstructeur") {
           const nom = texte(payload.nouveauGerant)
-          const { data: manager } = await admin.from("profiles").select("id,display_name").ilike("display_name", nom).maybeSingle()
-          const { error: updateError } = await admin.from("training_followups").update({ manager_profile_id: manager?.id ?? null, manager_snapshot: manager?.display_name ?? nom }).eq("id", row.id)
+          const matricule = matriculeDepuisLibelleGerant(nom)
+          const membreGerant = (members ?? []).find((member: any) => normalise(member.matricule) === normalise(matricule))
+          const { data: manager } = membreGerant
+            ? await admin.from("profiles").select("id,display_name").eq("member_id", membreGerant.id).eq("active", true).maybeSingle()
+            : await admin.from("profiles").select("id,display_name").ilike("display_name", matricule).eq("active", true).maybeSingle()
+          const { error: updateError } = await admin.from("training_followups").update({ manager_profile_id: manager?.id ?? null, manager_snapshot: nom }).eq("id", row.id)
           if (updateError) throw updateError
         } else if (action === "deciderSuiviFormationInstructeur") {
           const decision = normalise(payload.decision) === "ACCEPTE" ? "ACCEPTE" : "REFUSE"

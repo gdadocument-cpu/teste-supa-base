@@ -105,7 +105,11 @@ const authenticated = async (req: Request) => {
       coproprietaire: accessLevel !== "owner" && permissionCodes.includes("role_staff_total"),
       permissions: permissionCodes,
     },
-    defcon: defcon?.level ?? 0,
+    defcon: {
+      niveau: Math.max(0, Math.min(4, Number(defcon?.level) || 0)),
+      modifiePar: "",
+      modifieLe: "",
+    },
   })
 }
 

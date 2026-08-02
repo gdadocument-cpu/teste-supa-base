@@ -109,6 +109,13 @@ const authenticated = async (req: Request) => {
     const requireInstructor = () => { if (!instructor) throw new Error("Accès réservé aux instructeurs.") }
     const actorName = ownDelayed?.matricule ?? ownMember?.matricule ?? profile.display_name
     const actorGrade = ownDelayed?.grade ?? ownMember?.grade ?? "Visiteur"
+    const actorGradeNormalise = normalise(actorGrade).replace(/[^A-Z]/g, "")
+    const peutGererDefcon = owner || permissions.has("role_staff_total") || ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(actorGradeNormalise)
+    const defconClient = {
+      niveau: Math.max(0, Math.min(4, nombre(defcon?.level))),
+      modifiePar: "",
+      modifieLe: defcon?.updated_at ?? "",
+    }
 
     const audit = async (libelle: string, cible = "", details = "") => {
       await admin.from("audit_logs").insert({
@@ -331,9 +338,17 @@ const authenticated = async (req: Request) => {
 
     switch (action) {
       case "recupererVersionDonnees":
-        return json({ success: true, revision: Date.now(), action: "supabase", defcon: defcon?.level ?? 0 })
+        return json({ success: true, revision: Date.now(), action: "supabase", defcon: defconClient })
       case "presenceEnLigne":
-        return json({ success: true, utilisateurs: [{ nom: actorName, grade: actorGrade }], defcon: defcon?.level ?? 0 })
+        return json({
+          success: true,
+          total: 1,
+          proprietaire: owner,
+          coproprietaire: !owner && permissions.has("role_staff_total"),
+          peutGererDefcon,
+          utilisateurs: [{ nom: actorName, grade: actorGrade }],
+          defcon: defconClient,
+        })
       case "recupererEffectif":
         return json({
           success: true,
@@ -983,11 +998,15 @@ const authenticated = async (req: Request) => {
         if (error) throw error
         return json({ success: true, message: "Archive supprimée." })
       }
-      case "definirDefcon":
-        if (!owner) throw new Error("Modification DEFCON réservée au propriétaire.")
-        await admin.from("defcon_state").update({ level: Math.max(0, Math.min(5, nombre(payload.niveau))), updated_by_profile_id: profile.id }).eq("singleton", true)
+      case "definirDefcon": {
+        if (!peutGererDefcon) throw new Error("Modification DEFCON réservée aux officiers supérieurs, au propriétaire et au Staff.")
+        const niveau = Math.max(0, Math.min(4, nombre(payload.niveau)))
+        const modifieLe = new Date().toISOString()
+        const { error } = await admin.from("defcon_state").update({ level: niveau, updated_by_profile_id: profile.id, updated_at: modifieLe }).eq("singleton", true)
+        if (error) throw error
         await audit("DEFCON modifié", texte(payload.niveau))
-        return json({ success: true, defcon: nombre(payload.niveau), message: "DEFCON mis à jour." })
+        return json({ success: true, defcon: { niveau, modifiePar: actorName, modifieLe }, message: niveau ? `DEFCON ${niveau} activé.` : "DEFCON désactivé." })
+      }
       default:
         return json({ success: false, message: `Action Supabase non prise en charge : ${action || "vide"}.` }, 400)
     }

@@ -157,6 +157,9 @@ async function chargerPostItsInstructeurGDA() {
   if (cachePostItsInstructeurValide) return;
   const numeroChargement = ++chargementPostItsInstructeur;
   try {
+    if (typeof window.gdaForcerActualisation === "function") {
+      window.gdaForcerActualisation("recupererMesSuivisInstructeur");
+    }
     const resultat = await requeteRapportInstructeur(
       "recupererMesSuivisInstructeur",
       {},
@@ -206,6 +209,16 @@ window.addEventListener("focus", function () {
   cachePostItsInstructeurValide = false;
   chargerPostItsInstructeurGDA();
 });
+
+window.setInterval(function () {
+  if (
+    document.visibilityState !== "visible" ||
+    !sessionStorage.getItem("sessionTokenDiscord") ||
+    !document.querySelector("#workspace #welcomePanel")
+  ) return;
+  cachePostItsInstructeurValide = false;
+  chargerPostItsInstructeurGDA();
+}, 30000);
 
 function creerPostItInstructeurGDA(suivi) {
   return `<article class="post-it-instructeur-gda" data-post-it-suivi="${echapperRapportInstructeur(suivi.id)}">

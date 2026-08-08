@@ -55,6 +55,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const payload = await req.json()
+    const typeFlux = texte(payload.typeFlux)
     const nomFeuille = texte(payload.nomFeuille)
     const identifiantClasseur = texte(payload.identifiantClasseur)
     const identifiantFeuille = texte(payload.identifiantFeuille)
@@ -65,7 +66,8 @@ Deno.serve(async (req: Request) => {
     const conclusion = texte(payload.conclusion)
     const jourRapport = dateIso(payload.dateRapport)
 
-    if (nomFeuille !== "Rapport GDA") throw new Error("Cette réponse ne provient pas de la feuille Rapport GDA.")
+    if (typeFlux !== "RAPPORT_GDA") throw new Error("Type de formulaire invalide.")
+    if (!nomFeuille || nomFeuille.length > 100) throw new Error("Nom de feuille invalide.")
     if (!/^[A-Za-z0-9_-]{20,100}$/.test(identifiantClasseur)) throw new Error("Identifiant du classeur invalide.")
     if (!/^\d+$/.test(identifiantFeuille) || ligne < 2) throw new Error("Position de la réponse invalide.")
     if (!matriculeFormulaire || matriculeFormulaire.length > 100) throw new Error("Matricule invalide.")

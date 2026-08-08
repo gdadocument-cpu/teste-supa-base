@@ -11,8 +11,10 @@ let effectifSanctionsEdition = [];
 let effectifMedaillesEdition = [];
 let effectifSpecialisationsEdition = [];
 let effectifCharge = false;
+let actualisationEffectifAutomatiqueEnCours = false;
 const CLE_CACHE_LOCAL_EFFECTIF = "gdaEffectifOfficierLocalV2";
 const DUREE_CACHE_LOCAL_EFFECTIF = 30 * 60 * 1000;
+const DUREE_ACTUALISATION_EFFECTIF_AUTOMATIQUE = 5000;
 const ORDRE_GRADES_EFFECTIF = [
   "LIEUTENANT-COLONEL",
   "COMMANDANT",
@@ -90,8 +92,10 @@ async function chargerEffectif(options) {
       EFFECTIF_API_URL +
       "?action=recupererEffectif" +
       "&identifiant=" +
-      encodeURIComponent(identifiant);
-    const reponse = await fetch(url);
+      encodeURIComponent(identifiant) +
+      "&_=" +
+      Date.now();
+    const reponse = await fetch(url, { cache: "no-store" });
     if (!reponse.ok) {
       throw new Error(
         "Erreur serveur : " + reponse.status
@@ -284,6 +288,35 @@ window.gdaActualiserEffectifSilencieusement = function () {
   return chargerEffectif({ silencieux: true });
 };
 
+async function actualiserEffectifOfficierAutomatiquement() {
+  if (
+    actualisationEffectifAutomatiqueEnCours ||
+    !effectifCharge ||
+    document.hidden ||
+    !moduleGdaEstActif("effectif-officier")
+  ) {
+    return;
+  }
+
+  actualisationEffectifAutomatiqueEnCours = true;
+  try {
+    await chargerEffectif({ silencieux: true });
+  } finally {
+    actualisationEffectifAutomatiqueEnCours = false;
+  }
+}
+
+setInterval(
+  actualiserEffectifOfficierAutomatiquement,
+  DUREE_ACTUALISATION_EFFECTIF_AUTOMATIQUE
+);
+
+document.addEventListener("visibilitychange", function () {
+  if (!document.hidden) {
+    actualiserEffectifOfficierAutomatiquement();
+  }
+});
+
 
 function afficherEffectif(membres) {
   if (!moduleGdaEstActif("effectif-officier")) return;
@@ -435,7 +468,11 @@ function synchroniserAffichageEffectifIncremental(membres) {
   const module = document.getElementById("effectifModule");
   // Une fiche ou un formulaire est ouvert : mettre le cache à jour sans
   // chasser l'utilisateur de l'écran sur lequel il travaille.
-  if (!module || !module.querySelector(".effectif-list")) return;
+  if (!module) return;
+  if (!module.querySelector(".effectif-list")) {
+    synchroniserNoteFicheEffectif(module, membres);
+    return;
+  }
 
   const groupes = {
     "officiers-superieurs": [],
@@ -491,6 +528,28 @@ function synchroniserAffichageEffectifIncremental(membres) {
       "aria-label",
       membres.length + " GDA sur 35 maximum"
     );
+  }
+}
+
+function synchroniserNoteFicheEffectif(module, membres) {
+  const cle = module && module.dataset
+    ? module.dataset.membreKey
+    : "";
+  if (!cle) return;
+
+  const membre = (membres || []).find(function (item) {
+    return cleMembreEffectif(item) === cle;
+  });
+  const textarea = document.getElementById("effectifNoteTexte");
+  if (!membre || !textarea || document.activeElement === textarea) return;
+
+  const note = membre.notes || "";
+  if (textarea.value === note) return;
+  textarea.value = note;
+
+  const message = document.getElementById("effectifNoteMessage");
+  if (message) {
+    message.textContent = "Note partagée mise à jour automatiquement.";
   }
 }
 
@@ -889,9 +948,13 @@ function ouvrirFicheMembre(index) {
   if (!membre) {
     return;
   }
+  const peutNoter = membre.peutNoter === true;
 
   workspace.innerHTML = `
-    <section id="effectifModule">
+    <section
+      id="effectifModule"
+      data-membre-key="${echapperHTML(cleMembreEffectif(membre))}"
+    >
 
       <div class="effectif-header">
 
@@ -1004,15 +1067,19 @@ function ouvrirFicheMembre(index) {
         </h4>
 
         <p>
-          Cette note est visible et modifiable par tous les utilisateurs autorisés.
+          ${peutNoter
+            ? "Cette note est partagée avec les officiers et se met à jour automatiquement."
+            : "Lecture seule : vous pouvez modifier uniquement les notes d’une personne strictement moins gradée que vous."}
         </p>
 
         <textarea
           id="effectifNoteTexte"
           maxlength="3000"
           placeholder="Ajouter une note..."
+          ${peutNoter ? "" : "disabled"}
         >${echapperHTML(membre.notes || "")}</textarea>
 
+        ${peutNoter ? `
         <div class="effectif-notes-actions">
 
           <button
@@ -1032,6 +1099,7 @@ function ouvrirFicheMembre(index) {
           </button>
 
         </div>
+        ` : ""}
 
         <p id="effectifNoteMessage"></p>
 

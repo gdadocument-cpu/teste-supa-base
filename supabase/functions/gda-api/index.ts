@@ -142,6 +142,12 @@ const authenticated = async (req: Request) => {
     const actorName = ownDelayed?.matricule ?? ownMember?.matricule ?? profile.display_name
     const actorGrade = ownDelayed?.grade ?? ownMember?.grade ?? "Visiteur"
     const actorGradeNormalise = normalise(actorGrade).replace(/[^A-Z]/g, "")
+    const rangGrade = (grade: unknown) => GRADES.findIndex((item) => normalise(item) === normalise(grade))
+    const rangAuteurNotes = rangGrade(actorGrade)
+    const peutNoterMembre = (member: any) => {
+      const rangCible = rangGrade(member?.grade)
+      return officer && rangAuteurNotes >= 0 && rangCible > rangAuteurNotes
+    }
     const peutGererDefcon = owner || permissions.has("role_staff_total") || ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(actorGradeNormalise)
     const suivisProbatoiresActifs = (suivisProbatoires ?? []).filter((suivi: any) => !!suivi.end_on)
     const probatoiresParMembre = new Set(suivisProbatoiresActifs.map((suivi: any) => suivi.member_id).filter(Boolean))
@@ -218,6 +224,7 @@ const authenticated = async (req: Request) => {
         recommandation: nombre(base.recommendation),
         observation: nombre(base.observation),
         notes: base.notes || "",
+        peutNoter: !publicOnly && peutNoterMembre(member),
         enPeriodeProbatoire: probatoiresParMembre.has(member?.id) || probatoiresParMatricule.has(normalise(base.matricule)),
       }
     }
@@ -623,10 +630,14 @@ const authenticated = async (req: Request) => {
       }
       case "enregistrerNote":
       case "modifierMembreEffectif": { // effectif officier instantané uniquement
-        requirePermission("effectif_modifier")
+        if (action === "enregistrerNote") requireOfficer()
+        else requirePermission("effectif_modifier")
         const cible = texte(payload.personne || payload.nom || payload.matricule)
         const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(cible))
         if (!member) throw new Error("Membre introuvable.")
+        if (action === "enregistrerNote" && !peutNoterMembre(member)) {
+          throw new Error("Vous pouvez ajouter une note uniquement à une personne strictement moins gradée que vous.")
+        }
         const patch: Record<string, unknown> = {}
         if (action === "enregistrerNote") patch.notes = texte(payload.note || payload.notes)
         else {

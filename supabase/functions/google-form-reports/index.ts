@@ -57,6 +57,7 @@ Deno.serve(async (req: Request) => {
     const payload = await req.json()
     const typeFlux = texte(payload.typeFlux)
     const nomFeuille = texte(payload.nomFeuille)
+    const identifiantReponse = texte(payload.identifiantReponse)
     const identifiantClasseur = texte(payload.identifiantClasseur)
     const identifiantFeuille = texte(payload.identifiantFeuille)
     const ligne = Math.trunc(Number(payload.ligne || 0))
@@ -70,12 +71,15 @@ Deno.serve(async (req: Request) => {
     if (!nomFeuille || nomFeuille.length > 100) throw new Error("Nom de feuille invalide.")
     if (!/^[A-Za-z0-9_-]{20,100}$/.test(identifiantClasseur)) throw new Error("Identifiant du classeur invalide.")
     if (!/^\d+$/.test(identifiantFeuille) || ligne < 2) throw new Error("Position de la réponse invalide.")
+    if (identifiantReponse && !/^[a-f0-9]{64}$/i.test(identifiantReponse)) throw new Error("Identifiant de réponse invalide.")
     if (!matriculeFormulaire || matriculeFormulaire.length > 100) throw new Error("Matricule invalide.")
     if (!jourRapport) throw new Error("Date du rapport invalide.")
     if (!rapport || rapport.length > 10000) throw new Error("Le rapport doit contenir entre 1 et 10 000 caractères.")
     if (commentaire.length > 5000 || conclusion.length > 5000) throw new Error("Commentaire ou conclusion trop long.")
 
-    const identifiantExterne = `google-form:${identifiantClasseur}:${identifiantFeuille}:${ligne}`
+    const identifiantExterne = identifiantReponse
+      ? `google-form:${identifiantReponse.toLowerCase()}`
+      : `google-form:${identifiantClasseur}:${identifiantFeuille}:${ligne}`
     const { data: dejaImporte, error: doublonError } = await admin
       .from("reports")
       .select("external_id")

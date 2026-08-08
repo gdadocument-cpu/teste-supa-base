@@ -16,6 +16,7 @@ let rapportsPeutValider = false;
 let rapportsPeutArchiver = false;
 let rapportsPeutSupprimer = false;
 let rapportsCharges = false;
+let rapportsChargement = false;
 
 rapportsButton.addEventListener(
   "click",
@@ -30,6 +31,8 @@ rapportsButton.addEventListener(
 );
 
 async function chargerRapports(silencieux) {
+  if (rapportsChargement) return;
+  rapportsChargement = true;
   const identifiant =
     sessionStorage.getItem(
       "identifiantUtilisateur"
@@ -49,6 +52,7 @@ async function chargerRapports(silencieux) {
   }
 
   if (!identifiant) {
+    rapportsChargement = false;
     afficherErreurRapports(
       "Votre session n’est plus valide. Rechargez la page et reconnectez-vous."
     );
@@ -60,9 +64,10 @@ async function chargerRapports(silencieux) {
       RAPPORTS_API_URL +
       "?action=recupererRapports" +
       "&identifiant=" +
-      encodeURIComponent(identifiant);
+      encodeURIComponent(identifiant) +
+      "&_=" + Date.now();
 
-    const reponse = await fetch(url);
+    const reponse = await fetch(url, { cache: "no-store" });
     if (!reponse.ok) {
       throw new Error(
         "Erreur serveur : " + reponse.status
@@ -101,6 +106,8 @@ async function chargerRapports(silencieux) {
     afficherErreurRapports(
       erreur.message || "Impossible de contacter le serveur GDA."
     );
+  } finally {
+    rapportsChargement = false;
   }
 }
 
@@ -172,6 +179,11 @@ function afficherRapports() {
           "LU",
           "✓",
           "Lus et validés"
+        )}
+        ${creerBoutonCategorieRapports(
+          "REFUSE",
+          "✕",
+          "Refusés — à corriger"
         )}
         ${creerBoutonCategorieRapports(
           "ARCHIVE",
@@ -737,6 +749,15 @@ function creerCarteRapport(rapport) {
         `
         : ""}
 
+      ${normaliserStatutRapportClient(rapport.statut) === "REFUSE"
+        ? `
+          <section class="rapport-contenu rapport-refus-motif">
+            <h5>Motif du refus</h5>
+            <p>${formaterTexteRapport(rapport.motifRefus || "Motif non renseigné")}</p>
+          </section>
+        `
+        : ""}
+
       ${creerPiedCarteRapport(rapport)}
     </article>
   `;
@@ -750,7 +771,7 @@ function extraireLienRapportDiscord(texte) {
 }
 
 function creerContenuCarteRapport(rapport) {
-  const lienDiscord = extraireLienRapportDiscord(rapport.rapport);
+  const lienDiscord = rapport.discordUrl || extraireLienRapportDiscord(rapport.rapport);
   if (!lienDiscord) {
     return `
       <section class="rapport-contenu">
@@ -789,6 +810,7 @@ function creerBadgeStatutRapport(statut) {
   const libelles = {
     "EN ATTENTE": "En attente",
     LU: "Lu et validé",
+    REFUSE: "Refusé",
     ARCHIVE: "Archivé"
   };
 
@@ -819,7 +841,7 @@ function creerPiedCarteRapport(rapport) {
   const peutEffectuerAction =
     statut === "EN ATTENTE"
       ? rapportsPeutValider
-      : rapportsPeutArchiver;
+      : ["LU", "ARCHIVE"].includes(statut) && rapportsPeutArchiver;
 
   return `
     <footer class="rapport-carte-pied">
@@ -843,6 +865,20 @@ function creerPiedCarteRapport(rapport) {
                   data-rapport-statut="${action}"
                 >
                   ${libelle}
+                </button>
+              `
+              : ""}
+
+            ${statut === "EN ATTENTE" && rapportsPeutValider
+              ? `
+                <button
+                  class="rapport-refuser"
+                  type="button"
+                  data-rapport-ligne="${Number(rapport.ligne)}"
+                  data-rapport-id="${echapperHTMLRapports(rapport.id || "")}"
+                  data-rapport-statut="REFUSE"
+                >
+                  ✕ Refuser
                 </button>
               `
               : ""}
@@ -1107,18 +1143,38 @@ async function changerStatutRapport(
       "identifiantUtilisateur"
     ) || "";
 
+  let motifRefus = "";
+  if (normaliserTexteRapports(statut).includes("REFUS")) {
+    const saisie = window.prompt("Pourquoi ce rapport est-il refusé ?\n\nCe motif sera envoyé à son auteur.");
+    if (saisie === null) return;
+    motifRefus = saisie.trim();
+    if (!motifRefus) {
+      window.alert("Le motif du refus est obligatoire.");
+      return;
+    }
+    if (motifRefus.length > 1500) {
+      window.alert("Le motif du refus est limité à 1 500 caractères.");
+      return;
+    }
+  }
+
   bouton.disabled = true;
   const ancienTexte = bouton.textContent;
   bouton.textContent = "Mise à jour...";
 
   try {
-    const url = RAPPORTS_API_URL +
-      "?action=changerStatutRapport" +
-      "&identifiant=" + encodeURIComponent(identifiant) +
-      "&ligne=" + encodeURIComponent(ligne) +
-      "&rapportId=" + encodeURIComponent(rapportId) +
-      "&statut=" + encodeURIComponent(statut);
-    const reponse = await fetch(url);
+    const donnees = new URLSearchParams({
+      identifiant: identifiant,
+      ligne: String(ligne),
+      rapportId: rapportId,
+      statut: statut,
+      motifRefus: motifRefus
+    });
+    const reponse = await fetch(RAPPORTS_API_URL + "?action=changerStatutRapport", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: donnees.toString()
+    });
     const resultat = await reponse.json();
 
     if (!resultat.success) {
@@ -1129,18 +1185,26 @@ async function changerStatutRapport(
     }
 
     synchroniserEffectifDepuisRapports(resultat);
-    const rapport = rapportsRegistre.find(
-      element => rapportId
-        ? element.id === rapportId
-        : Number(element.ligne) === Number(ligne)
-    );
-    if (rapport) {
-      rapport.statut = resultat.statut || statut;
-      rapport.traitePar =
-        sessionStorage.getItem("nomUtilisateur") ||
-        identifiant;
-      rapport.dateTraitement =
-        obtenirDateHeureRapportMaintenant();
+    if (Array.isArray(resultat.rapports)) {
+      rapportsRegistre = resultat.rapports;
+    } else {
+      const rapport = rapportsRegistre.find(
+        element => rapportId
+          ? element.id === rapportId
+          : Number(element.ligne) === Number(ligne)
+      );
+      if (rapport) {
+        rapport.statut = resultat.statut || statut;
+        rapport.traitePar =
+          sessionStorage.getItem("nomUtilisateur") ||
+          identifiant;
+        rapport.dateTraitement =
+          obtenirDateHeureRapportMaintenant();
+      }
+    }
+
+    if (typeof afficherNotificationGDA === "function" && resultat.message) {
+      afficherNotificationGDA(resultat.message, "succes");
     }
 
     rafraichirRapportsLocalement();
@@ -1357,6 +1421,11 @@ function normaliserStatutRapportClient(statut) {
       .replace(/-/g, " ");
 
   if (
+    normalise === "REFUSE" ||
+    normalise === "REFUS"
+  ) return "REFUSE";
+
+  if (
     normalise === "EN ATTENTE" ||
     normalise === "ATTENTE"
   ) return "EN ATTENTE";
@@ -1375,10 +1444,19 @@ function normaliserStatutRapportClient(statut) {
   return "EN ATTENTE";
 }
 
+window.setInterval(function () {
+  if (document.hidden || !moduleGdaEstActif("rapports-officier")) return;
+  if (typeof gdaForcerActualisation === "function") {
+    gdaForcerActualisation("recupererRapports");
+  }
+  chargerRapports(true);
+}, 30000);
+
 function obtenirLibelleCategorieRapports() {
   const libelles = {
     "EN ATTENTE": "Rapports en attente",
     LU: "Rapports lus et validés",
+    REFUSE: "Rapports refusés — en attente de correction",
     ARCHIVE: "Rapports archivés"
   };
 

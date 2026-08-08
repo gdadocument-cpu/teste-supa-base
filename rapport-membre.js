@@ -132,7 +132,7 @@ function afficherRapportsPersonnelsGDA() {
 
 function creerCarteRapportPersonnelGDA(rapport) {
   const statut = normaliserStatutRapportPersonnel(rapport.statut);
-  const modifiable = rapport.modifiable === true && statut === "EN ATTENTE";
+  const modifiable = rapport.modifiable === true && ["EN ATTENTE", "REFUSE"].includes(statut);
   return `
     <article class="rapport-personnel-carte">
       <header>
@@ -147,8 +147,13 @@ function creerCarteRapportPersonnelGDA(rapport) {
 
       <section class="rapport-personnel-contenu">
         <h5>Rapport</h5>
-        <p>${formaterTexteRapportPersonnel(rapport.rapport)}</p>
+        ${rapport.discordUrl
+          ? `<a class="rapport-personnel-discord" href="${echapperHTML(rapport.discordUrl)}" target="_blank" rel="noopener noreferrer">Ouvrir le rapport sur Discord ↗</a>`
+          : `<p>${formaterTexteRapportPersonnel(rapport.rapport)}</p>`}
       </section>
+      ${statut === "REFUSE"
+        ? `<section class="rapport-personnel-contenu refus"><h5>Motif du refus</h5><p>${formaterTexteRapportPersonnel(rapport.motifRefus || "Motif non renseigné")}</p><small>Corrigez le rapport puis cliquez sur « Enregistrer les modifications » pour le renvoyer aux officiers.</small></section>`
+        : ""}
       ${rapport.commentaire
         ? `<section class="rapport-personnel-contenu secondaire"><h5>Commentaire</h5><p>${formaterTexteRapportPersonnel(rapport.commentaire)}</p></section>`
         : ""}
@@ -349,18 +354,21 @@ function afficherErreurRapportsPersonnelsGDA(message) {
 function normaliserStatutRapportPersonnel(statut) {
   const valeur = String(statut || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/-/g, " ").trim();
   if (valeur === "LU" || valeur === "VALIDE") return "LU";
+  if (valeur === "REFUSE" || valeur === "REFUS") return "REFUSE";
   if (valeur === "ARCHIVE") return "ARCHIVE";
   return "EN ATTENTE";
 }
 
 function libelleStatutRapportPersonnel(statut) {
   if (statut === "LU") return "✓ Lu et validé";
+  if (statut === "REFUSE") return "✕ Refusé — à corriger";
   if (statut === "ARCHIVE") return "▣ Archivé";
   return "⌛ En attente";
 }
 
 function classeStatutRapportPersonnel(statut) {
   if (statut === "LU") return "lu";
+  if (statut === "REFUSE") return "refuse";
   if (statut === "ARCHIVE") return "archive";
   return "attente";
 }

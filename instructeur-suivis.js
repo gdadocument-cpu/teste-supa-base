@@ -589,6 +589,11 @@ function afficherFormulaireSuiviFormation(personne) {
   const workspace = document.getElementById("workspace");
   const instructeur = personne.instructeur ||
     sessionStorage.getItem("identifiantUtilisateur") || "";
+  const optionsInstructeurs = instructeursDisponiblesSuivi.map(function (profilInstructeur) {
+    const selectionne = normaliserValeurRapportInstructeur(profilInstructeur.nom) ===
+      normaliserValeurRapportInstructeur(instructeur);
+    return `<option value="${echapperRapportInstructeur(profilInstructeur.nom)}" ${selectionne ? "selected" : ""}>${echapperRapportInstructeur(profilInstructeur.nom)} — ${echapperRapportInstructeur(profilInstructeur.specialisation || "Instructeur")}</option>`;
+  }).join("");
   workspace.innerHTML = `
     <section class="suivis-instructeur-module">
       ${boutonRetourSuivisInstructeur()}
@@ -599,7 +604,7 @@ function afficherFormulaireSuiviFormation(personne) {
         ${champSuiviInstructeur("Steam ID *", "steamId", personne.steamId, "text", true)}
         ${champSuiviInstructeur("Discord ID *", "discordId", personne.discordId, "text", true)}
         <label><span>Date de fin</span><input type="text" value="Calculée automatiquement à J+7" readonly></label>
-        ${champSuiviInstructeur("Instructeur en charge", "instructeur", instructeur, "text", false)}
+        <label><span>Formateur en charge *</span><select name="instructeur" required><option value="">Sélectionner un instructeur</option>${optionsInstructeurs}</select></label>
         ${champSuiviInstructeur("Gérant", "gerant", "", "text", false)}
         <label><span>Nombre de rapports</span><input type="text" value="Calculé automatiquement" readonly></label>
         ${champSuiviInstructeur("Prises de service", "prisesService", "0", "number", false)}

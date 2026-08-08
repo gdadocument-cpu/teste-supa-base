@@ -638,6 +638,34 @@
     0 0 18px rgba(48, 139, 219, 0.12);
 }
 
+.rapport-carte-source-discord {
+  border-color: rgba(114, 127, 255, 0.82);
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(88, 101, 242, 0.2);
+}
+
+.rapport-carte-source-discord:hover {
+  border-color: rgba(151, 160, 255, 0.96);
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.25),
+    0 0 20px rgba(88, 101, 242, 0.2);
+}
+
+.rapport-carte-source-google-form {
+  border-color: rgba(226, 197, 112, 0.74);
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(226, 197, 112, 0.12);
+}
+
+.rapport-carte-source-google-form:hover {
+  border-color: rgba(239, 216, 149, 0.9);
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.25),
+    0 0 18px rgba(226, 197, 112, 0.14);
+}
+
 .rapport-carte-header {
   display: flex;
   align-items: center;

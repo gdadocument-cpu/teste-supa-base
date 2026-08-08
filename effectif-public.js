@@ -305,9 +305,10 @@ function creerLigneEffectifPublicGDA(membre, index) {
 }
 
 function creerDetailsEffectifPublicGDA(membre) {
-  const medailles = Array.isArray(membre.medailles)
-    ? membre.medailles.filter(Boolean)
-    : String(membre.medailles || "")
+  const valeurMedailles = membre.medailles ?? membre.medaille ?? "";
+  const medailles = Array.isArray(valeurMedailles)
+    ? valeurMedailles.filter(Boolean)
+    : String(valeurMedailles || "")
         .split(/[;,\n]/)
         .map(function (valeur) { return valeur.trim(); })
         .filter(Boolean);

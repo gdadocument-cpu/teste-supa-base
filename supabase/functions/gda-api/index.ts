@@ -221,6 +221,7 @@ const authenticated = async (req: Request) => {
         nombreRapports: nombre(base.reports_count),
         sanction: base.sanction || "Clean",
         medaille: (base.medals ?? []).join("; "),
+        medailles: base.medals ?? [],
         recommandation: nombre(base.recommendation),
         observation: nombre(base.observation),
         notes: base.notes || "",

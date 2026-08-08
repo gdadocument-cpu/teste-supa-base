@@ -94,8 +94,8 @@ const partiesDateHeureParis = (date: Date) => {
     hour: valeur("hour"), minute: valeur("minute"), second: valeur("second"),
   }
 }
-const instantParis = (year: number, month: number, day: number, hour: number) => {
-  const cibleUtc = Date.UTC(year, month - 1, day, hour, 0, 0)
+const instantParis = (year: number, month: number, day: number, hour: number, minute = 0) => {
+  const cibleUtc = Date.UTC(year, month - 1, day, hour, minute, 0)
   let estimation = cibleUtc
   for (let tentative = 0; tentative < 3; tentative++) {
     const parties = partiesDateHeureParis(new Date(estimation))
@@ -107,15 +107,19 @@ const instantParis = (year: number, month: number, day: number, hour: number) =>
   }
   return new Date(estimation)
 }
-const metadonneesEffectifGda = (dernierePublication: unknown, reference = new Date()) => {
+const metadonneesEffectifGda = (dernierePublication: unknown, heurePublication: unknown = "20:00", reference = new Date()) => {
+  const correspondanceHeure = texte(heurePublication).match(/^(\d{1,2}):(\d{2})/)
+  const heure = correspondanceHeure ? Math.max(0, Math.min(23, Number(correspondanceHeure[1]))) : 20
+  const minute = correspondanceHeure ? Math.max(0, Math.min(59, Number(correspondanceHeure[2]))) : 0
   const parties = partiesDateHeureParis(reference)
-  const echeanceAujourdhui = instantParis(parties.year, parties.month, parties.day, 20)
+  const echeanceAujourdhui = instantParis(parties.year, parties.month, parties.day, heure, minute)
   const lendemainCivil = new Date(Date.UTC(parties.year, parties.month - 1, parties.day + 1, 12))
   const echeanceDemain = instantParis(
     lendemainCivil.getUTCFullYear(),
     lendemainCivil.getUTCMonth() + 1,
     lendemainCivil.getUTCDate(),
-    20,
+    heure,
+    minute,
   )
   const publication = new Date(texte(dernierePublication))
   const publicationMs = Number.isNaN(publication.getTime()) ? 0 : publication.getTime()
@@ -126,6 +130,7 @@ const metadonneesEffectifGda = (dernierePublication: unknown, reference = new Da
   return {
     actualiseLe: publicationMs,
     prochaineActualisation: prochaine.getTime(),
+    heureActualisation: `${String(heure).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
   }
 }
 const joursRestants = (fin: unknown) => {
@@ -168,7 +173,7 @@ const authenticated = async (req: Request) => {
       .maybeSingle()
     if (profileError || !profile) return json({ success: false, message: "Profil GDA non autorisé." }, 403)
 
-    const [{ data: grants }, { data: members }, { data: delayed }, { data: defcon }, { data: suivisProbatoires }, { data: absencesSuivis }, { data: derniereVersionEffectif }] = await Promise.all([
+    const [{ data: grants }, { data: members }, { data: delayed }, { data: defcon }, { data: suivisProbatoires }, { data: absencesSuivis }, { data: derniereVersionEffectif }, { data: configurationSite }] = await Promise.all([
       admin.from("profile_permissions").select("permission_code").eq("profile_id", profile.id),
       admin.from("members").select("*").eq("active", true),
       admin.from("current_gda_roster").select("*"),
@@ -176,6 +181,7 @@ const authenticated = async (req: Request) => {
       admin.from("training_followups").select("*").eq("status", "EN_ATTENTE"),
       admin.from("absences").select("member_id,matricule_snapshot,starts_on,ends_on"),
       admin.from("gda_roster_versions").select("published_at").order("published_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle(),
+      admin.from("site_configuration").select("max_gda,roster_publish_time,updated_at").eq("singleton", true).maybeSingle(),
     ])
 
     const permissions = new Set((grants ?? []).map((grant: any) => grant.permission_code))
@@ -258,6 +264,10 @@ const authenticated = async (req: Request) => {
       return officer && rangAuteurNotes >= 0 && rangCible > rangAuteurNotes
     }
     const peutGererDefcon = owner || permissions.has("role_staff_total") || ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(actorGradeNormalise)
+    const peutGererParametres = owner || permissions.has("role_staff_total") ||
+      (ownMember?.specializations ?? []).some((item: string) => normalise(item) === "GERANT GDA")
+    const maximumGda = Math.max(1, Math.min(200, nombre(configurationSite?.max_gda) || 35))
+    const heurePublicationEffectif = texte(configurationSite?.roster_publish_time).slice(0, 5) || "20:00"
     const suivisProbatoiresActifs = (suivisProbatoires ?? []).filter((suivi: any) => !!suivi.end_on)
     const probatoiresParMembre = new Set(suivisProbatoiresActifs.map((suivi: any) => suivi.member_id).filter(Boolean))
     const probatoiresParMatricule = new Set(suivisProbatoiresActifs.map((suivi: any) => normalise(suivi.matricule_snapshot)))
@@ -541,6 +551,54 @@ const authenticated = async (req: Request) => {
       }
     }
 
+    const normaliserUrlLienSite = (valeur: unknown) => {
+      const saisie = texte(valeur)
+      let url: URL
+      try {
+        url = new URL(saisie)
+      } catch (_) {
+        throw new Error("Le lien doit être une adresse web valide.")
+      }
+      if (!["https:", "http:"].includes(url.protocol)) {
+        throw new Error("Seuls les liens HTTP et HTTPS sont autorisés.")
+      }
+      if (url.hostname === "docs.google.com" && /\/document\/d\//.test(url.pathname)) {
+        url.pathname = url.pathname.replace(/\/(edit|view)(?:\/.*)?$/, "/preview")
+        url.search = ""
+        url.hash = ""
+      }
+      return url.toString()
+    }
+
+    const parametresSiteDonnees = async (message = "") => {
+      const [{ data: configuration, error: configurationError }, { data: liens, error: liensError }] = await Promise.all([
+        admin.from("site_configuration").select("max_gda,roster_publish_time,updated_at").eq("singleton", true).single(),
+        admin.from("navigation_links").select("external_id,category,label,url,display_mode,sort_order,updated_at")
+          .eq("active", true).order("category", { ascending: true }).order("sort_order", { ascending: true }).order("id", { ascending: true }),
+      ])
+      if (configurationError) throw configurationError
+      if (liensError) throw liensError
+      return {
+        success: true,
+        message,
+        peutGerer: peutGererParametres,
+        configuration: {
+          maximumGda: Math.max(1, Math.min(200, nombre(configuration?.max_gda) || 35)),
+          heureActualisation: texte(configuration?.roster_publish_time).slice(0, 5) || "20:00",
+          modifieLe: configuration?.updated_at || "",
+        },
+        liens: (liens ?? []).map((lien: any) => ({
+          id: lien.external_id,
+          categorie: lien.category,
+          nom: lien.label,
+          url: lien.url,
+          mode: lien.display_mode,
+          ordre: nombre(lien.sort_order),
+          modifieLe: lien.updated_at || "",
+        })),
+      }
+    }
+
     const rapportParPayload = async () => {
       let query = admin.from("reports").select("*")
       if (texte(payload.rapportId)) query = query.eq("external_id", texte(payload.rapportId))
@@ -720,12 +778,13 @@ const authenticated = async (req: Request) => {
         return json({
           success: true,
           membres: membresClient,
+          maximumGda,
           peutModifier: has("effectif_modifier"),
           peutAjouter: owner || ["LIEUTENANT-COLONEL", "COMMANDANT", "VICE-COMMANDANT"].includes(normalise(ownMember?.grade)),
           grades: GRADES, sanctions: SANCTIONS, medailles: MEDAILLES, specialisations: SPECIALISATIONS,
         })
       case "recupererEffectifPublic":
-        return json({ success: true, membres: membresPublic, ...metadonneesEffectifGda(derniereVersionEffectif?.published_at), peutActualiser: has("effectif_public_actualiser"), actualisationForcee: false })
+        return json({ success: true, membres: membresPublic, ...metadonneesEffectifGda(derniereVersionEffectif?.published_at, heurePublicationEffectif), peutActualiser: has("effectif_public_actualiser"), actualisationForcee: false })
       case "actualiserEffectifPublic": { // publication volontaire de l'instantané retardé
         requirePermission("effectif_public_actualiser")
         const { data: version, error: versionError } = await admin.from("gda_roster_versions").insert({ published_by_profile_id: profile.id, note: "Actualisation depuis le site Supabase" }).select("id,published_at").single()
@@ -741,7 +800,7 @@ const authenticated = async (req: Request) => {
         const { error } = await admin.from("gda_roster_members").insert(rows)
         if (error) throw error
         await audit("Effectif GDA actualisé")
-        return json({ success: true, membres: rows.map((row: any) => ({ ...membreClient(memberById.get(row.member_id), true), grade: row.grade })), ...metadonneesEffectifGda(version.published_at), peutActualiser: true, actualisationForcee: true })
+        return json({ success: true, membres: rows.map((row: any) => ({ ...membreClient(memberById.get(row.member_id), true), grade: row.grade })), ...metadonneesEffectifGda(version.published_at, heurePublicationEffectif), peutActualiser: true, actualisationForcee: true })
       }
       case "enregistrerNote":
       case "modifierMembreEffectif": { // effectif officier instantané uniquement
@@ -787,6 +846,7 @@ const authenticated = async (req: Request) => {
       }
       case "ajouterMembreEffectif": {
         if (!owner) throw new Error("Ajout réservé au propriétaire.")
+        if ((members ?? []).length >= maximumGda) throw new Error(`L’effectif a atteint sa limite de ${maximumGda} GDA.`)
         const matricule = texte(payload.nom || payload.matricule)
         const { error } = await admin.from("members").insert({
           matricule, grade: texte(payload.grade) || "Caporal", steam_id: texte(payload.steamId) || null,
@@ -1426,6 +1486,70 @@ const authenticated = async (req: Request) => {
         if (error) throw error
         return json({ success: true, message: action === "viderJournalActions" ? "Journal vidé." : "Ligne supprimée." })
       }
+      case "recupererParametresSite":
+        return json(await parametresSiteDonnees())
+      case "enregistrerParametresSite": {
+        if (!peutGererParametres) throw new Error("Modification réservée à la propriété et aux Gérant GDA.")
+        const maximum = Math.trunc(nombre(payload.maximumGda))
+        const heure = texte(payload.heureActualisation)
+        if (maximum < 1 || maximum > 200) throw new Error("Le maximum de GDA doit être compris entre 1 et 200.")
+        if (maximum < (members ?? []).length) {
+          throw new Error(`Le maximum ne peut pas être inférieur à l’effectif actif actuel (${(members ?? []).length}).`)
+        }
+        if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(heure)) throw new Error("L’heure d’actualisation est invalide.")
+        const { error } = await admin.from("site_configuration").update({
+          max_gda: maximum,
+          roster_publish_time: `${heure}:00`,
+          updated_by_profile_id: profile.id,
+        }).eq("singleton", true)
+        if (error) throw error
+        await audit("Paramètres du site modifiés", "Configuration", `Maximum ${maximum} GDA · actualisation ${heure}`)
+        return json(await parametresSiteDonnees("Paramètres enregistrés."))
+      }
+      case "enregistrerLienSite": {
+        if (!peutGererParametres) throw new Error("Modification réservée à la propriété et aux Gérant GDA.")
+        const categorieNormalisee = normalise(payload.categorie).replace(/[^A-Z]+/g, "_").replace(/^_|_$/g, "")
+        const categorie = categorieNormalisee === "LIENS_UTILES" ? "LIENS_UTILES"
+          : categorieNormalisee === "INSTRUCTEUR" ? "INSTRUCTEUR" : ""
+        if (!categorie) throw new Error("Catégorie de lien invalide.")
+        const nom = texte(payload.nom)
+        if (!nom || nom.length > 100) throw new Error("Le nom du lien doit contenir entre 1 et 100 caractères.")
+        const url = normaliserUrlLienSite(payload.url)
+        const mode = normalise(payload.mode) === "EXTERNAL" ? "EXTERNAL" : "IFRAME"
+        const id = texte(payload.id)
+        let ordre = Math.max(0, Math.min(10000, Math.trunc(nombre(payload.ordre))))
+        if (!id && !ordre) {
+          const { data: dernier } = await admin.from("navigation_links").select("sort_order")
+            .eq("category", categorie).eq("active", true).order("sort_order", { ascending: false }).limit(1).maybeSingle()
+          ordre = nombre(dernier?.sort_order) + 10
+        }
+        const donneesLien = {
+          category: categorie,
+          label: nom,
+          url,
+          display_mode: mode,
+          sort_order: ordre,
+          active: true,
+          updated_by_profile_id: profile.id,
+        }
+        const resultat = id
+          ? await admin.from("navigation_links").update(donneesLien).eq("external_id", id).select("external_id").single()
+          : await admin.from("navigation_links").insert({ ...donneesLien, created_by_profile_id: profile.id }).select("external_id").single()
+        if (resultat.error) throw resultat.error
+        await audit(id ? "Lien du site modifié" : "Lien du site ajouté", nom, categorie)
+        return json(await parametresSiteDonnees(id ? "Lien modifié." : "Lien ajouté."))
+      }
+      case "supprimerLienSite": {
+        if (!peutGererParametres) throw new Error("Modification réservée à la propriété et aux Gérant GDA.")
+        const id = texte(payload.id)
+        const { data: lien, error: rechercheError } = await admin.from("navigation_links")
+          .select("label,category").eq("external_id", id).maybeSingle()
+        if (rechercheError || !lien) throw new Error("Lien introuvable.")
+        const { error } = await admin.from("navigation_links").delete().eq("external_id", id)
+        if (error) throw error
+        await audit("Lien du site supprimé", lien.label, lien.category)
+        return json(await parametresSiteDonnees("Lien supprimé."))
+      }
       case "recupererAdministration": {
         requirePermission("administration_permissions")
         const [{ data: allProfiles }, { data: allGrants }, { data: allPermissions }] = await Promise.all([
@@ -1752,7 +1876,7 @@ const authenticated = async (req: Request) => {
           if ((members ?? []).some((item: any) => normalise(item.matricule) === normalise(matricule))) throw new Error("Ce matricule est déjà présent dans l’effectif.")
           if ((members ?? []).some((item: any) => normalise(item.steam_id) === normalise(steamId))) throw new Error("Ce Steam ID est déjà présent dans l’effectif.")
           if ((members ?? []).some((item: any) => normalise(item.discord_id) === normalise(discordId))) throw new Error("Ce Discord ID est déjà présent dans l’effectif.")
-          if ((members ?? []).length >= 35) throw new Error("L’effectif a atteint sa limite de 35 GDA.")
+          if ((members ?? []).length >= maximumGda) throw new Error(`L’effectif a atteint sa limite de ${maximumGda} GDA.`)
           const { data: formation, error: formationError } = await admin.from("instructor_reports")
             .select("id,steam_id,discord_id").eq("active", true).eq("report_type", "FORMATION")
             .eq("folder_external_id", suivi.external_id).order("submitted_at", { ascending: false }).limit(1).maybeSingle()
@@ -1799,7 +1923,7 @@ const authenticated = async (req: Request) => {
         if (member) throw new Error("Ce matricule est déjà présent dans l’effectif.")
         if ((members ?? []).some((item: any) => normalise(item.steam_id) === normalise(steamId))) throw new Error("Ce Steam ID est déjà présent dans l’effectif.")
         if ((members ?? []).some((item: any) => normalise(item.discord_id) === normalise(discordId))) throw new Error("Ce Discord ID est déjà présent dans l’effectif.")
-        if ((members ?? []).length >= 35) throw new Error("L’effectif a atteint sa limite de 35 GDA.")
+        if ((members ?? []).length >= maximumGda) throw new Error(`L’effectif a atteint sa limite de ${maximumGda} GDA.`)
         const instructeurNom = texte(payload.instructeur) || actorName
         const membreInstructeur = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(instructeurNom))
         if (!membreInstructeur || !(membreInstructeur.specializations ?? []).some((item: string) => normalise(item).includes("INSTRUCTEUR"))) {

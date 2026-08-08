@@ -6,6 +6,7 @@ const EFFECTIF_API_URL = API_URL;
 let effectifMembres = [];
 let effectifPeutModifier = false;
 let effectifPeutAjouter = false;
+let effectifMaximumGda = 35;
 let effectifGradesEdition = [];
 let effectifSanctionsEdition = [];
 let effectifMedaillesEdition = [];
@@ -122,6 +123,10 @@ async function chargerEffectif(options) {
       resultat.peutModifier === true;
     effectifPeutAjouter =
       resultat.peutAjouter === true;
+    effectifMaximumGda = Math.max(
+      1,
+      Number(resultat.maximumGda || effectifMaximumGda || 35)
+    );
     effectifGradesEdition =
       Array.isArray(resultat.grades)
         ? resultat.grades
@@ -211,6 +216,10 @@ function restaurerCacheLocalEffectif(identifiant) {
       cache.peutModifier === true;
     effectifPeutAjouter =
       cache.peutAjouter === true;
+    effectifMaximumGda = Math.max(
+      1,
+      Number(cache.maximumGda || 35)
+    );
     effectifGradesEdition =
       Array.isArray(cache.grades) ? cache.grades : [];
     effectifSanctionsEdition =
@@ -241,6 +250,7 @@ function memoriserCacheLocalEffectif(identifiant) {
         membres: effectifMembres,
         peutModifier: effectifPeutModifier,
         peutAjouter: effectifPeutAjouter,
+        maximumGda: effectifMaximumGda,
         grades: effectifGradesEdition,
         sanctions: effectifSanctionsEdition,
         medailles: effectifMedaillesEdition,
@@ -352,10 +362,10 @@ function afficherEffectif(membres) {
         <div class="effectif-header-actions">
           <div
             class="effectif-compteur"
-            aria-label="${membres.length} GDA sur 35 maximum"
+            aria-label="${membres.length} GDA sur ${effectifMaximumGda} maximum"
           >
             <strong>${membres.length}</strong>
-            <span>/ 35 GDA</span>
+            <span>/ ${effectifMaximumGda} GDA</span>
           </div>
 
           ${effectifPeutAjouter ? `
@@ -526,10 +536,24 @@ function synchroniserAffichageEffectifIncremental(membres) {
   if (compteurBloc) {
     compteurBloc.setAttribute(
       "aria-label",
-      membres.length + " GDA sur 35 maximum"
+      membres.length + " GDA sur " + effectifMaximumGda + " maximum"
     );
   }
+  const maximumAffiche = module.querySelector(".effectif-compteur span");
+  if (maximumAffiche) maximumAffiche.textContent = "/ " + effectifMaximumGda + " GDA";
 }
+
+window.mettreAJourMaximumEffectifGDA = function (maximum) {
+  const valeur = Math.max(1, Number(maximum || 35));
+  if (!Number.isFinite(valeur)) return;
+  effectifMaximumGda = valeur;
+  if (effectifCharge) {
+    memoriserCacheLocalEffectif(
+      sessionStorage.getItem("identifiantUtilisateur") || ""
+    );
+    synchroniserAffichageEffectifIncremental(effectifMembres);
+  }
+};
 
 function synchroniserNoteFicheEffectif(module, membres) {
   const cle = module && module.dataset

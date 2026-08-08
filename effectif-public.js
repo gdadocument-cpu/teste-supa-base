@@ -1,5 +1,6 @@
 let effectifPublicMembres = [];
 let effectifPublicProchaineActualisation = 0;
+let effectifPublicHeureActualisation = "20:00";
 let effectifPublicMinuteur = null;
 let effectifPublicActualisationEnCours = false;
 let effectifPublicCharge = false;
@@ -57,6 +58,9 @@ async function chargerEffectifPublicGDA(forcer, silencieux) {
     effectifPublicProchaineActualisation = Number(
       resultat.prochaineActualisation || 0
     );
+    effectifPublicHeureActualisation = String(
+      resultat.heureActualisation || effectifPublicHeureActualisation || "20:00"
+    ).slice(0, 5);
     effectifPublicCharge = true;
     effectifPublicDernierResultat = Object.assign({}, resultat, {
       membres: effectifPublicMembres
@@ -138,7 +142,9 @@ function afficherEffectifPublicGDA(resultat) {
           <h3>👥 Effectif</h3>
           <p>
             ${effectifPublicMembres.length} membre${effectifPublicMembres.length > 1 ? "s" : ""}
-            · mise à jour quotidienne à 20 h 00
+            · mise à jour quotidienne à ${echapperHTML(
+              effectifPublicHeureActualisation.replace(":", " h ")
+            )}
           </p>
         </div>
 

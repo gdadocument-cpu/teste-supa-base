@@ -367,6 +367,7 @@ const ACTIONS_LECTURE_GDA = new Set([
   "recupererNotifications",
   "recupererGestionPersonnel",
   "recupererAdministration",
+  "recupererParametresSite",
   "recupererListeBlanche",
   "recupererJournalActions",
   "recupererArchivesInstructeur",
@@ -442,6 +443,9 @@ const INVALIDATIONS_CACHE_GDA = {
   enregistrerPermissions: ["recupererAdministration", "recupererListeBlanche"],
   definirCoproprietaire: ["recupererAdministration", "recupererListeBlanche"],
   transfererPropriete: ["recupererAdministration", "recupererListeBlanche"],
+  enregistrerParametresSite: ["recupererParametresSite", "recupererEffectif", "recupererEffectifPublic"],
+  enregistrerLienSite: ["recupererParametresSite"],
+  supprimerLienSite: ["recupererParametresSite"],
   marquerNotificationsLues: ["recupererNotifications"],
   effacerNotifications: ["recupererNotifications"],
   actualiserEffectifPublic: ["recupererEffectifPublic"],
@@ -1801,6 +1805,14 @@ function utilisateurPeutAccederEspaceInstructeurGDA() {
 }
 
 function appliquerVisibiliteModulesGDA() {
+  if (
+    sessionStorage.getItem("identifiantUtilisateur") &&
+    typeof chargerConfigurationSiteGDA === "function"
+  ) {
+    chargerConfigurationSiteGDA(false).catch(function (erreur) {
+      console.warn("Configuration du site indisponible :", erreur);
+    });
+  }
   appliquerModeVisiteurGDA();
   const visiteur = utilisateurEstVisiteurGDA();
   const officier = utilisateurEstOfficierGDA();
@@ -1819,10 +1831,14 @@ function appliquerVisibiliteModulesGDA() {
   if (menuInstructeurOuvert && !accesEspaceInstructeur) {
     menuInstructeurOuvert = false;
   }
+  const accesParametresSite = !visiteur &&
+    typeof utilisateurPeutGererParametresSiteGDA === "function" &&
+    utilisateurPeutGererParametresSiteGDA();
   const accesStaffAdministration = !visiteur && (
     utilisateurEstProprietaireOuCoproprietaireGDA() ||
     utilisateurAPermission("role_staff_total") ||
-    utilisateurAPermission("administration_staff")
+    utilisateurAPermission("administration_staff") ||
+    accesParametresSite
   );
   if (menuAdministrationOuvert && !accesStaffAdministration) {
     menuAdministrationOuvert = false;
@@ -1919,11 +1935,15 @@ function appliquerVisibiliteModulesGDA() {
     const bouton = document.getElementById(id);
     if (bouton) bouton.hidden = !menuLiensUtilesOuvert;
   });
+  if (typeof actualiserVisibiliteLiensDynamiquesGDA === "function") {
+    actualiserVisibiliteLiensDynamiquesGDA();
+  }
 
   const administration = document.getElementById("administrationButton");
   const permissions = document.getElementById("permissionsButton");
   const logs = document.getElementById("logsButton");
   const listeBlanche = document.getElementById("listeBlancheButton");
+  const parametres = document.getElementById("parametresButton");
   const retourAdministration = document.getElementById("retourAdministrationButton");
   if (administration) {
     administration.hidden =
@@ -1946,6 +1966,9 @@ function appliquerVisibiliteModulesGDA() {
       !menuAdministrationOuvert ||
       !(utilisateurEstProprietaireOuCoproprietaireReelGDA() ||
         utilisateurAPermission("role_staff_total"));
+  }
+  if (parametres) {
+    parametres.hidden = !menuAdministrationOuvert || !accesParametresSite;
   }
   if (retourAdministration) {
     retourAdministration.hidden = !menuAdministrationOuvert;
@@ -1972,9 +1995,11 @@ function appliquerVisibiliteModulesGDA() {
 }
 
 function ouvrirMenuAdministrationGDA() {
+  const accesParametres = typeof utilisateurPeutGererParametresSiteGDA === "function" &&
+    utilisateurPeutGererParametresSiteGDA();
   if (
     utilisateurEstVisiteurGDA() ||
-    !utilisateurAPermission("administration_staff")
+    (!utilisateurAPermission("administration_staff") && !accesParametres)
   ) return;
 
   menuOfficierOuvert = false;
@@ -1995,6 +2020,9 @@ function ouvrirMenuAdministrationGDA() {
   }
   if (utilisateurEstProprietaireOuCoproprietaireReelGDA()) {
     modules.push("Liste blanche");
+  }
+  if (accesParametres) {
+    modules.push("Paramètres");
   }
   afficherAccueilMenuGDA(
     "Administration",

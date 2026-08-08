@@ -77,6 +77,57 @@ const dateHeureFr = (value: unknown) => {
   }).format(date)
 }
 const aujourdHui = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(new Date())
+const partiesDateHeureParis = (date: Date) => {
+  const parties = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Paris",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date)
+  const valeur = (type: string) => Number(parties.find((partie) => partie.type === type)?.value || 0)
+  return {
+    year: valeur("year"), month: valeur("month"), day: valeur("day"),
+    hour: valeur("hour"), minute: valeur("minute"), second: valeur("second"),
+  }
+}
+const instantParis = (year: number, month: number, day: number, hour: number) => {
+  const cibleUtc = Date.UTC(year, month - 1, day, hour, 0, 0)
+  let estimation = cibleUtc
+  for (let tentative = 0; tentative < 3; tentative++) {
+    const parties = partiesDateHeureParis(new Date(estimation))
+    const representeUtc = Date.UTC(
+      parties.year, parties.month - 1, parties.day,
+      parties.hour, parties.minute, parties.second,
+    )
+    estimation += cibleUtc - representeUtc
+  }
+  return new Date(estimation)
+}
+const metadonneesEffectifGda = (dernierePublication: unknown, reference = new Date()) => {
+  const parties = partiesDateHeureParis(reference)
+  const echeanceAujourdhui = instantParis(parties.year, parties.month, parties.day, 20)
+  const lendemainCivil = new Date(Date.UTC(parties.year, parties.month - 1, parties.day + 1, 12))
+  const echeanceDemain = instantParis(
+    lendemainCivil.getUTCFullYear(),
+    lendemainCivil.getUTCMonth() + 1,
+    lendemainCivil.getUTCDate(),
+    20,
+  )
+  const publication = new Date(texte(dernierePublication))
+  const publicationMs = Number.isNaN(publication.getTime()) ? 0 : publication.getTime()
+  const actualisationDuJourEnAttente = reference >= echeanceAujourdhui && publicationMs < echeanceAujourdhui.getTime()
+  const prochaine = reference < echeanceAujourdhui || actualisationDuJourEnAttente
+    ? echeanceAujourdhui
+    : echeanceDemain
+  return {
+    actualiseLe: publicationMs,
+    prochaineActualisation: prochaine.getTime(),
+  }
+}
 const joursRestants = (fin: unknown) => {
   const cible = isoDate(fin)
   if (!cible) return 0
@@ -117,13 +168,14 @@ const authenticated = async (req: Request) => {
       .maybeSingle()
     if (profileError || !profile) return json({ success: false, message: "Profil GDA non autorisé." }, 403)
 
-    const [{ data: grants }, { data: members }, { data: delayed }, { data: defcon }, { data: suivisProbatoires }, { data: absencesSuivis }] = await Promise.all([
+    const [{ data: grants }, { data: members }, { data: delayed }, { data: defcon }, { data: suivisProbatoires }, { data: absencesSuivis }, { data: derniereVersionEffectif }] = await Promise.all([
       admin.from("profile_permissions").select("permission_code").eq("profile_id", profile.id),
       admin.from("members").select("*").eq("active", true),
       admin.from("current_gda_roster").select("*"),
       admin.from("defcon_state").select("level,updated_at").eq("singleton", true).maybeSingle(),
       admin.from("training_followups").select("*").eq("status", "EN_ATTENTE"),
       admin.from("absences").select("member_id,matricule_snapshot,starts_on,ends_on"),
+      admin.from("gda_roster_versions").select("published_at").order("published_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle(),
     ])
 
     const permissions = new Set((grants ?? []).map((grant: any) => grant.permission_code))
@@ -620,10 +672,10 @@ const authenticated = async (req: Request) => {
           grades: GRADES, sanctions: SANCTIONS, medailles: MEDAILLES, specialisations: SPECIALISATIONS,
         })
       case "recupererEffectifPublic":
-        return json({ success: true, membres: membresPublic, actualiseLe: dateHeureFr(new Date()), prochaineActualisation: Date.now() + 86400000, peutActualiser: has("effectif_public_actualiser"), actualisationForcee: false })
+        return json({ success: true, membres: membresPublic, ...metadonneesEffectifGda(derniereVersionEffectif?.published_at), peutActualiser: has("effectif_public_actualiser"), actualisationForcee: false })
       case "actualiserEffectifPublic": { // publication volontaire de l'instantané retardé
         requirePermission("effectif_public_actualiser")
-        const { data: version, error: versionError } = await admin.from("gda_roster_versions").insert({ published_by_profile_id: profile.id, note: "Actualisation depuis le site Supabase" }).select("id").single()
+        const { data: version, error: versionError } = await admin.from("gda_roster_versions").insert({ published_by_profile_id: profile.id, note: "Actualisation depuis le site Supabase" }).select("id,published_at").single()
         if (versionError) throw versionError
         const rows = (members ?? []).map((member: any) => ({
           version_id: version.id, member_id: member.id, matricule: member.matricule,
@@ -636,7 +688,7 @@ const authenticated = async (req: Request) => {
         const { error } = await admin.from("gda_roster_members").insert(rows)
         if (error) throw error
         await audit("Effectif GDA actualisé")
-        return json({ success: true, membres: rows.map((row: any) => ({ ...membreClient(memberById.get(row.member_id), true), grade: row.grade })), actualiseLe: dateHeureFr(new Date()), prochaineActualisation: Date.now() + 86400000, peutActualiser: true, actualisationForcee: true })
+        return json({ success: true, membres: rows.map((row: any) => ({ ...membreClient(memberById.get(row.member_id), true), grade: row.grade })), ...metadonneesEffectifGda(version.published_at), peutActualiser: true, actualisationForcee: true })
       }
       case "enregistrerNote":
       case "modifierMembreEffectif": { // effectif officier instantané uniquement

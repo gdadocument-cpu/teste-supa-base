@@ -4,6 +4,7 @@ let effectifPublicMinuteur = null;
 let effectifPublicActualisationEnCours = false;
 let effectifPublicCharge = false;
 let effectifPublicDernierResultat = null;
+let effectifPublicDerniereVerificationAutomatique = 0;
 
 function ouvrirEffectifPublicGDA() {
   definirModuleGdaActif("effectif-public");
@@ -368,7 +369,11 @@ function demarrerCompteAReboursEffectifPublicGDA() {
     const reste = effectifPublicProchaineActualisation - Date.now();
     if (reste <= 0) {
       affichage.textContent = "Mise à jour…";
-      if (!effectifPublicActualisationEnCours) {
+      if (
+        !effectifPublicActualisationEnCours &&
+        Date.now() - effectifPublicDerniereVerificationAutomatique >= 5000
+      ) {
+        effectifPublicDerniereVerificationAutomatique = Date.now();
         chargerEffectifPublicGDA(false, true);
       }
       return;

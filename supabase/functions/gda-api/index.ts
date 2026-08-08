@@ -607,7 +607,7 @@ const authenticated = async (req: Request) => {
           membres: membresClient,
           peutModifier: has("effectif_modifier"),
           peutAjouter: owner || ["LIEUTENANT-COLONEL", "COMMANDANT", "VICE-COMMANDANT"].includes(normalise(ownMember?.grade)),
-          grades: GRADES, sanctions: SANCTIONS, medailles: [], specialisations: SPECIALISATIONS,
+          grades: GRADES, sanctions: SANCTIONS, medailles: MEDAILLES, specialisations: SPECIALISATIONS,
         })
       case "recupererEffectifPublic":
         return json({ success: true, membres: membresPublic, actualiseLe: dateHeureFr(new Date()), prochaineActualisation: Date.now() + 86400000, peutActualiser: has("effectif_public_actualiser"), actualisationForcee: false })

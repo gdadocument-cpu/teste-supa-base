@@ -1220,7 +1220,13 @@ function obtenirRangGradeGestion(grade) {
 }
 
 function convertirDateHeureGestion(texte) {
-  const match = String(texte || "").match(
+  const valeur = String(texte || "").trim();
+  if (!valeur) return null;
+
+  const dateISO = new Date(valeur);
+  if (!Number.isNaN(dateISO.getTime())) return dateISO;
+
+  const match = valeur.match(
     /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/
   );
   if (!match) return null;

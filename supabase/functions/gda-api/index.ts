@@ -379,13 +379,14 @@ const authenticated = async (req: Request) => {
 
     const gestionPersonnelDonnees = async (message = "") => {
       const { data, error } = await admin.from("personnel_history")
-        .select("*,profiles!personnel_history_performed_by_profile_id_fkey(display_name)")
+        .select("*,auteur:profiles!personnel_history_performed_by_profile_id_fkey(display_name)")
         .order("occurred_at", { ascending: false })
+        .order("id", { ascending: false })
       if (error) throw error
       const logs = (data ?? []).map((row: any) => ({
-        ligne: row.id, date: dateHeureFr(row.occurred_at), personne: row.matricule_snapshot,
+        ligne: row.id, date: row.occurred_at, personne: row.matricule_snapshot,
         grade: row.grade_snapshot || "", type: row.action_type, choix: row.choice || "",
-        raison: row.reason || "", auteur: row.profiles?.display_name || "",
+        raison: row.reason || "", auteur: row.auteur?.display_name || "",
       }))
       const specialisationsAuteur = normalise((ownMember?.specializations ?? []).join(";"))
       const privilegie = owner || permissions.has("role_staff_total")

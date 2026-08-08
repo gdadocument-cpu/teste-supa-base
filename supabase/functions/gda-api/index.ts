@@ -137,8 +137,17 @@ const authenticated = async (req: Request) => {
     const delayedByName = new Map((delayed ?? []).map((member: any) => [normalise(member.matricule), member]))
     const ownMember = profile.member_id ? memberById.get(profile.member_id) : null
     const ownDelayed = profile.member_id ? delayedById.get(profile.member_id) : delayedByName.get(normalise(profile.display_name))
+    const specialisationsAuteur = normalise((ownMember?.specializations ?? []).join("; "))
+    const roleGestionInstructeur = specialisationsAuteur.includes("RESPONSABLE INST") ||
+      specialisationsAuteur.includes("INSTRUCTEUR EN CHEF")
     const instructor = owner || (ownMember?.specializations ?? []).some((item: string) => normalise(item).includes("INSTRUCTEUR"))
+    const peutAdministrerSuivis = owner || permissions.has("role_staff_total") || roleGestionInstructeur
     const requireInstructor = () => { if (!instructor) throw new Error("Accès réservé aux instructeurs.") }
+    const requireTrainingManager = () => {
+      if (!peutAdministrerSuivis) {
+        throw new Error("Prise en charge réservée à la propriété et aux responsables Instructeur.")
+      }
+    }
     const actorName = ownDelayed?.matricule ?? ownMember?.matricule ?? profile.display_name
     const actorGrade = ownDelayed?.grade ?? ownMember?.grade ?? "Visiteur"
     const actorGradeNormalise = normalise(actorGrade).replace(/[^A-Z]/g, "")
@@ -1307,7 +1316,7 @@ const authenticated = async (req: Request) => {
           instructeurs,
           gerants,
           gerantConnecte: libelleGerantMembre(ownMember ?? { matricule: actorName, specializations: [] }),
-          peutModifier: instructor,
+          peutModifier: peutAdministrerSuivis,
           peutDeciderTous: has("suivis_decider_tous"),
         })
       }
@@ -1470,7 +1479,7 @@ const authenticated = async (req: Request) => {
       }
       case "ajouterSuiviFormationInstructeur":
       case "demarrerSuiviFormationInstructeur": {
-        requireInstructor()
+        requireTrainingManager()
         if (action === "demarrerSuiviFormationInstructeur") {
           const suiviId = texte(payload.suiviId)
           let suiviQuery = admin.from("training_followups").select("*")
@@ -1570,7 +1579,7 @@ const authenticated = async (req: Request) => {
       case "transfererGeranceSuiviFormationInstructeur":
       case "deciderSuiviFormationInstructeur":
       case "supprimerSuiviFormationInstructeur": {
-        if (action !== "deciderSuiviFormationInstructeur") requireInstructor()
+        if (action !== "deciderSuiviFormationInstructeur") requireTrainingManager()
         const id = texte(payload.suiviId)
         let query = admin.from("training_followups").select("*")
         query = /^\d+$/.test(id) ? query.eq("id", Number(id)) : query.eq("external_id", id)

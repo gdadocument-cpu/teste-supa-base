@@ -1060,26 +1060,24 @@ function ouvrirFicheMembre(index) {
         )}
 
       </div>
-            <section class="effectif-notes">
+
+      ${peutNoter ? `
+      <section class="effectif-notes">
 
         <h4>
           Notes partagées
         </h4>
 
         <p>
-          ${peutNoter
-            ? "Cette note est partagée avec les officiers et se met à jour automatiquement."
-            : "Lecture seule : vous pouvez modifier uniquement les notes d’une personne strictement moins gradée que vous."}
+          Cette note est partagée avec les officiers et se met à jour automatiquement.
         </p>
 
         <textarea
           id="effectifNoteTexte"
           maxlength="3000"
           placeholder="Ajouter une note..."
-          ${peutNoter ? "" : "disabled"}
         >${echapperHTML(membre.notes || "")}</textarea>
 
-        ${peutNoter ? `
         <div class="effectif-notes-actions">
 
           <button
@@ -1099,11 +1097,11 @@ function ouvrirFicheMembre(index) {
           </button>
 
         </div>
-        ` : ""}
 
         <p id="effectifNoteMessage"></p>
 
       </section>
+      ` : ""}
 
     </section>
   `;

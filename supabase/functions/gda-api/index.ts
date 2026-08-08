@@ -204,6 +204,54 @@ const authenticated = async (req: Request) => {
     const actorGrade = ownDelayed?.grade ?? ownMember?.grade ?? "Visiteur"
     const actorGradeNormalise = normalise(actorGrade).replace(/[^A-Z]/g, "")
     const rangGrade = (grade: unknown) => GRADES.findIndex((item) => normalise(item) === normalise(grade))
+    const valeurReferentiel = (valeur: unknown, referentiel: string[], message: string) => {
+      const trouve = referentiel.find((item) => normalise(item) === normalise(valeur))
+      if (!trouve) throw new Error(message)
+      return trouve
+    }
+    const privilegieGestionPersonnel = owner || permissions.has("role_staff_total") || permissions.has("role_visiteur")
+    const exigerAutoriteGestionPersonnel = (cible: any) => {
+      if (privilegieGestionPersonnel) return
+      const rangAuteur = rangGrade(actorGrade)
+      const rangCible = rangGrade(cible?.grade)
+      if (rangAuteur < 0 || rangCible < rangAuteur) {
+        throw new Error("Accès refusé : vous ne pouvez pas gérer une personne ayant un grade supérieur au vôtre.")
+      }
+    }
+    const specialisationsModifiablesGestionPersonnel = () => {
+      const modifiables = new Set(["Instructeur", "Médecin", "Instructeur et Médecin"])
+      const rangAuteur = rangGrade(actorGrade)
+      const rangCapitaine = rangGrade("Capitaine")
+      if (privilegieGestionPersonnel || (rangAuteur >= 0 && rangAuteur <= rangCapitaine)) {
+        ["Responsable MDC", "CO-Responsable MDC", "Responsable INST", "CO-Responsable INST", "Instructeur en chef"]
+          .forEach((item) => modifiables.add(item))
+      }
+      const specialisationsAuteur = normalise((ownMember?.specializations ?? []).join(";"))
+      if (specialisationsAuteur.includes("RESPONSABLE MDC")) modifiables.add("CO-Responsable MDC")
+      if (specialisationsAuteur.includes("RESPONSABLE INST")) {
+        modifiables.add("CO-Responsable INST")
+        modifiables.add("Instructeur en chef")
+      }
+      if (specialisationsAuteur.includes("CO-RESPONSABLE INST")) modifiables.add("Instructeur en chef")
+      if (specialisationsAuteur.includes("GERANT GDA")) modifiables.add("CO-Gérant GDA")
+      if (privilegieGestionPersonnel) modifiables.add("Gérant GDA")
+      return modifiables
+    }
+    const specialisationsValideesGestionPersonnel = (valeur: unknown) => {
+      const finales: string[] = []
+      for (const saisie of texte(valeur).split(/[;,]/).map(texte).filter(Boolean)) {
+        const valide = valeurReferentiel(saisie, SPECIALISATIONS, "Spécialisation invalide.")
+        if (!finales.some((item) => normalise(item) === normalise(valide))) finales.push(valide)
+      }
+      const instructeur = finales.some((item) => normalise(item) === "INSTRUCTEUR")
+      const medecin = finales.some((item) => normalise(item) === "MEDECIN")
+      const combinaison = finales.some((item) => normalise(item) === "INSTRUCTEUR ET MEDECIN")
+      if (combinaison || (instructeur && medecin)) {
+        return finales.filter((item) => !["INSTRUCTEUR", "MEDECIN", "INSTRUCTEUR ET MEDECIN"].includes(normalise(item)))
+          .concat("Instructeur et Médecin")
+      }
+      return finales
+    }
     const rangAuteurNotes = rangGrade(actorGrade)
     const peutNoterMembre = (member: any) => {
       const rangCible = rangGrade(member?.grade)
@@ -477,22 +525,7 @@ const authenticated = async (req: Request) => {
         grade: row.grade_snapshot || "", type: row.action_type, choix: row.choice || "",
         raison: row.reason || "", auteur: row.auteur?.display_name || row.performed_by_snapshot || "",
       }))
-      const specialisationsAuteur = normalise((ownMember?.specializations ?? []).join(";"))
-      const privilegie = owner || permissions.has("role_staff_total")
-      const rangAuteur = GRADES.findIndex((grade) => normalise(grade) === normalise(actorGrade))
-      const rangCapitaine = GRADES.findIndex((grade) => normalise(grade) === "CAPITAINE")
-      const modifiables = new Set(["Instructeur", "Médecin", "Instructeur et Médecin"])
-      if (privilegie || (rangAuteur >= 0 && rangAuteur <= rangCapitaine)) {
-        ["Responsable MDC", "CO-Responsable MDC", "Responsable INST", "CO-Responsable INST", "Instructeur en chef"].forEach((item) => modifiables.add(item))
-      }
-      if (specialisationsAuteur.includes("RESPONSABLE MDC")) modifiables.add("CO-Responsable MDC")
-      if (specialisationsAuteur.includes("RESPONSABLE INST")) {
-        modifiables.add("CO-Responsable INST")
-        modifiables.add("Instructeur en chef")
-      }
-      if (specialisationsAuteur.includes("CO-RESPONSABLE INST")) modifiables.add("Instructeur en chef")
-      if (specialisationsAuteur.includes("GERANT GDA")) modifiables.add("CO-Gérant GDA")
-      if (privilegie) modifiables.add("Gérant GDA")
+      const modifiables = specialisationsModifiablesGestionPersonnel()
       return {
         success: true, message,
         membres: membresClient.map((membre: any) => ({
@@ -1029,19 +1062,42 @@ const authenticated = async (req: Request) => {
         requirePermission("departs_gerer")
         const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(payload.nom))
         if (!member) throw new Error("Membre introuvable.")
-        const type = typeDepartNormalise(payload.type) || "DEPART"
+        const type = typeDepartNormalise(payload.type)
+        if (!type) throw new Error("Type de départ invalide.")
         const start = isoDate(payload.dateDepart) ?? aujourdHui()
-        const end = type === "BLACKLIST" ? finBlacklist(start, payload.duree) : isoDate(payload.dateRetour)
-        const { error } = await admin.from("departures").insert({
+        const dureeBlacklist = type === "BLACKLIST"
+          ? valeurReferentiel(payload.duree, DUREES_BLACKLIST, "Durée de blacklist invalide.")
+          : ""
+        const end = type === "BLACKLIST"
+          ? finBlacklist(start, dureeBlacklist)
+          : isoDate(payload.dateRetour) ?? ajouterJoursIso(start, 7)
+        if (type !== "BLACKLIST" && end < ajouterJoursIso(start, 7)) {
+          throw new Error("La date de retour doit être située au moins 7 jours après la date de départ.")
+        }
+        const { data: departCree, error } = await admin.from("departures").insert({
           external_id: idExterne(), member_id: member.id, matricule_snapshot: member.matricule,
           grade_snapshot: delayedById.get(member.id)?.grade ?? member.grade, steam_id_snapshot: member.steam_id,
           discord_id_snapshot: member.discord_id, departure_type: type, starts_on: start, ends_on: end,
           reason: texte(payload.raison) || null, status: end ? "TEMPORAIRE" : "PERMANENT",
           decided_by_profile_id: profile.id, decided_by_snapshot: profile.display_name, medals_snapshot: member.medals ?? [],
-        })
+        }).select("id").single()
         if (error) throw error
+        const { error: retraitError } = await admin.from("members")
+          .update({ active: false }).eq("id", member.id).eq("active", true).select("id").single()
+        if (retraitError) {
+          await admin.from("departures").delete().eq("id", departCree.id)
+          throw retraitError
+        }
         await audit("Dossier de départ ajouté", member.matricule, type)
-        return json(await departsDonnees("Dossier enregistré."))
+        const donnees = await departsDonnees(`Dossier enregistré et ${member.matricule} retiré de l’effectif.`)
+        const { data: membresActifs, error: membresError } = await admin.from("members")
+          .select("*").eq("active", true).order("id", { ascending: true })
+        if (membresError) throw membresError
+        return json({
+          ...donnees,
+          membres: (membresActifs ?? []).map((item: any) => ({ nom: item.matricule, grade: item.grade })),
+          effectif: (membresActifs ?? []).map((item: any) => membreClient(item)),
+        })
       }
       case "modifierDepart":
       case "supprimerDepart": {
@@ -1114,46 +1170,114 @@ const authenticated = async (req: Request) => {
         requirePermission("personnel_historique_modifier")
         const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(payload.personne))
         if (!member) throw new Error("Membre introuvable.")
-        const type = texte(payload.type)
-        const choix = texte(payload.choix)
+        exigerAutoriteGestionPersonnel(member)
+        const type = valeurReferentiel(payload.type, ["Promotion", "Rétrogradation", "Sanction", "Départ", "Licenciement", "Blacklist", "Médaille", "Spécialisation"], "Type de gestion invalide.")
+        const choixDemande = texte(payload.choix)
         const patch: Record<string, unknown> = {}
         const normalizedType = normalise(type)
+        let choixJournal = choixDemande
         if (["PROMOTION", "RETROGRADATION"].includes(normalizedType)) {
-          patch.grade = choix
+          const nouveauGrade = valeurReferentiel(choixDemande, GRADES, "Grade invalide.")
+          const rangActuel = rangGrade(member.grade)
+          const nouveauRang = rangGrade(nouveauGrade)
+          if (normalizedType === "PROMOTION" && (rangActuel < 0 || nouveauRang < 0 || nouveauRang >= rangActuel)) {
+            throw new Error("La promotion doit mener vers un grade supérieur.")
+          }
+          if (normalizedType === "RETROGRADATION" && (rangActuel < 0 || nouveauRang < 0 || nouveauRang <= rangActuel)) {
+            throw new Error("La rétrogradation doit mener vers un grade inférieur.")
+          }
+          patch.grade = nouveauGrade
           patch.promotion_changed_on = aujourdHui()
-        } else if (normalizedType === "SANCTION") patch.sanction = choix || "Clean"
-        else if (normalizedType === "SPECIALISATION") patch.specializations = choix.split(/[;,]/).map(texte).filter(Boolean)
+          choixJournal = nouveauGrade
+        } else if (normalizedType === "SANCTION") {
+          const sanction = valeurReferentiel(choixDemande, SANCTIONS, "Sanction invalide.")
+          patch.sanction = sanction
+          choixJournal = sanction
+        } else if (normalizedType === "SPECIALISATION") {
+          const demandees = specialisationsValideesGestionPersonnel(choixDemande)
+          const actuelles = specialisationsValideesGestionPersonnel((member.specializations ?? []).join(";"))
+          const clesModifiables = new Set([...specialisationsModifiablesGestionPersonnel()].map(normalise))
+          for (const specialisation of SPECIALISATIONS) {
+            const presenteAvant = actuelles.some((item) => normalise(item) === normalise(specialisation))
+            const presenteApres = demandees.some((item) => normalise(item) === normalise(specialisation))
+            if (presenteAvant !== presenteApres && !clesModifiables.has(normalise(specialisation))) {
+              throw new Error(`Vous n’êtes pas autorisé à modifier la spécialisation « ${specialisation} ».`)
+            }
+          }
+          patch.specializations = demandees
+          choixJournal = demandees.length ? demandees.join(", ") : "Aucune spécialisation"
+        }
         else if (normalizedType === "MEDAILLE") {
+          const retrait = normalise(choixDemande).startsWith("RETIR")
+          const medailleDemandee = choixDemande.replace(/^(?:Retir|Donn)[^:]*:\s*/i, "")
+          const medaille = valeurReferentiel(medailleDemandee, MEDAILLES, "Médaille invalide.")
           const medals = new Set<string>(member.medals ?? [])
-          if (normalise(choix).startsWith("RETIR")) medals.delete(choix.replace(/^Retir[^:]*:\s*/i, ""))
-          else medals.add(choix.replace(/^Donn[^:]*:\s*/i, ""))
+          const existante = [...medals].find((item) => normalise(item) === normalise(medaille))
+          if (retrait) {
+            if (!existante) throw new Error("Cette personne ne possède pas cette médaille.")
+            medals.delete(existante)
+            choixJournal = `Retirer : ${medaille}`
+          } else {
+            if (existante) throw new Error("Cette personne possède déjà cette médaille.")
+            medals.add(medaille)
+            choixJournal = medaille
+          }
           patch.medals = [...medals].filter(Boolean)
         }
-        if (Object.keys(patch).length) {
-          const { error } = await admin.from("members").update(patch).eq("id", member.id)
-          if (error) throw error
-        }
+        let departCreeId: number | null = null
+        let membreRetire = false
         if (["DEPART", "LICENCIEMENT", "BLACKLIST"].includes(normalizedType)) {
           const startsOn = isoDate(payload.dateDepart) ?? aujourdHui()
-          const endsOn = normalizedType === "BLACKLIST" ? finBlacklist(startsOn, choix) : isoDate(payload.dateRetour)
-          const { error } = await admin.from("departures").insert({
+          const dureeBlacklist = normalizedType === "BLACKLIST"
+            ? valeurReferentiel(choixDemande, DUREES_BLACKLIST, "Durée de blacklist invalide.")
+            : ""
+          const endsOn = normalizedType === "BLACKLIST"
+            ? finBlacklist(startsOn, dureeBlacklist)
+            : isoDate(payload.dateRetour) ?? ajouterJoursIso(startsOn, 7)
+          if (normalizedType !== "BLACKLIST" && endsOn < ajouterJoursIso(startsOn, 7)) {
+            throw new Error("La date de retour doit être située au moins 7 jours après la date de départ.")
+          }
+          choixJournal = normalizedType === "BLACKLIST"
+            ? `Blacklist — ${dureeBlacklist}`
+            : `${type} enregistré — retour autorisé le ${dateFr(endsOn)}`
+          const { data: departCree, error } = await admin.from("departures").insert({
             external_id: idExterne(), member_id: member.id, matricule_snapshot: member.matricule,
             grade_snapshot: delayedById.get(member.id)?.grade ?? member.grade, steam_id_snapshot: member.steam_id,
             discord_id_snapshot: member.discord_id, departure_type: normalizedType, starts_on: startsOn,
             ends_on: endsOn, reason: texte(payload.raison) || null,
             status: endsOn ? "TEMPORAIRE" : "PERMANENT", decided_by_profile_id: profile.id, decided_by_snapshot: profile.display_name,
             medals_snapshot: member.medals ?? [],
-          })
+          }).select("id").single()
+          if (error) throw error
+          departCreeId = departCree.id
+          const { error: retraitError } = await admin.from("members")
+            .update({ active: false }).eq("id", member.id).eq("active", true).select("id").single()
+          if (retraitError) {
+            await admin.from("departures").delete().eq("id", departCreeId)
+            throw retraitError
+          }
+          membreRetire = true
+        } else if (Object.keys(patch).length) {
+          const { error } = await admin.from("members").update(patch).eq("id", member.id).eq("active", true)
           if (error) throw error
         }
         const { error: historyError } = await admin.from("personnel_history").insert({
           member_id: member.id, matricule_snapshot: member.matricule,
           grade_snapshot: delayedById.get(member.id)?.grade ?? member.grade,
-          action_type: type, choice: choix || null, reason: texte(payload.raison) || null,
+          action_type: type, choice: choixJournal || null, reason: texte(payload.raison) || null,
           performed_by_profile_id: profile.id, performed_by_snapshot: profile.display_name, occurred_at: new Date().toISOString(),
         })
-        if (historyError) throw historyError
-        await audit(type, member.matricule, choix)
+        if (historyError) {
+          if (membreRetire) await admin.from("members").update({ active: true }).eq("id", member.id)
+          if (departCreeId) await admin.from("departures").delete().eq("id", departCreeId)
+          if (Object.keys(patch).length) {
+            const restauration: Record<string, unknown> = {}
+            for (const cle of Object.keys(patch)) restauration[cle] = member[cle]
+            await admin.from("members").update(restauration).eq("id", member.id)
+          }
+          throw historyError
+        }
+        await audit(type, member.matricule, choixJournal)
         const gestion = await gestionPersonnelDonnees("Action enregistrée.")
         const departs = await departsDonnees()
         const { data: membresActualises, error: membresActualisesError } = await admin
@@ -1172,7 +1296,9 @@ const authenticated = async (req: Request) => {
           ...departs,
           ...gestion,
           membres: membresGestionActualises,
-          message: "Action enregistrée.",
+          message: membreRetire
+            ? `${type} enregistré pour ${member.matricule} et personne retirée de l’effectif.`
+            : `${type} enregistré(e) pour ${member.matricule}.`,
           effectif: effectifActualise,
         })
       }

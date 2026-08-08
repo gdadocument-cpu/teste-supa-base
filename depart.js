@@ -2072,6 +2072,9 @@ async function envoyerNouveauDepart(
     } else if (typeof window.invaliderCacheEffectifGDA === "function") {
       window.invaliderCacheEffectifGDA();
     }
+    if (typeof synchroniserCacheEffectifGDA === "function") {
+      synchroniserCacheEffectifGDA(resultat.effectif);
+    }
 
     appliquerDonneesDeparts(resultat, false);
     categorieDepartOuverte = null;

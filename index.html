@@ -22,6 +22,7 @@
 <link rel="stylesheet" href="rapport-membre.css?v=20260808-1">
   <link rel="stylesheet" href="gestion-personnel.css?v=20260728-2">
 <link rel="stylesheet" href="administration.css?v=20260717-5">
+<link rel="stylesheet" href="parametres.css?v=20260809-1">
 <link rel="stylesheet" href="liste-blanche.css?v=20260722-1">
 <link rel="stylesheet" href="logs.css?v=20260717-5">
 <link rel="stylesheet" href="demande-absence.css?v=20260717-5">
@@ -246,14 +247,7 @@
         📝 Rapport Instructeur
       </button>
 
-      <button
-        id="reglementInstructeurButton"
-        class="menuButton menuInstructeur"
-        type="button"
-        hidden
-      >
-        📜 Règlement instructeur
-      </button>
+      <div id="liensInstructeurDynamiques" class="menu-liens-dynamiques"></div>
 
       <button
         id="archivesInstructeurButton"
@@ -299,32 +293,7 @@
         🔗 Lien utile
       </button>
 
-      <button
-        id="reglementGdaButton"
-        class="menuButton menuLiensUtiles"
-        type="button"
-        hidden
-      >
-        📜 Règlement GDA
-      </button>
-
-      <button
-        id="guideGdaButton"
-        class="menuButton menuLiensUtiles"
-        type="button"
-        hidden
-      >
-        📘 Guide GDA
-      </button>
-
-      <button
-        id="coursMartialButton"
-        class="menuButton menuLiensUtiles"
-        type="button"
-        hidden
-      >
-        ⚖️ Cours martial
-      </button>
+      <div id="liensUtilesDynamiques" class="menu-liens-dynamiques"></div>
 
       <button
         id="retourLiensUtilesButton"
@@ -435,6 +404,15 @@
       </button>
 
       <button
+        id="parametresButton"
+        class="menuButton menuAdministration"
+        type="button"
+        hidden
+      >
+        🛠️ Paramètres
+      </button>
+
+      <button
         id="retourAdministrationButton"
         class="menuButton menuAdministration menuRetour"
         type="button"
@@ -477,12 +455,12 @@
 <script src="supabase-app.bundle.js?v=20260802-1"></script>
 
   <!-- Script principal : connexion et bureau -->
-<script src="script.js?v=20260802-2"></script>
+<script src="script.js?v=20260809-1"></script>
 
   <!-- Module Effectif -->
-<script src="effectif.js?v=20260802-2"></script>
+<script src="effectif.js?v=20260809-1"></script>
 <script src="recommandations-observations.js?v=20260728-1"></script>
-<script src="effectif-public.js?v=20260808-1"></script>
+<script src="effectif-public.js?v=20260809-1"></script>
 <script src="disponibilites.js?v=20260728-1"></script>
 <script src="depart.js?v=20260808-2"></script>
 <script src="rapports.js?v=20260808-1"></script>
@@ -490,6 +468,7 @@
 <script src="demande-absence.js?v=20260801-1"></script>
   <script src="gestion-personnel.js?v=20260808-1"></script>
 <script src="administration.js?v=20260802-1"></script>
+<script src="parametres.js?v=20260809-1"></script>
 <script src="liste-blanche.js?v=20260802-1"></script>
 <script src="logs.js?v=20260728-1"></script>
 <script src="instructeur-archives.js?v=20260722-1"></script>

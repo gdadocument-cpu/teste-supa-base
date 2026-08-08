@@ -70,7 +70,7 @@
 
 .parametres-lien-formulaire {
   display: grid;
-  grid-template-columns: minmax(160px, .8fr) minmax(280px, 1.8fr) minmax(145px, .55fr) 90px;
+  grid-template-columns: minmax(160px, .8fr) 115px minmax(280px, 1.8fr) minmax(145px, .55fr) 90px;
   gap: 12px;
   align-items: end;
   border: 1px solid #143e5b;
@@ -78,6 +78,8 @@
   padding: 14px;
   background: rgba(8, 42, 65, .7);
 }
+
+.parametres-lien-icone input[hidden] { display: none; }
 
 .parametres-lien-nouveau { border-color: #2c9bd5; }
 .parametres-lien-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 9px; }

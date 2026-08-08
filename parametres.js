@@ -72,6 +72,7 @@ function libelleCategorieLienGDA(categorie) {
 }
 
 function iconeLienDynamiqueGDA(lien) {
+  if (lien && String(lien.icone || "").trim()) return String(lien.icone).trim();
   const nom = normaliserParametresSite(lien && lien.nom);
   if (nom.includes("REGLEMENT")) return "📜";
   if (nom.includes("GUIDE")) return "📘";
@@ -91,7 +92,7 @@ function rendreLiensDynamiquesGDA() {
       .filter(function (lien) { return lien.categorie === categorie; })
       .map(function (lien) {
         return `<button class="menuButton lien-dynamique-gda" type="button" data-lien-site="${echapperHTML(lien.id)}" hidden>
-          ${iconeLienDynamiqueGDA(lien)} ${echapperHTML(lien.nom)}
+          ${echapperHTML(iconeLienDynamiqueGDA(lien))} ${echapperHTML(lien.nom)}
         </button>`;
       }).join("");
     destination.querySelectorAll("[data-lien-site]").forEach(function (bouton) {
@@ -122,7 +123,7 @@ function ouvrirLienDynamiqueGDA(id) {
     const zone = document.getElementById("workspace");
     if (!zone) return;
     zone.innerHTML = `<section id="welcomePanel">
-      <h3>${iconeLienDynamiqueGDA(lien)} ${echapperHTML(lien.nom)}</h3>
+      <h3>${echapperHTML(iconeLienDynamiqueGDA(lien))} ${echapperHTML(lien.nom)}</h3>
       <p>Ce document est disponible sur son site dédié.</p>
       <p><a href="${echapperHTML(lien.url)}" target="_blank" rel="noopener noreferrer" class="bouton-lien-externe-gda">Ouvrir ${echapperHTML(lien.nom)}</a></p>
     </section>`;
@@ -185,15 +186,19 @@ function creerCategorieParametresLiensGDA(categorie) {
     <header><div><h4>${categorie === "INSTRUCTEUR" ? "🎓 Liens Instructeur" : "🔗 Liens utiles"}</h4><p>${liens.length} onglet${liens.length > 1 ? "s" : ""} configuré${liens.length > 1 ? "s" : ""}</p></div><button type="button" data-ajouter-lien="${categorie}">＋ Ajouter un onglet</button></header>
     <div class="parametres-liens-liste">
       ${liens.length ? liens.map(creerFormulaireLienParametresGDA).join("") : '<div class="parametres-vide">Aucun lien dans cette catégorie.</div>'}
-      ${parametresAjoutCategorie === categorie ? creerFormulaireLienParametresGDA({ categorie, nom: "", url: "", mode: "IFRAME", ordre: (liens.length + 1) * 10 }) : ""}
+      ${parametresAjoutCategorie === categorie ? creerFormulaireLienParametresGDA({ categorie, nom: "", icone: categorie === "INSTRUCTEUR" ? "🎓" : "🔗", url: "", mode: "IFRAME", ordre: (liens.length + 1) * 10 }) : ""}
     </div>
   </section>`;
 }
 
 function creerFormulaireLienParametresGDA(lien) {
   const nouveau = !lien.id;
+  const iconesProposees = ["🔗", "📜", "📘", "⚖️", "🎓", "📋", "📁", "📊", "🛡️", "📌", "🌐", "⚙️"];
+  const iconeActuelle = iconeLienDynamiqueGDA(lien);
+  const iconePersonnalisee = !iconesProposees.includes(iconeActuelle);
   return `<form class="parametres-lien-formulaire ${nouveau ? "parametres-lien-nouveau" : ""}" data-lien-id="${echapperHTML(lien.id || "")}" data-lien-categorie="${echapperHTML(lien.categorie)}">
     <label class="parametres-lien-nom"><span>Nom de l’onglet</span><input name="nom" maxlength="100" value="${echapperHTML(lien.nom || "")}" required></label>
+    <label class="parametres-lien-icone"><span>Icône</span><select name="iconeChoix">${iconesProposees.map(function (icone) { return `<option value="${echapperHTML(icone)}" ${icone === iconeActuelle ? "selected" : ""}>${echapperHTML(icone)}</option>`; }).join("")}<option value="PERSONNALISEE" ${iconePersonnalisee ? "selected" : ""}>Autre…</option></select><input name="iconePersonnalisee" maxlength="16" value="${echapperHTML(iconePersonnalisee ? iconeActuelle : "")}" placeholder="Votre emoji" ${iconePersonnalisee ? "" : "hidden"}></label>
     <label class="parametres-lien-url"><span>Lien du document</span><input name="url" type="url" value="${echapperHTML(lien.url || "")}" placeholder="https://…" required></label>
     <label><span>Affichage</span><select name="mode"><option value="IFRAME" ${lien.mode !== "EXTERNAL" ? "selected" : ""}>Intégré au site</option><option value="EXTERNAL" ${lien.mode === "EXTERNAL" ? "selected" : ""}>Nouvel onglet</option></select></label>
     <label><span>Ordre</span><input name="ordre" type="number" min="0" max="10000" value="${Number(lien.ordre || 0)}"></label>
@@ -213,6 +218,12 @@ function brancherParametresSiteGDA() {
   });
   document.querySelectorAll(".parametres-lien-formulaire").forEach(function (formulaire) {
     formulaire.addEventListener("submit", enregistrerLienParametresGDA);
+    const choixIcone = formulaire.querySelector('[name="iconeChoix"]');
+    const iconePersonnalisee = formulaire.querySelector('[name="iconePersonnalisee"]');
+    choixIcone?.addEventListener("change", function () {
+      iconePersonnalisee.hidden = choixIcone.value !== "PERSONNALISEE";
+      if (!iconePersonnalisee.hidden) iconePersonnalisee.focus();
+    });
     formulaire.querySelector("[data-supprimer-lien]")?.addEventListener("click", supprimerLienParametresGDA);
     formulaire.querySelector("[data-annuler-ajout]")?.addEventListener("click", function () {
       parametresAjoutCategorie = "";
@@ -264,6 +275,11 @@ async function enregistrerLienParametresGDA(evenement) {
     const donnees = Object.fromEntries(new FormData(formulaire).entries());
     donnees.id = formulaire.dataset.lienId || "";
     donnees.categorie = formulaire.dataset.lienCategorie;
+    donnees.icone = donnees.iconeChoix === "PERSONNALISEE"
+      ? String(donnees.iconePersonnalisee || "").trim()
+      : donnees.iconeChoix;
+    delete donnees.iconeChoix;
+    delete donnees.iconePersonnalisee;
     const resultat = await requeteMutationParametresGDA("enregistrerLienSite", donnees);
     parametresAjoutCategorie = "";
     afficherParametresSiteGDA();

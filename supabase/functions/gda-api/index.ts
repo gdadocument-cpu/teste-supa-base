@@ -1016,7 +1016,25 @@ const authenticated = async (req: Request) => {
         await audit(type, member.matricule, choix)
         const gestion = await gestionPersonnelDonnees("Action enregistrée.")
         const departs = await departsDonnees()
-        return json({ ...departs, ...gestion, message: "Action enregistrée.", effectif: membresClient })
+        const { data: membresActualises, error: membresActualisesError } = await admin
+          .from("members")
+          .select("*")
+          .eq("active", true)
+          .order("id", { ascending: true })
+        if (membresActualisesError) throw membresActualisesError
+        const effectifActualise = (membresActualises ?? []).map((item: any) => membreClient(item))
+        const membresGestionActualises = effectifActualise.map((membre: any) => ({
+          ...membre,
+          medailles: texte(membre.medaille).split(";").map(texte).filter(Boolean),
+          specialisations: texte(membre.specialisation).split(";").map(texte).filter(Boolean),
+        }))
+        return json({
+          ...departs,
+          ...gestion,
+          membres: membresGestionActualises,
+          message: "Action enregistrée.",
+          effectif: effectifActualise,
+        })
       }
       case "modifierLogGestionPersonnel": {
         requirePermission("personnel_historique_modifier")

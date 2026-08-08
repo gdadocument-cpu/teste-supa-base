@@ -255,7 +255,7 @@ const authenticated = async (req: Request) => {
         conclusion: row.conclusion || "",
         dateEnvoi: dateHeureFr(row.submitted_at),
         statut: row.status === "LU" ? "LU" : row.status === "ARCHIVE" ? "ARCHIVE" : "EN ATTENTE",
-        traitePar: noms.get(row.processed_by_profile_id) || "",
+        traitePar: noms.get(row.processed_by_profile_id) || row.processed_by_snapshot || "",
         dateTraitement: dateHeureFr(row.processed_at),
         source: row.source,
         discordUrl: row.discord_url || "",
@@ -277,7 +277,7 @@ const authenticated = async (req: Request) => {
           dateFin: isoDate(row.ends_on) || "",
           raison: row.reason,
           statut: actif ? "ACTIF" : "TERMINE",
-          auteur: row.profiles?.display_name || "",
+          auteur: row.profiles?.display_name || row.declared_by_snapshot || "",
           joursRestants: actif ? joursRestants(row.ends_on) : 0,
         }
       })
@@ -303,7 +303,7 @@ const authenticated = async (req: Request) => {
           raison: row.reason,
           statut,
           statutBase: base,
-          decidePar: row.profiles?.display_name || "",
+          decidePar: row.profiles?.display_name || row.decided_by_snapshot || "",
           dateDecision: row.decided_at || "",
           motifRefus: row.refusal_reason || "",
           notificationLue: row.notification_read === true,
@@ -361,7 +361,7 @@ const authenticated = async (req: Request) => {
         type: typeNormalise === "DEPART" ? "Départ" : typeNormalise === "LICENCIEMENT" ? "Licenciement" : typeNormalise === "BLACKLIST" ? "Blacklist" : row.departure_type,
         steamId: row.steam_id_snapshot || "", discordId: row.discord_id_snapshot || "",
         dateDepart: dateFr(row.starts_on), dateRetour: dateFr(row.ends_on), raison: row.reason || "",
-        peutRevenir: !!row.ends_on && row.ends_on <= aujourdHui(), decision: row.profiles?.display_name || "",
+        peutRevenir: !!row.ends_on && row.ends_on <= aujourdHui(), decision: row.profiles?.display_name || row.decided_by_snapshot || "",
         statut: row.status, permanent: row.status === "PERMANENT" || (typeNormalise === "BLACKLIST" && (normalise(row.departure_type).includes("PERM") || !row.ends_on)),
         medailles: (row.medals_snapshot ?? []).join("; "), medaillesRestaureesLe: dateHeureFr(row.medals_restored_at),
         joursRestants: joursRestants(row.ends_on),
@@ -386,7 +386,7 @@ const authenticated = async (req: Request) => {
       const logs = (data ?? []).map((row: any) => ({
         ligne: row.id, date: row.occurred_at, personne: row.matricule_snapshot,
         grade: row.grade_snapshot || "", type: row.action_type, choix: row.choice || "",
-        raison: row.reason || "", auteur: row.auteur?.display_name || "",
+        raison: row.reason || "", auteur: row.auteur?.display_name || row.performed_by_snapshot || "",
       }))
       const specialisationsAuteur = normalise((ownMember?.specializations ?? []).join(";"))
       const privilegie = owner || permissions.has("role_staff_total")
@@ -705,7 +705,7 @@ const authenticated = async (req: Request) => {
           grade_snapshot: roster?.grade ?? member?.grade ?? "Non renseigné",
           report_on: aujourdHui(), body: "Rapport Discord", submitted_at: new Date().toISOString(),
           status: "LU", source: "DISCORD", discord_url: texte(payload.lien || payload.url),
-          processed_by_profile_id: profile.id, processed_at: new Date().toISOString(),
+          processed_by_profile_id: profile.id, processed_by_snapshot: profile.display_name, processed_at: new Date().toISOString(),
         })
         if (error) throw error
         await audit("Rapport Discord ajouté", roster?.matricule ?? member?.matricule ?? texte(payload.nom))
@@ -730,15 +730,15 @@ const authenticated = async (req: Request) => {
         const row = await rapportParPayload()
         const demande = normalise(payload.statut)
         const status = demande.includes("ARCH") ? "ARCHIVE" : demande === "LU" || demande.includes("VALID") ? "LU" : "EN_ATTENTE"
-        const { error } = await admin.from("reports").update({ status, processed_by_profile_id: profile.id, processed_at: new Date().toISOString() }).eq("id", row.id)
+        const { error } = await admin.from("reports").update({ status, processed_by_profile_id: profile.id, processed_by_snapshot: profile.display_name, processed_at: new Date().toISOString() }).eq("id", row.id)
         if (error) throw error
-        await admin.from("report_status_history").insert({ report_id: row.id, matricule_snapshot: row.matricule_snapshot, grade_snapshot: row.grade_snapshot, previous_status: row.status, new_status: status, changed_by_profile_id: profile.id, report_on: row.report_on })
+        await admin.from("report_status_history").insert({ report_id: row.id, matricule_snapshot: row.matricule_snapshot, grade_snapshot: row.grade_snapshot, previous_status: row.status, new_status: status, changed_by_profile_id: profile.id, changed_by_snapshot: profile.display_name, report_on: row.report_on })
         await audit("Statut rapport modifié", row.matricule_snapshot, status)
         return json({ success: true, message: "Statut du rapport modifié.", rapports: await rapportsClient() })
       }
       case "archiverTousRapportsLus":
         requirePermission("rapports_gerer")
-        await admin.from("reports").update({ status: "ARCHIVE", processed_by_profile_id: profile.id, processed_at: new Date().toISOString() }).eq("status", "LU")
+        await admin.from("reports").update({ status: "ARCHIVE", processed_by_profile_id: profile.id, processed_by_snapshot: profile.display_name, processed_at: new Date().toISOString() }).eq("status", "LU")
         await audit("Rapports lus archivés")
         return json({ success: true, message: "Tous les rapports lus ont été archivés.", rapports: await rapportsClient() })
       case "supprimerRapport": {
@@ -798,11 +798,11 @@ const authenticated = async (req: Request) => {
         const accepter = normalise(payload.decision) === "ACCEPTER"
         let absenceId = null
         if (accepter) {
-          const { data: absence, error } = await admin.from("absences").insert({ external_id: idExterne(), member_id: row.member_id, matricule_snapshot: row.matricule_snapshot, grade_snapshot: row.grade_snapshot, starts_on: row.starts_on, ends_on: row.ends_on, reason: row.reason, active: true, declared_by_profile_id: profile.id }).select("id").single()
+          const { data: absence, error } = await admin.from("absences").insert({ external_id: idExterne(), member_id: row.member_id, matricule_snapshot: row.matricule_snapshot, grade_snapshot: row.grade_snapshot, starts_on: row.starts_on, ends_on: row.ends_on, reason: row.reason, active: true, declared_by_profile_id: profile.id, declared_by_snapshot: profile.display_name }).select("id").single()
           if (error) throw error
           absenceId = absence.id
         }
-        const { error: requestError } = await admin.from("absence_requests").update({ status: accepter ? "VALIDEE" : "REFUSEE", decided_by_profile_id: profile.id, decided_at: new Date().toISOString(), refusal_reason: accepter ? null : texte(payload.motifRefus), absence_id: absenceId, notification_read: false, notification_deleted: false }).eq("id", row.id)
+        const { error: requestError } = await admin.from("absence_requests").update({ status: accepter ? "VALIDEE" : "REFUSEE", decided_by_profile_id: profile.id, decided_by_snapshot: profile.display_name, decided_at: new Date().toISOString(), refusal_reason: accepter ? null : texte(payload.motifRefus), absence_id: absenceId, notification_read: false, notification_deleted: false }).eq("id", row.id)
         if (requestError) throw requestError
         if (accepter) await synchroniserPresenceMembre(row.member_id)
         await audit(accepter ? "Demande d’absence acceptée" : "Demande d’absence refusée", row.matricule_snapshot)
@@ -815,7 +815,7 @@ const authenticated = async (req: Request) => {
         if (!member && !roster) throw new Error("Membre introuvable.")
         const debut = isoDate(payload.dateDebut), fin = isoDate(payload.dateFin)
         if (!debut || !fin || fin < debut) throw new Error("Dates d’absence invalides.")
-        const { error } = await admin.from("absences").insert({ external_id: idExterne(), member_id: member?.id ?? null, matricule_snapshot: roster?.matricule ?? member?.matricule ?? texte(payload.nom), grade_snapshot: roster?.grade ?? member?.grade ?? "Non renseigné", starts_on: debut, ends_on: fin, reason: texte(payload.raison), active: true, declared_by_profile_id: profile.id })
+        const { error } = await admin.from("absences").insert({ external_id: idExterne(), member_id: member?.id ?? null, matricule_snapshot: roster?.matricule ?? member?.matricule ?? texte(payload.nom), grade_snapshot: roster?.grade ?? member?.grade ?? "Non renseigné", starts_on: debut, ends_on: fin, reason: texte(payload.raison), active: true, declared_by_profile_id: profile.id, declared_by_snapshot: profile.display_name })
         if (error) throw error
         await synchroniserPresenceMembre(member?.id)
         await audit("Absence ajoutée", roster?.matricule ?? member?.matricule ?? texte(payload.nom))
@@ -885,7 +885,7 @@ const authenticated = async (req: Request) => {
           grade_snapshot: delayedById.get(member.id)?.grade ?? member.grade, steam_id_snapshot: member.steam_id,
           discord_id_snapshot: member.discord_id, departure_type: type, starts_on: start, ends_on: end,
           reason: texte(payload.raison) || null, status: end ? "TEMPORAIRE" : "PERMANENT",
-          decided_by_profile_id: profile.id, medals_snapshot: member.medals ?? [],
+          decided_by_profile_id: profile.id, decided_by_snapshot: profile.display_name, medals_snapshot: member.medals ?? [],
         })
         if (error) throw error
         await audit("Dossier de départ ajouté", member.matricule, type)
@@ -912,7 +912,7 @@ const authenticated = async (req: Request) => {
         requireOfficer()
         const { data, error } = await admin.from("recommendations_observations").select("*,profiles!recommendations_observations_recorded_by_profile_id_fkey(display_name)").order("created_at", { ascending: false })
         if (error) throw error
-        const historique = (data ?? []).map((row: any) => ({ id: row.external_id, date: dateFr(row.occurred_on), personne: row.matricule_snapshot, grade: row.grade_snapshot || "", type: row.entry_type, nature: row.nature || "", emetteur: row.transmitted_by || "", raison: row.reason || "", enregistrePar: row.profiles?.display_name || "", creeLe: dateHeureFr(row.created_at) }))
+        const historique = (data ?? []).map((row: any) => ({ id: row.external_id, date: dateFr(row.occurred_on), personne: row.matricule_snapshot, grade: row.grade_snapshot || "", type: row.entry_type, nature: row.nature || "", emetteur: row.transmitted_by || "", raison: row.reason || "", enregistrePar: row.profiles?.display_name || row.recorded_by_snapshot || "", creeLe: dateHeureFr(row.created_at) }))
         return json({ success: true, membres: membresPublic.map((m: any) => ({ nom: m.nom, grade: m.grade, recommandations: m.recommandation, observations: m.observation })), historique, peutPurger: owner })
       }
       case "ajouterRecommandationObservation":
@@ -928,7 +928,7 @@ const authenticated = async (req: Request) => {
           grade_snapshot: delayedById.get(member.id)?.grade ?? member.grade,
           entry_type: type, nature: texte(payload.nature) || null,
           transmitted_by: transmittedBy || null, reason: reason || null,
-          recorded_by_profile_id: profile.id, recorder_grade_snapshot: actorGrade,
+          recorded_by_profile_id: profile.id, recorded_by_snapshot: profile.display_name, recorder_grade_snapshot: actorGrade,
           occurred_on: isoDate(payload.date) ?? aujourdHui(),
         }
         if (action === "ajouterRecommandationObservation") {
@@ -989,7 +989,7 @@ const authenticated = async (req: Request) => {
             grade_snapshot: delayedById.get(member.id)?.grade ?? member.grade, steam_id_snapshot: member.steam_id,
             discord_id_snapshot: member.discord_id, departure_type: normalizedType, starts_on: startsOn,
             ends_on: endsOn, reason: texte(payload.raison) || null,
-            status: endsOn ? "TEMPORAIRE" : "PERMANENT", decided_by_profile_id: profile.id,
+            status: endsOn ? "TEMPORAIRE" : "PERMANENT", decided_by_profile_id: profile.id, decided_by_snapshot: profile.display_name,
             medals_snapshot: member.medals ?? [],
           })
           if (error) throw error
@@ -998,7 +998,7 @@ const authenticated = async (req: Request) => {
           member_id: member.id, matricule_snapshot: member.matricule,
           grade_snapshot: delayedById.get(member.id)?.grade ?? member.grade,
           action_type: type, choice: choix || null, reason: texte(payload.raison) || null,
-          performed_by_profile_id: profile.id, occurred_at: new Date().toISOString(),
+          performed_by_profile_id: profile.id, performed_by_snapshot: profile.display_name, occurred_at: new Date().toISOString(),
         })
         if (historyError) throw historyError
         await audit(type, member.matricule, choix)
@@ -1021,6 +1021,7 @@ const authenticated = async (req: Request) => {
           choice: texte(payload.choix) || null,
           reason: texte(payload.raison) || null,
           performed_by_profile_id: auteur?.id ?? null,
+          performed_by_snapshot: auteur?.display_name ?? (texte(payload.auteur) || null),
           occurred_at: date && !Number.isNaN(date.getTime()) ? date.toISOString() : new Date().toISOString(),
         }).eq("id", id)
         if (error) throw error
@@ -1590,7 +1591,7 @@ const authenticated = async (req: Request) => {
                 matricule_snapshot: row.matricule_snapshot, grade_snapshot: membreSuivi?.grade || "Caporal",
                 steam_id_snapshot: row.steam_id, discord_id_snapshot: row.discord_id,
                 departure_type: "LICENCIEMENT", starts_on: aujourdHui(), ends_on: dateRetour,
-                reason: raison, status: "TEMPORAIRE", decided_by_profile_id: profile.id,
+                reason: raison, status: "TEMPORAIRE", decided_by_profile_id: profile.id, decided_by_snapshot: profile.display_name,
                 medals_snapshot: membreSuivi?.medals ?? [],
               }).select("id").single()
               if (departError) throw departError

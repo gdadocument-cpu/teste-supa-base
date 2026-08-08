@@ -698,9 +698,15 @@ function creerCarteRapport(rapport) {
   const iconeGrade = obtenirIconeGradeRapport(
     rapport.grade
   );
+  const source = String(rapport.source || "SITE").trim().toUpperCase();
+  const classeSource = source === "DISCORD"
+    ? " rapport-carte-source-discord"
+    : source === "GOOGLE_FORM"
+      ? " rapport-carte-source-google-form"
+      : "";
 
   return `
-    <article class="rapport-carte">
+    <article class="rapport-carte${classeSource}">
       <header class="rapport-carte-header">
         <div class="rapport-identite">
           <span class="rapport-avatar">

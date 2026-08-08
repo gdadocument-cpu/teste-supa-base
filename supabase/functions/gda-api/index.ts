@@ -573,7 +573,7 @@ const authenticated = async (req: Request) => {
     const parametresSiteDonnees = async (message = "") => {
       const [{ data: configuration, error: configurationError }, { data: liens, error: liensError }] = await Promise.all([
         admin.from("site_configuration").select("max_gda,roster_publish_time,updated_at").eq("singleton", true).single(),
-        admin.from("navigation_links").select("external_id,category,label,url,display_mode,sort_order,updated_at")
+        admin.from("navigation_links").select("external_id,category,label,icon,url,display_mode,sort_order,updated_at")
           .eq("active", true).order("category", { ascending: true }).order("sort_order", { ascending: true }).order("id", { ascending: true }),
       ])
       if (configurationError) throw configurationError
@@ -591,6 +591,7 @@ const authenticated = async (req: Request) => {
           id: lien.external_id,
           categorie: lien.category,
           nom: lien.label,
+          icone: lien.icon || "🔗",
           url: lien.url,
           mode: lien.display_mode,
           ordre: nombre(lien.sort_order),
@@ -1514,6 +1515,10 @@ const authenticated = async (req: Request) => {
         if (!categorie) throw new Error("Catégorie de lien invalide.")
         const nom = texte(payload.nom)
         if (!nom || nom.length > 100) throw new Error("Le nom du lien doit contenir entre 1 et 100 caractères.")
+        const icone = texte(payload.icone)
+        if (!icone || Array.from(icone).length > 16 || /[<>&]/.test(icone)) {
+          throw new Error("L’icône doit contenir entre 1 et 16 caractères valides.")
+        }
         const url = normaliserUrlLienSite(payload.url)
         const mode = normalise(payload.mode) === "EXTERNAL" ? "EXTERNAL" : "IFRAME"
         const id = texte(payload.id)
@@ -1526,6 +1531,7 @@ const authenticated = async (req: Request) => {
         const donneesLien = {
           category: categorie,
           label: nom,
+          icon: icone,
           url,
           display_mode: mode,
           sort_order: ordre,

@@ -1616,7 +1616,7 @@ const authenticated = async (req: Request) => {
         const { error } = await admin.from("training_followups").insert({
           external_id: idExterne(), member_id: membreCree.id, matricule_snapshot: matricule,
           steam_id: steamId, discord_id: discordId,
-          reports_count: Math.max(0, nombre(payload.nombreRapports)), service_count: Math.max(0, nombre(payload.prisesService)),
+          reports_count: 0, service_count: Math.max(0, nombre(payload.prisesService)),
           initial_end_on: finInitiale.toISOString().slice(0, 10), end_on: fin.toISOString().slice(0, 10), end_after_absence_on: fin.toISOString().slice(0, 10), instructor_profile_id: profilInstructeur.id,
           instructor_snapshot: instructeurNom, manager_profile_id: profilGerant?.id ?? null, manager_snapshot: gerantNom || null,
           comment: texte(payload.commentaire) || null, sanction, status: "EN_ATTENTE", source: "SITE",
@@ -1657,9 +1657,12 @@ const authenticated = async (req: Request) => {
           const decision = normalise(payload.decision) === "ACCEPTE" ? "ACCEPTE" : "REFUSE"
           const raison = texte(payload.raison)
           if (decision === "REFUSE" && !raison) throw new Error("La raison du refus est obligatoire.")
+          const { data: compteurActuel, error: compteurError } = await admin.from("training_followups")
+            .select("reports_count").eq("id", row.id).single()
+          if (compteurError) throw compteurError
           const { data: archiveCreee, error: archiveError } = await admin.from("instructor_archives").insert({
             external_id: idExterne(), matricule_snapshot: row.matricule_snapshot, steam_id: row.steam_id, discord_id: row.discord_id,
-            reports_count: row.reports_count, service_count: row.service_count, ended_on: aujourdHui(), instructor_snapshot: row.instructor_snapshot,
+            reports_count: compteurActuel.reports_count, service_count: row.service_count, ended_on: aujourdHui(), instructor_snapshot: row.instructor_snapshot,
             manager_snapshot: row.manager_snapshot, comment: row.comment, sanction: row.sanction, result: decision,
             reason: raison || null, imported_at: new Date().toISOString(), source: "SITE",
           }).select("id").single()
@@ -1721,7 +1724,7 @@ const authenticated = async (req: Request) => {
           const dateFin = ajouterJoursIso(dateFinInitiale, joursSanctionSuivi(sanction))
           const { error: updateError } = await admin.from("training_followups").update({
             matricule_snapshot: texte(payload.matricule) || row.matricule_snapshot, steam_id: texte(payload.steamId) || null,
-            discord_id: texte(payload.discordId) || null, reports_count: Math.max(0, nombre(payload.nombreRapports)),
+            discord_id: texte(payload.discordId) || null,
             service_count: Math.max(0, nombre(payload.prisesService)), instructor_profile_id: profilInstructeur.id,
             instructor_snapshot: instructeurNom, manager_profile_id: profilGerant?.id ?? row.manager_profile_id,
             manager_snapshot: gerantNom, comment: texte(payload.commentaire) || null,

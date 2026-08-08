@@ -7,7 +7,7 @@ let gerantsDisponiblesSuivi = [];
 let gerantConnecteSuivi = "";
 let suivisFormationPeutModifier = false;
 let suivisFormationInstructeurCharges = false;
-const CACHE_SUIVIS_FORMATION_INSTRUCTEUR = "gdaSuivisFormationInstructeurV4:";
+const CACHE_SUIVIS_FORMATION_INSTRUCTEUR = "gdaSuivisFormationInstructeurV5:";
 const DUREE_CACHE_SUIVIS_FORMATION_INSTRUCTEUR = 5 * 60 * 1000;
 let suivisFormationInstructeurChargesLe = 0;
 let chargementPostItsInstructeur = 0;
@@ -601,7 +601,7 @@ function afficherFormulaireSuiviFormation(personne) {
         <label><span>Date de fin</span><input type="text" value="Calculée automatiquement à J+7" readonly></label>
         ${champSuiviInstructeur("Instructeur en charge", "instructeur", instructeur, "text", false)}
         ${champSuiviInstructeur("Gérant", "gerant", "", "text", false)}
-        ${champSuiviInstructeur("Nombre de rapports", "nombreRapports", "0", "number", false)}
+        <label><span>Nombre de rapports</span><input type="text" value="Calculé automatiquement" readonly></label>
         ${champSuiviInstructeur("Prises de service", "prisesService", "0", "number", false)}
         <label class="large"><span>Commentaire</span><textarea name="commentaire" rows="4"></textarea></label>
         ${champSanctionSuiviInstructeur("Rien", true)}
@@ -774,7 +774,7 @@ function afficherModificationSuiviInstructeur(suivi) {
         <label><span>Date de fin calculée</span><input type="text" value="${echapperRapportInstructeur(suivi.dateFin || "Non renseignée")}" readonly></label>
         <label><span>Instructeur *</span><select name="instructeur" required>${options}</select></label>
         ${champSuiviInstructeur("Gérant *", "gerant", suivi.gerant, "text", true)}
-        ${champSuiviInstructeur("Nombre de rapports", "nombreRapports", suivi.nombreRapports, "number", false)}
+        <label><span>Nombre de rapports</span><input type="number" value="${Number(suivi.nombreRapports || 0)}" readonly></label>
         ${champSuiviInstructeur("Prises de service", "prisesService", suivi.prisesService, "number", false)}
         <label class="large"><span>Commentaire</span><textarea name="commentaire" rows="4">${echapperRapportInstructeur(suivi.commentaire || "")}</textarea></label>
         ${champSanctionSuiviInstructeur(suivi.sanction, true)}

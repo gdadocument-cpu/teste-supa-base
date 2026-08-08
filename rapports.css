@@ -732,6 +732,12 @@
   color: #c4ced8 !important;
 }
 
+.rapport-statut-refuse {
+  border-color: rgba(255, 91, 91, 0.58);
+  background: rgba(117, 20, 28, 0.52);
+  color: #ffb0b0 !important;
+}
+
 .rapport-contenu {
   padding: 16px 18px;
 }
@@ -877,6 +883,25 @@
   border-color: rgba(255, 91, 91, 0.58);
   background: rgba(117, 20, 28, 0.64);
   color: #ffd8d8;
+}
+
+.rapport-refus-motif {
+  border-left: 3px solid rgba(255, 91, 91, 0.7);
+  background: rgba(128, 27, 32, 0.16);
+}
+
+.rapport-refus-motif h5 {
+  color: #ff9f9f;
+}
+
+.rapport-carte-pied .rapport-refuser {
+  border-color: rgba(255, 133, 91, 0.62);
+  background: rgba(130, 43, 24, 0.68);
+  color: #ffe0d5;
+}
+
+.rapport-carte-pied .rapport-refuser:hover {
+  background: rgba(174, 55, 30, 0.84);
 }
 
 .rapport-carte-pied .rapport-supprimer:hover {

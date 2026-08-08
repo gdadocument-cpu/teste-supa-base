@@ -308,6 +308,7 @@ const authenticated = async (req: Request) => {
     }
 
     const rapportsClient = async (onlyOwn = false) => {
+      if (onlyOwn && !profile.member_id) return []
       let query = admin.from("reports").select("*").order("submitted_at", { ascending: false }).limit(1000)
       if (onlyOwn && profile.member_id) query = query.eq("member_id", profile.member_id)
       const { data, error } = await query
@@ -323,12 +324,13 @@ const authenticated = async (req: Request) => {
         commentaire: row.comment || "",
         conclusion: row.conclusion || "",
         dateEnvoi: dateHeureFr(row.submitted_at),
-        statut: row.status === "LU" ? "LU" : row.status === "ARCHIVE" ? "ARCHIVE" : "EN ATTENTE",
+        statut: row.status === "LU" ? "LU" : row.status === "REFUSE" ? "REFUSE" : row.status === "ARCHIVE" ? "ARCHIVE" : "EN ATTENTE",
         traitePar: noms.get(row.processed_by_profile_id) || row.processed_by_snapshot || "",
         dateTraitement: dateHeureFr(row.processed_at),
         source: row.source,
         discordUrl: row.discord_url || "",
-        modifiable: row.status === "EN_ATTENTE",
+        motifRefus: row.refusal_reason || "",
+        modifiable: ["EN_ATTENTE", "REFUSE"].includes(row.status),
       }))
     }
 
@@ -401,7 +403,7 @@ const authenticated = async (req: Request) => {
     const notificationsAbsenceClient = async () => {
       if (!profile.member_id) return { success: true, notifications: [], nonLues: 0 }
       const demandes = await demandesClient(true)
-      const notifications = demandes
+      const notificationsAbsence = demandes
         .filter((item: any) => ["VALIDEE", "REFUSEE"].includes(item.statutBase) && !item.notificationSupprimee)
         .map((item: any) => ({
           id: item.id,
@@ -413,6 +415,24 @@ const authenticated = async (req: Request) => {
           lue: item.notificationLue === true,
           type: item.statutBase === "VALIDEE" ? "succes" : "refus",
         }))
+      const { data: notificationsGenerales, error: notificationsError } = await admin.from("notifications")
+        .select("id,notification_type,title,message,read_at,created_at")
+        .eq("profile_id", profile.id)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(100)
+      if (notificationsError) throw notificationsError
+      const notifications = [
+        ...notificationsAbsence,
+        ...(notificationsGenerales ?? []).map((item: any) => ({
+          id: `notification-${item.id}`,
+          titre: item.title,
+          message: item.message || "",
+          date: item.created_at,
+          lue: !!item.read_at,
+          type: normalise(item.notification_type).includes("REFUS") ? "refus" : "succes",
+        })),
+      ].sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
       return {
         success: true,
         notifications,
@@ -786,14 +806,29 @@ const authenticated = async (req: Request) => {
       }
       case "modifierMonRapport": {
         const row = await rapportParPayload()
-        if (row.member_id !== profile.member_id || row.status !== "EN_ATTENTE") throw new Error("Ce rapport n’est plus modifiable.")
-        const { error } = await admin.from("reports").update({ report_on: isoDate(payload.dateRapport), body: texte(payload.rapport), comment: texte(payload.commentaire) || null, conclusion: texte(payload.conclusion) || null }).eq("id", row.id)
+        if (row.member_id !== profile.member_id || !["EN_ATTENTE", "REFUSE"].includes(row.status)) throw new Error("Ce rapport n’est plus modifiable.")
+        const etaitRefuse = row.status === "REFUSE"
+        const { error } = await admin.from("reports").update({
+          report_on: isoDate(payload.dateRapport), body: texte(payload.rapport),
+          comment: texte(payload.commentaire) || null, conclusion: texte(payload.conclusion) || null,
+          status: "EN_ATTENTE", refusal_reason: null, rejected_at: null,
+          processed_by_profile_id: null, processed_by_snapshot: null, processed_at: null,
+          resubmitted_at: etaitRefuse ? new Date().toISOString() : row.resubmitted_at,
+        }).eq("id", row.id)
         if (error) throw error
-        return json({ success: true, message: "Rapport modifié.", nom: actorName, grade: actorGrade, rapports: await rapportsClient(true) })
+        if (etaitRefuse) {
+          await admin.from("report_status_history").insert({
+            report_id: row.id, matricule_snapshot: row.matricule_snapshot, grade_snapshot: row.grade_snapshot,
+            previous_status: "REFUSE", new_status: "EN_ATTENTE", changed_by_profile_id: profile.id,
+            changed_by_snapshot: profile.display_name, report_on: isoDate(payload.dateRapport) || row.report_on,
+          })
+          await audit("Rapport corrigé et renvoyé", row.matricule_snapshot)
+        }
+        return json({ success: true, message: etaitRefuse ? "Rapport corrigé et renvoyé aux Officiers." : "Rapport modifié.", nom: actorName, grade: actorGrade, rapports: await rapportsClient(true) })
       }
       case "supprimerMonRapport": {
         const row = await rapportParPayload()
-        if (row.member_id !== profile.member_id || row.status !== "EN_ATTENTE") throw new Error("Ce rapport n’est plus supprimable.")
+        if (row.member_id !== profile.member_id || !["EN_ATTENTE", "REFUSE"].includes(row.status)) throw new Error("Ce rapport n’est plus supprimable.")
         const { error } = await admin.from("reports").delete().eq("id", row.id)
         if (error) throw error
         return json({ success: true, message: "Rapport supprimé.", nom: actorName, grade: actorGrade, rapports: await rapportsClient(true) })
@@ -802,12 +837,45 @@ const authenticated = async (req: Request) => {
         requireOfficer()
         const row = await rapportParPayload()
         const demande = normalise(payload.statut)
-        const status = demande.includes("ARCH") ? "ARCHIVE" : demande === "LU" || demande.includes("VALID") ? "LU" : "EN_ATTENTE"
-        const { error } = await admin.from("reports").update({ status, processed_by_profile_id: profile.id, processed_by_snapshot: profile.display_name, processed_at: new Date().toISOString() }).eq("id", row.id)
+        const status = demande.includes("ARCH") ? "ARCHIVE" : demande.includes("REFUS") ? "REFUSE" : demande === "LU" || demande.includes("VALID") ? "LU" : "EN_ATTENTE"
+        const transitions: Record<string, string[]> = {
+          EN_ATTENTE: ["LU", "REFUSE"],
+          LU: ["ARCHIVE"],
+          ARCHIVE: ["LU"],
+        }
+        if (!(transitions[row.status] ?? []).includes(status)) throw new Error("Cette transition de statut n’est pas autorisée.")
+        const motifRefus = status === "REFUSE" ? texte(payload.motifRefus) : ""
+        if (status === "REFUSE" && !motifRefus) throw new Error("Le motif du refus est obligatoire.")
+        if (motifRefus.length > 1500) throw new Error("Le motif du refus est limité à 1 500 caractères.")
+        const maintenant = new Date().toISOString()
+        const { error } = await admin.from("reports").update({
+          status, refusal_reason: motifRefus || null, rejected_at: status === "REFUSE" ? maintenant : null,
+          processed_by_profile_id: profile.id, processed_by_snapshot: profile.display_name, processed_at: maintenant,
+        }).eq("id", row.id)
         if (error) throw error
         await admin.from("report_status_history").insert({ report_id: row.id, matricule_snapshot: row.matricule_snapshot, grade_snapshot: row.grade_snapshot, previous_status: row.status, new_status: status, changed_by_profile_id: profile.id, changed_by_snapshot: profile.display_name, report_on: row.report_on })
+        if (status === "REFUSE") {
+          let profilDestinataire: any = null
+          if (row.member_id) {
+            const { data } = await admin.from("profiles").select("id").eq("member_id", row.member_id).eq("active", true).maybeSingle()
+            profilDestinataire = data
+          }
+          if (!profilDestinataire) {
+            const { data } = await admin.from("profiles").select("id").ilike("display_name", row.matricule_snapshot).eq("active", true).maybeSingle()
+            profilDestinataire = data
+          }
+          if (profilDestinataire) {
+            const { error: notificationError } = await admin.from("notifications").insert({
+              profile_id: profilDestinataire.id, notification_type: "RAPPORT_REFUSE",
+              title: "Rapport refusé",
+              message: `Votre rapport du ${dateFr(row.report_on)} a été refusé : ${motifRefus}. Vous pouvez le corriger puis le renvoyer.`,
+              related_table: "reports", related_id: row.id,
+            })
+            if (notificationError) throw notificationError
+          }
+        }
         await audit("Statut rapport modifié", row.matricule_snapshot, status)
-        return json({ success: true, message: "Statut du rapport modifié.", rapports: await rapportsClient() })
+        return json({ success: true, message: status === "REFUSE" ? "Rapport refusé et auteur notifié." : "Statut du rapport modifié.", statut: status, rapports: await rapportsClient() })
       }
       case "archiverTousRapportsLus":
         requirePermission("rapports_gerer")
@@ -930,6 +998,12 @@ const authenticated = async (req: Request) => {
             .eq("notification_deleted", false)
           if (error) throw error
         }
+        const { error: notificationsError } = await admin.from("notifications")
+          .update({ read_at: new Date().toISOString() })
+          .eq("profile_id", profile.id)
+          .is("deleted_at", null)
+          .is("read_at", null)
+        if (notificationsError) throw notificationsError
         return json(await notificationsAbsenceClient())
       }
       case "effacerNotifications": {
@@ -940,6 +1014,11 @@ const authenticated = async (req: Request) => {
             .in("status", ["VALIDEE", "REFUSEE"])
           if (error) throw error
         }
+        const { error: notificationsError } = await admin.from("notifications")
+          .update({ deleted_at: new Date().toISOString() })
+          .eq("profile_id", profile.id)
+          .is("deleted_at", null)
+        if (notificationsError) throw notificationsError
         return json(await notificationsAbsenceClient())
       }
       case "recupererDeparts": {

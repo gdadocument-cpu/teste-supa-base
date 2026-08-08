@@ -183,6 +183,11 @@
   color: #aec1cf;
 }
 
+.rapport-personnel-statut.refuse {
+  background: rgba(194, 55, 55, .18);
+  color: #ff9999;
+}
+
 .rapport-personnel-contenu {
   padding: 12px 14px;
 }
@@ -216,6 +221,33 @@
 
 .rapport-personnel-contenu.conclusion {
   background: rgba(37, 113, 80, .08);
+}
+
+.rapport-personnel-contenu.refus {
+  border-left: 3px solid rgba(255, 91, 91, .72);
+  background: rgba(128, 27, 32, .16);
+}
+
+.rapport-personnel-contenu.refus h5 {
+  color: #ff9f9f;
+}
+
+.rapport-personnel-contenu.refus small {
+  display: block;
+  margin-top: 8px;
+  color: #efb0b0;
+  line-height: 1.45;
+}
+
+.rapport-personnel-discord {
+  display: inline-flex;
+  padding: 8px 11px;
+  border: 1px solid rgba(114, 137, 218, .55);
+  border-radius: 9px;
+  background: rgba(88, 101, 242, .16);
+  color: #c8ceff;
+  font-weight: 700;
+  text-decoration: none;
 }
 
 .rapport-personnel-carte > footer {

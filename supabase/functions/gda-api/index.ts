@@ -1582,7 +1582,7 @@ const authenticated = async (req: Request) => {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              apikey: anonKey,
+              apikey: serviceRoleKey,
               Authorization: `Bearer ${serviceRoleKey}`,
             },
             body: JSON.stringify({

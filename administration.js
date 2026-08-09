@@ -113,10 +113,17 @@ function afficherAdministration() {
           <h3>🔐 PERMISSIONS</h3>
           <p>Attribuez les rôles et droits d’accès de chaque membre.</p>
         </div>
-        <button id="administrationActualiser" type="button">
-          ↻ Actualiser
-        </button>
+        <div class="administration-header-actions">
+          <button id="administrationSynchroniserSheets" type="button">
+            ↻ Synchroniser Google Sheets
+          </button>
+          <button id="administrationActualiser" type="button">
+            ↻ Actualiser
+          </button>
+        </div>
       </header>
+
+      <div id="administrationSynchronisationRetour" class="administration-synchronisation-retour" aria-live="polite"></div>
 
       <div class="administration-resume">
         <div><strong>${administrationUtilisateurs.length}</strong><span>personnes</span></div>
@@ -149,11 +156,51 @@ function afficherAdministration() {
       chargerAdministration();
     });
 
+  document.getElementById("administrationSynchroniserSheets")
+    .addEventListener("click", synchroniserGoogleSheetsAdministration);
+
   document.getElementById("administrationRecherche")
     .addEventListener("input", function (evenement) {
       rechercheAdministration = evenement.target.value || "";
       afficherListeAdministration();
     });
+}
+
+async function synchroniserGoogleSheetsAdministration() {
+  const bouton = document.getElementById("administrationSynchroniserSheets");
+  const retour = document.getElementById("administrationSynchronisationRetour");
+  if (!bouton || !retour || bouton.disabled) return;
+
+  bouton.disabled = true;
+  bouton.textContent = "Synchronisation en cours...";
+  retour.classList.remove("administration-erreur");
+  retour.textContent = "Copie de l’effectif et des archives vers Google Sheets...";
+
+  try {
+    const donnees = new URLSearchParams();
+    donnees.set("action", "synchroniserGoogleSheets");
+    const reponse = await fetch(ADMINISTRATION_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: donnees.toString(),
+      gdaTimeoutMs: 130000
+    });
+    const resultat = await reponse.json();
+    if (!reponse.ok || !resultat.success) {
+      throw new Error(resultat.message || "Synchronisation impossible.");
+    }
+    retour.textContent =
+      "Synchronisation terminée : " +
+      Number(resultat.effectif || 0) + " membres, " +
+      Number(resultat.absences || 0) + " absences et " +
+      Number(resultat.departs || 0) + " départs.";
+  } catch (erreur) {
+    retour.classList.add("administration-erreur");
+    retour.textContent = erreur.message || "Synchronisation impossible.";
+  } finally {
+    bouton.disabled = false;
+    bouton.textContent = "↻ Synchroniser Google Sheets";
+  }
 }
 
 function afficherListeAdministration() {

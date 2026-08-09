@@ -1574,6 +1574,46 @@ const authenticated = async (req: Request) => {
           })),
         })
       }
+      case "synchroniserGoogleSheets": {
+        requirePermission("administration_permissions")
+        const reponseSynchronisation = await fetch(
+          `${supabaseUrl}/functions/v1/sync-google-sheets`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: anonKey,
+              Authorization: `Bearer ${serviceRoleKey}`,
+            },
+            body: JSON.stringify({
+              source: "administration",
+              requestedBy: profile.display_name,
+            }),
+          },
+        )
+        const texteSynchronisation = await reponseSynchronisation.text()
+        let resultatSynchronisation: any = null
+        try {
+          resultatSynchronisation = JSON.parse(texteSynchronisation)
+        } catch {
+          resultatSynchronisation = null
+        }
+        if (!reponseSynchronisation.ok || resultatSynchronisation?.success !== true) {
+          throw new Error(
+            resultatSynchronisation?.message ||
+            "La synchronisation Google Sheets n’a pas pu être exécutée.",
+          )
+        }
+        await audit("Google Sheets synchronisé manuellement")
+        return json({
+          success: true,
+          message: "Google Sheets a été synchronisé.",
+          effectif: nombre(resultatSynchronisation.effectif),
+          absences: nombre(resultatSynchronisation.absences),
+          departs: nombre(resultatSynchronisation.departs),
+          synchroniseLe: resultatSynchronisation.destination?.synchroniseLe || new Date().toISOString(),
+        })
+      }
       case "enregistrerPermissions":
       case "definirCoproprietaire":
       case "transfererPropriete": {

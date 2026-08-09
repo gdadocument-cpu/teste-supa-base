@@ -746,10 +746,12 @@ function fetchApiAvecDelaiGDA(ressource, options) {
     entetes.set("apikey", window.gdaSupabase.publishableKey);
   }
   if (sessionToken) entetes.set("Authorization", "Bearer " + sessionToken);
+  const delaiMaximum = Number(options && options.gdaTimeoutMs) || DELAI_MAX_API_GDA;
   const optionsFinales = Object.assign({}, options || {}, {
     headers: entetes,
     signal: controleur.signal
   });
+  delete optionsFinales.gdaTimeoutMs;
   const signalExterne = options && options.signal;
   const annulerDepuisExterieur = function() { controleur.abort(); };
   if (signalExterne) {
@@ -758,7 +760,7 @@ function fetchApiAvecDelaiGDA(ressource, options) {
   }
   const minuteur = window.setTimeout(function() {
     controleur.abort();
-  }, DELAI_MAX_API_GDA);
+  }, delaiMaximum);
 
   return fetchNatifGDA(ressource, optionsFinales)
     .catch(function(erreur) {

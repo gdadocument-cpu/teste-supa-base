@@ -23,6 +23,13 @@
   margin: 0;
 }
 
+.administration-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .administration-header button,
 .administration-actions button {
   background: linear-gradient(135deg, #1e91d6, #58c8ff);
@@ -32,6 +39,21 @@
   cursor: pointer;
   font-weight: 800;
   padding: 11px 17px;
+}
+
+.administration-header button:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+.administration-synchronisation-retour {
+  color: #7de4b5;
+  min-height: 20px;
+  margin: -10px 0 16px;
+}
+
+.administration-synchronisation-retour.administration-erreur {
+  color: #ff7b8c;
 }
 
 .administration-resume {

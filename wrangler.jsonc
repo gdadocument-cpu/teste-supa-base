@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
 
-  "name": "intranet-gda-supabase-test",
+  "name": "intranet-gda",
   "main": "./cloudflare-worker.js",
   "compatibility_date": "2026-07-17",
 

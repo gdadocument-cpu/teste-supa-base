@@ -328,6 +328,32 @@ if (retourAdministrationButton) {
 
 const fetchNatifGDA = window.fetch.bind(window);
 
+function estJetonUtilisateurSupabaseGDA(jeton) {
+  if (typeof jeton !== "string" || jeton.split(".").length !== 3) return false;
+  try {
+    const partie = jeton.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const base64 = partie.padEnd(Math.ceil(partie.length / 4) * 4, "=");
+    const octets = Uint8Array.from(atob(base64), function(caractere) {
+      return caractere.charCodeAt(0);
+    });
+    const donnees = JSON.parse(new TextDecoder().decode(octets));
+    return donnees &&
+      donnees.iss === "https://hiothrwlpmulpcwwjxqf.supabase.co/auth/v1" &&
+      donnees.role === "authenticated" &&
+      typeof donnees.sub === "string" &&
+      donnees.sub.length > 0;
+  } catch (erreur) {
+    return false;
+  }
+}
+
+function lireJetonUtilisateurSupabaseGDA() {
+  const jeton = sessionStorage.getItem("sessionTokenDiscord") || "";
+  if (!jeton || estJetonUtilisateurSupabaseGDA(jeton)) return jeton;
+  sessionStorage.removeItem("sessionTokenDiscord");
+  return "";
+}
+
 function extraireActionCorpsRequeteGDA(options) {
   const corps = options && options.body;
   if (!corps) return "";
@@ -740,7 +766,7 @@ async function securiserReponseJsonGDA(reponse) {
 
 function fetchApiAvecDelaiGDA(ressource, options) {
   const controleur = new AbortController();
-  const sessionToken = sessionStorage.getItem("sessionTokenDiscord") || "";
+  const sessionToken = lireJetonUtilisateurSupabaseGDA();
   const entetes = new Headers((options && options.headers) || {});
   if (window.gdaSupabase && window.gdaSupabase.publishableKey) {
     entetes.set("apikey", window.gdaSupabase.publishableKey);
@@ -814,7 +840,7 @@ window.gdaForcerActualisation = function(action) {
 
 window.gdaReponseEnCache = function(action) {
   const maintenant = Date.now();
-  const sessionToken = sessionStorage.getItem("sessionTokenDiscord") || "";
+  const sessionToken = lireJetonUtilisateurSupabaseGDA();
   hydraterCacheSessionGDA(sessionToken);
   for (const entree of cacheLecturesGDA.values()) {
     if (
@@ -836,8 +862,7 @@ window.fetch = function(ressource, options) {
       : ressource instanceof URL
         ? ressource.toString()
         : "";
-  const sessionToken =
-    sessionStorage.getItem("sessionTokenDiscord") || "";
+  const sessionToken = lireJetonUtilisateurSupabaseGDA();
 
   if (adresse && adresse.startsWith(API_URL) && sessionToken) {
     hydraterCacheSessionGDA(sessionToken);
@@ -968,7 +993,7 @@ window.fetch = function(ressource, options) {
 };
 
 function prechargerDonneesGDA() {
-  const sessionToken = sessionStorage.getItem("sessionTokenDiscord") || "";
+  const sessionToken = lireJetonUtilisateurSupabaseGDA();
   if (!sessionToken || sessionPrechargeeGDA === sessionToken) return;
   hydraterCacheSessionGDA(sessionToken);
   sessionPrechargeeGDA = sessionToken;

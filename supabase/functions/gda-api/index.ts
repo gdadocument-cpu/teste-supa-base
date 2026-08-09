@@ -388,7 +388,7 @@ const authenticated = async (req: Request) => {
         source: row.source,
         discordUrl: row.discord_url || "",
         motifRefus: row.refusal_reason || "",
-        modifiable: ["EN_ATTENTE", "REFUSE"].includes(row.status),
+        modifiable: row.source === "SITE" && ["EN_ATTENTE", "REFUSE"].includes(row.status),
       }))
     }
 
@@ -900,6 +900,7 @@ const authenticated = async (req: Request) => {
       }
       case "modifierMonRapport": {
         const row = await rapportParPayload()
+        if (row.source !== "SITE") throw new Error("Seuls les rapports envoyés depuis l’intranet peuvent être modifiés.")
         if (row.member_id !== profile.member_id || !["EN_ATTENTE", "REFUSE"].includes(row.status)) throw new Error("Ce rapport n’est plus modifiable.")
         const etaitRefuse = row.status === "REFUSE"
         const { error } = await admin.from("reports").update({
@@ -922,6 +923,7 @@ const authenticated = async (req: Request) => {
       }
       case "supprimerMonRapport": {
         const row = await rapportParPayload()
+        if (row.source !== "SITE") throw new Error("Seuls les rapports envoyés depuis l’intranet peuvent être supprimés par leur auteur.")
         if (row.member_id !== profile.member_id || !["EN_ATTENTE", "REFUSE"].includes(row.status)) throw new Error("Ce rapport n’est plus supprimable.")
         const { error } = await admin.from("reports").delete().eq("id", row.id)
         if (error) throw error
@@ -939,6 +941,7 @@ const authenticated = async (req: Request) => {
         }
         if (!(transitions[row.status] ?? []).includes(status)) throw new Error("Cette transition de statut n’est pas autorisée.")
         const motifRefus = status === "REFUSE" ? texte(payload.motifRefus) : ""
+        if (status === "REFUSE" && row.source !== "SITE") throw new Error("Seuls les rapports envoyés depuis l’intranet peuvent être refusés.")
         if (status === "REFUSE" && !motifRefus) throw new Error("Le motif du refus est obligatoire.")
         if (motifRefus.length > 1500) throw new Error("Le motif du refus est limité à 1 500 caractères.")
         const maintenant = new Date().toISOString()

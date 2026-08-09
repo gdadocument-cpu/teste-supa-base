@@ -830,6 +830,11 @@ function creerBadgeStatutRapport(statut) {
 function creerPiedCarteRapport(rapport) {
   const statut =
     normaliserStatutRapportClient(rapport.statut);
+  const source = String(rapport.source || "SITE").trim().toUpperCase();
+  const peutRefuser =
+    statut === "EN ATTENTE" &&
+    source === "SITE" &&
+    rapportsPeutValider;
   let action = "";
   let libelle = "";
 
@@ -875,7 +880,7 @@ function creerPiedCarteRapport(rapport) {
               `
               : ""}
 
-            ${statut === "EN ATTENTE" && rapportsPeutValider
+            ${peutRefuser
               ? `
                 <button
                   class="rapport-refuser"

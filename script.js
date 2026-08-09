@@ -1084,7 +1084,7 @@ loginForm.addEventListener("submit", async function(e) {
       bar.style.display = "none";
       percent.style.display = "none";
       bootText.textContent = "Ouverture de la connexion Discord…";
-      const redirectTo = new URL("index.html", window.location.href).href;
+      const redirectTo = new URL("/", window.location.origin).href;
       await window.gdaSupabase.connexionDiscord(redirectTo);
       return;
     } catch (erreur) {

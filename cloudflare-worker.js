@@ -59,6 +59,10 @@ export default {
     }
 
     const requestUrl = new URL(request.url);
+    if (requestUrl.pathname === "/supabase-test" || requestUrl.pathname === "/supabase-test.html") {
+      requestUrl.pathname = "/";
+      return Response.redirect(requestUrl.toString(), 302);
+    }
     const asset = await env.ASSETS.fetch(request);
     const headers = new Headers(asset.headers);
     const url = requestUrl;

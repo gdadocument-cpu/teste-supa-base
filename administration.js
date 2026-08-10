@@ -249,6 +249,123 @@ function afficherListeAdministration() {
     });
 }
 
+const administrationGroupesPermissions = [
+  {
+    cle: "acces",
+    titre: "Niveau d’accès",
+    icone: "🛡️",
+    permissions: ["role_staff_total", "role_visiteur"]
+  },
+  {
+    cle: "effectif",
+    titre: "Effectif et personnel",
+    icone: "👥",
+    permissions: [
+      "effectif_modifier",
+      "effectif_public_actualiser",
+      "personnel_historique_modifier",
+      "personnel_historique_supprimer"
+    ]
+  },
+  {
+    cle: "absences",
+    titre: "Absences et départs",
+    icone: "📆",
+    permissions: [
+      "absences_gerer",
+      "disponibilites_modifier_supprimer",
+      "departs_gerer"
+    ]
+  },
+  {
+    cle: "rapports",
+    titre: "Rapports et formations",
+    icone: "📋",
+    permissions: [
+      "rapports_gerer",
+      "rapports_supprimer",
+      "suivis_decider_tous",
+      "recommandations_nouvelle_semaine"
+    ]
+  },
+  {
+    cle: "administration",
+    titre: "Administration",
+    icone: "⚙️",
+    permissions: [
+      "administration_staff",
+      "administration_permissions",
+      "administration_logs"
+    ]
+  }
+];
+
+function creerCasePermissionAdministration(permission, cochee, accesPermanent) {
+  const cle = String(permission.cle || "");
+  const classeRole = cle === "role_staff_total"
+    ? " administration-permission-staff"
+    : cle === "role_visiteur"
+      ? " administration-permission-visiteur"
+      : "";
+  return `
+    <label class="administration-permission${classeRole}">
+      <input
+        type="checkbox"
+        data-permission="${echapperHTMLAdministration(cle)}"
+        ${cochee ? "checked" : ""}
+        ${accesPermanent ? "disabled" : ""}
+      >
+      <span>${echapperHTMLAdministration(permission.libelle || permission.nom || cle)}</span>
+    </label>
+  `;
+}
+
+function creerGroupesPermissionsAdministration(permissionsAccordees, accesPermanent) {
+  const parCle = new Map(administrationPermissions.map(function (permission) {
+    return [permission.cle, permission];
+  }));
+  const clesClassees = new Set();
+  const groupes = administrationGroupesPermissions.map(function (groupe) {
+    const cases = groupe.permissions.map(function (cle) {
+      const permission = parCle.get(cle);
+      if (!permission) return "";
+      clesClassees.add(cle);
+      return creerCasePermissionAdministration(
+        permission,
+        accesPermanent || permissionsAccordees.includes(cle),
+        accesPermanent
+      );
+    }).filter(Boolean).join("");
+    if (!cases) return "";
+    return `
+      <section class="administration-groupe-permissions administration-groupe-${groupe.cle}">
+        <h5><span aria-hidden="true">${groupe.icone}</span>${echapperHTMLAdministration(groupe.titre)}</h5>
+        <div class="administration-permissions-grille">${cases}</div>
+      </section>
+    `;
+  }).filter(Boolean);
+
+  const autres = administrationPermissions.filter(function (permission) {
+    return !clesClassees.has(permission.cle);
+  }).map(function (permission) {
+    return creerCasePermissionAdministration(
+      permission,
+      accesPermanent || permissionsAccordees.includes(permission.cle),
+      accesPermanent
+    );
+  }).join("");
+
+  if (autres) {
+    groupes.push(`
+      <section class="administration-groupe-permissions administration-groupe-autres">
+        <h5><span aria-hidden="true">🔧</span>Autres permissions</h5>
+        <div class="administration-permissions-grille">${autres}</div>
+      </section>
+    `);
+  }
+  return groupes.join("");
+}
+
 function creerCarteAdministration(utilisateur) {
   const index = administrationUtilisateurs.indexOf(utilisateur);
   const permissions = Array.isArray(utilisateur.permissions)
@@ -259,21 +376,15 @@ function creerCarteAdministration(utilisateur) {
   const iconeGrade = obtenirIconeGradeAdministration(utilisateur.grade);
   const accesPermanent = utilisateur.proprietaire || utilisateur.coproprietaire;
   const estStaff = !accesPermanent && permissions.includes("role_staff_total");
-
-  const cases = administrationPermissions.map(function (permission) {
-    const cochee = accesPermanent || permissions.includes(permission.cle);
-    return `
-      <label class="administration-permission">
-        <input
-          type="checkbox"
-          data-permission="${echapperHTMLAdministration(permission.cle)}"
-          ${cochee ? "checked" : ""}
-          ${accesPermanent ? "disabled" : ""}
-        >
-        <span>${echapperHTMLAdministration(permission.libelle || permission.nom || permission.cle)}</span>
-      </label>
-    `;
-  }).join("");
+  const estVisiteur = !accesPermanent && !estStaff && permissions.includes("role_visiteur");
+  const resumePermissions = accesPermanent
+    ? "Tous les droits"
+    : estStaff
+      ? "Staff total"
+      : estVisiteur
+        ? "Visiteur"
+        : `${permissions.length} permission${permissions.length > 1 ? "s" : ""}`;
+  const groupesPermissions = creerGroupesPermissionsAdministration(permissions, accesPermanent);
 
   return `
     <article class="administration-carte ${estOuverte ? "administration-carte-ouverte" : ""}" data-utilisateur-index="${index}">
@@ -294,6 +405,7 @@ function creerCarteAdministration(utilisateur) {
           <h4>${echapperHTMLAdministration(utilisateur.nom)}</h4>
           <p>${echapperHTMLAdministration(utilisateur.grade || "Grade non renseigné")}</p>
         </div>
+        <span class="administration-resume-droits">${echapperHTMLAdministration(resumePermissions)}</span>
         ${utilisateur.proprietaire
           ? '<span class="administration-badge-proprietaire">Propriétaire</span>'
           : utilisateur.coproprietaire
@@ -305,7 +417,7 @@ function creerCarteAdministration(utilisateur) {
       </button>
 
       <div class="administration-panneau" ${estOuverte ? "" : "hidden"}>
-        <div class="administration-permissions">${cases}</div>
+        <div class="administration-permissions">${groupesPermissions}</div>
 
         <div class="administration-actions">
           <span class="administration-retour" aria-live="polite"></span>

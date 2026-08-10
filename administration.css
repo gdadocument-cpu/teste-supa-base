@@ -180,9 +180,15 @@
 }
 
 .administration-badge-staff {
-  background: rgba(179, 103, 255, .14);
-  border-color: rgba(190, 125, 255, .58);
-  color: #d8a9ff;
+  background: rgba(241, 185, 46, .14);
+  border-color: rgba(241, 185, 46, .58);
+  color: #ffd86c;
+}
+
+.administration-resume-droits {
+  color: #8caec5;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .administration-chevron {
@@ -209,7 +215,40 @@
 
 .administration-permissions {
   display: grid;
-  gap: 9px;
+  gap: 11px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.administration-groupe-permissions {
+  background: rgba(4, 24, 42, .32);
+  border: 1px solid rgba(86, 166, 210, .14);
+  border-radius: 11px;
+  padding: 10px;
+}
+
+.administration-groupe-permissions h5 {
+  align-items: center;
+  color: #83c8ed;
+  display: flex;
+  font-size: 11px;
+  gap: 7px;
+  letter-spacing: .08em;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.administration-groupe-permissions h5 span {
+  font-size: 14px;
+}
+
+.administration-groupe-acces {
+  background: rgba(9, 31, 51, .58);
+  grid-column: 1 / -1;
+}
+
+.administration-permissions-grille {
+  display: grid;
+  gap: 6px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -217,17 +256,42 @@
   align-items: center;
   background: rgba(255, 255, 255, .025);
   border: 1px solid rgba(255, 255, 255, .06);
-  border-radius: 9px;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
-  gap: 10px;
-  padding: 10px 12px;
+  font-size: 12px;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 9px;
+  transition: background .16s ease, border-color .16s ease;
+}
+
+.administration-permission:hover {
+  background: rgba(57, 166, 225, .07);
+  border-color: rgba(82, 184, 235, .22);
 }
 
 .administration-permission input {
   accent-color: #32b8f4;
-  height: 17px;
-  width: 17px;
+  flex: 0 0 auto;
+  height: 15px;
+  width: 15px;
+}
+
+.administration-permission-staff {
+  background: rgba(241, 185, 46, .08);
+  border-color: rgba(241, 185, 46, .48);
+  color: #ffd86c;
+}
+
+.administration-permission-staff input {
+  accent-color: #e9b62f;
+}
+
+.administration-permission-visiteur {
+  background: rgba(56, 174, 232, .08);
+  border-color: rgba(56, 174, 232, .55);
+  color: #d7efff;
 }
 
 .administration-actions {
@@ -300,5 +364,7 @@
   .administration-header { align-items: flex-start; flex-direction: column; }
   .administration-resume { grid-template-columns: 1fr; }
   .administration-permissions { grid-template-columns: 1fr; }
+  .administration-permissions-grille { grid-template-columns: 1fr; }
+  .administration-resume-droits { display: none; }
   .administration-actions-propriete { flex-direction: column; }
 }

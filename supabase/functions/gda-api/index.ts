@@ -1187,7 +1187,7 @@ const authenticated = async (req: Request) => {
         const { data, error } = await admin.from("recommendations_observations").select("*,profiles!recommendations_observations_recorded_by_profile_id_fkey(display_name)").order("created_at", { ascending: false })
         if (error) throw error
         const historique = (data ?? []).map((row: any) => ({ id: row.external_id, date: dateFr(row.occurred_on), personne: row.matricule_snapshot, grade: row.grade_snapshot || "", type: row.entry_type, nature: row.nature || "", emetteur: row.transmitted_by || "", raison: row.reason || "", enregistrePar: row.profiles?.display_name || row.recorded_by_snapshot || "", creeLe: dateHeureFr(row.created_at) }))
-        return json({ success: true, membres: membresPublic.map((m: any) => ({ nom: m.nom, grade: m.grade, recommandations: m.recommandation, observations: m.observation })), historique, peutPurger: peutCommencerNouvelleSemaine })
+        return json({ success: true, membres: membresClient.map((m: any) => ({ nom: m.nom, grade: m.grade, recommandations: m.recommandation, observations: m.observation })), historique, peutPurger: peutCommencerNouvelleSemaine })
       }
       case "ajouterRecommandationObservation":
       case "modifierRecommandationObservation": {

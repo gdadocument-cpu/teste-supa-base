@@ -264,6 +264,8 @@ const authenticated = async (req: Request) => {
       return officer && rangAuteurNotes >= 0 && rangCible > rangAuteurNotes
     }
     const peutGererDefcon = owner || permissions.has("role_staff_total") || ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(actorGradeNormalise)
+    const peutCommencerNouvelleSemaine = has("recommandations_nouvelle_semaine") ||
+      ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(actorGradeNormalise)
     const peutGererParametres = owner || permissions.has("role_staff_total") ||
       (ownMember?.specializations ?? []).some((item: string) => normalise(item) === "GERANT GDA")
     const maximumGda = Math.max(1, Math.min(200, nombre(configurationSite?.max_gda) || 35))
@@ -1185,7 +1187,7 @@ const authenticated = async (req: Request) => {
         const { data, error } = await admin.from("recommendations_observations").select("*,profiles!recommendations_observations_recorded_by_profile_id_fkey(display_name)").order("created_at", { ascending: false })
         if (error) throw error
         const historique = (data ?? []).map((row: any) => ({ id: row.external_id, date: dateFr(row.occurred_on), personne: row.matricule_snapshot, grade: row.grade_snapshot || "", type: row.entry_type, nature: row.nature || "", emetteur: row.transmitted_by || "", raison: row.reason || "", enregistrePar: row.profiles?.display_name || row.recorded_by_snapshot || "", creeLe: dateHeureFr(row.created_at) }))
-        return json({ success: true, membres: membresPublic.map((m: any) => ({ nom: m.nom, grade: m.grade, recommandations: m.recommandation, observations: m.observation })), historique, peutPurger: owner })
+        return json({ success: true, membres: membresPublic.map((m: any) => ({ nom: m.nom, grade: m.grade, recommandations: m.recommandation, observations: m.observation })), historique, peutPurger: peutCommencerNouvelleSemaine })
       }
       case "ajouterRecommandationObservation":
       case "modifierRecommandationObservation": {
@@ -1219,7 +1221,7 @@ const authenticated = async (req: Request) => {
         return json({ success: true, message: "Élément enregistré." })
       }
       case "purgerRecommandationsObservations": {
-        if (!owner) throw new Error("Purge réservée au propriétaire.")
+        if (!peutCommencerNouvelleSemaine) throw new Error("Permission Nouvelle semaine insuffisante.")
         const { error } = await admin.from("recommendations_observations").delete().gt("id", 0)
         if (error) throw error
         await admin.from("members").update({ recommendation: "0", observation: "0" }).eq("active", true)

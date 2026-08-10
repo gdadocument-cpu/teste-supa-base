@@ -185,7 +185,16 @@ async function roPurger() {
   const bouton = document.getElementById("roPurger");
   try {
     if (bouton) bouton.disabled = true;
-    const reponse = await fetch(API_URL + "?action=purgerRecommandationsObservations", {method:"POST"});
+    const donnees = new URLSearchParams({
+      action: "purgerRecommandationsObservations"
+    });
+    const reponse = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+      },
+      body: donnees.toString()
+    });
     const resultat = await reponse.json();
     if (!resultat.success) throw new Error(resultat.message || "Purge impossible.");
     if (typeof invaliderCacheEffectifGDA === "function") invaliderCacheEffectifGDA();

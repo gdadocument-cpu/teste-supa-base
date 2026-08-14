@@ -6,6 +6,12 @@ const loginForm = document.getElementById("login");
 const loginButton = document.getElementById("loginButton");
 const rememberDiscord = document.getElementById("rememberDiscord");
 const CLE_SOUVENIR_DISCORD = "gdaDiscordRemember";
+const CLE_EXPIRATION_SESSION_SUPABASE_GDA = "gdaSupabaseSessionExpireLe";
+const CLE_SESSION_NAVIGATEUR_SUPABASE_GDA = "gdaSupabaseSessionNavigateur";
+const CLE_MOIS_SESSION_SUPABASE_GDA = "gdaSupabaseSessionMois";
+const CLE_VERSION_POLITIQUE_SESSION_GDA = "gdaSupabaseSessionPolicy";
+const VERSION_POLITIQUE_SESSION_GDA = "20260815-1";
+const DUREE_SESSION_MEMORISEE_GDA = 7 * 24 * 60 * 60 * 1000;
 const CLE_DEFCON_MEMORISE_GDA = "gdaDefconGlobal";
 const VERSION_CACHE_GDA = "20260717-5";
 const CLE_VERSION_CACHE_GDA = "gdaCacheVersion";
@@ -36,6 +42,7 @@ const loading = document.getElementById("loading");
 const progress = document.getElementById("progress");
 const percent = document.getElementById("percent");
 const bootText = document.getElementById("bootText");
+const logoutButton = document.getElementById("logoutButton");
 
 const bar = document.getElementById("bar");
 const alertOverlay = document.getElementById("alertOverlay");
@@ -44,6 +51,7 @@ let minuteurPresenceEnLigne = null;
 let utilisateursEnLigne = [];
 let minuteurNotificationsAbsence = null;
 let notificationsAbsenceGDA = [];
+let minuteurPolitiqueSessionGDA = null;
 let menuOfficierOuvert = false;
 let menuEspaceGdaOuvert = false;
 let menuSpecialisationsOuvert = false;
@@ -1083,6 +1091,130 @@ function prechargerDonneesGDA() {
   }
 }
 
+function obtenirMoisSessionGDA(date) {
+  const parties = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Paris",
+    year: "numeric",
+    month: "2-digit"
+  }).formatToParts(date || new Date());
+  const annee = parties.find(function(partie) { return partie.type === "year"; });
+  const mois = parties.find(function(partie) { return partie.type === "month"; });
+  return (annee ? annee.value : "") + "-" + (mois ? mois.value : "");
+}
+
+function effacerPersistanceConnexionGDA() {
+  try {
+    localStorage.removeItem(CLE_SOUVENIR_DISCORD);
+    localStorage.removeItem(CLE_EXPIRATION_SESSION_SUPABASE_GDA);
+    localStorage.removeItem(CLE_MOIS_SESSION_SUPABASE_GDA);
+  } catch (erreur) {
+    /* Le stockage peut être indisponible en navigation privée stricte. */
+  }
+  sessionStorage.removeItem(CLE_SESSION_NAVIGATEUR_SUPABASE_GDA);
+  sessionStorage.removeItem("gdaResterConnecte");
+  sessionStorage.removeItem("gdaMatriculeConnexion");
+}
+
+function memoriserPolitiqueConnexionGDA(resterConnecte) {
+  const maintenant = Date.now();
+  try {
+    localStorage.setItem(
+      CLE_VERSION_POLITIQUE_SESSION_GDA,
+      VERSION_POLITIQUE_SESSION_GDA
+    );
+    localStorage.setItem(
+      CLE_MOIS_SESSION_SUPABASE_GDA,
+      obtenirMoisSessionGDA(new Date(maintenant))
+    );
+    if (resterConnecte) {
+      localStorage.setItem(
+        CLE_EXPIRATION_SESSION_SUPABASE_GDA,
+        String(maintenant + DUREE_SESSION_MEMORISEE_GDA)
+      );
+    } else {
+      localStorage.removeItem(CLE_EXPIRATION_SESSION_SUPABASE_GDA);
+    }
+  } catch (erreur) {
+    /* La connexion reste limitée à l’onglet si le stockage local échoue. */
+  }
+  sessionStorage.setItem(CLE_SESSION_NAVIGATEUR_SUPABASE_GDA, "1");
+  sessionStorage.removeItem("gdaResterConnecte");
+  programmerSurveillanceSessionGDA();
+}
+
+function politiqueConnexionAutoriseRestaurationGDA(retourOAuth) {
+  if (retourOAuth) return true;
+  try {
+    if (
+      localStorage.getItem(CLE_VERSION_POLITIQUE_SESSION_GDA) !==
+      VERSION_POLITIQUE_SESSION_GDA
+    ) return false;
+    if (
+      localStorage.getItem(CLE_MOIS_SESSION_SUPABASE_GDA) !==
+      obtenirMoisSessionGDA()
+    ) return false;
+    const expiration = Number(
+      localStorage.getItem(CLE_EXPIRATION_SESSION_SUPABASE_GDA) || 0
+    );
+    if (expiration) return Date.now() < expiration;
+  } catch (erreur) {
+    return sessionStorage.getItem(CLE_SESSION_NAVIGATEUR_SUPABASE_GDA) === "1";
+  }
+  return sessionStorage.getItem(CLE_SESSION_NAVIGATEUR_SUPABASE_GDA) === "1";
+}
+
+function sessionConnexionGDAEstExpiree() {
+  try {
+    if (
+      localStorage.getItem(CLE_MOIS_SESSION_SUPABASE_GDA) !==
+      obtenirMoisSessionGDA()
+    ) return true;
+    const expiration = Number(
+      localStorage.getItem(CLE_EXPIRATION_SESSION_SUPABASE_GDA) || 0
+    );
+    if (expiration) return Date.now() >= expiration;
+  } catch (erreur) {
+    return false;
+  }
+  return false;
+}
+
+async function deconnecterUtilisateurGDA(rechargerPage) {
+  if (minuteurPolitiqueSessionGDA) {
+    clearInterval(minuteurPolitiqueSessionGDA);
+    minuteurPolitiqueSessionGDA = null;
+  }
+  if (logoutButton) logoutButton.disabled = true;
+  try {
+    if (window.gdaSupabase) await window.gdaSupabase.deconnexion();
+  } catch (erreur) {
+    console.warn("Déconnexion Supabase incomplète :", erreur);
+  } finally {
+    effacerPersistanceConnexionGDA();
+    sessionStorage.clear();
+    if (rechargerPage) {
+      window.location.replace(new URL("/", window.location.origin).href);
+    } else if (logoutButton) {
+      logoutButton.disabled = false;
+    }
+  }
+}
+
+function programmerSurveillanceSessionGDA() {
+  if (minuteurPolitiqueSessionGDA) clearInterval(minuteurPolitiqueSessionGDA);
+  minuteurPolitiqueSessionGDA = setInterval(function() {
+    if (sessionConnexionGDAEstExpiree()) {
+      deconnecterUtilisateurGDA(true);
+    }
+  }, 60 * 1000);
+}
+
+if (logoutButton) {
+  logoutButton.addEventListener("click", function() {
+    deconnecterUtilisateurGDA(true);
+  });
+}
+
 loginForm.addEventListener("submit", async function(e) {
   e.preventDefault();
 
@@ -1101,6 +1233,14 @@ loginForm.addEventListener("submit", async function(e) {
       "gdaResterConnecte",
       rememberDiscord.checked ? "1" : "0"
     );
+    try {
+      localStorage.setItem(
+        CLE_VERSION_POLITIQUE_SESSION_GDA,
+        VERSION_POLITIQUE_SESSION_GDA
+      );
+    } catch (erreur) {
+      /* La session restera limitée à l’onglet courant. */
+    }
     try {
       loginButton.disabled = true;
       username.disabled = true;
@@ -1203,6 +1343,12 @@ async function tenterRestaurationDiscord() {
     try {
       const session = await window.gdaSupabase.session();
       if (!session) return;
+      const choixResterConnecte = sessionStorage.getItem("gdaResterConnecte");
+      const retourOAuth = choixResterConnecte === "0" || choixResterConnecte === "1";
+      if (!politiqueConnexionAutoriseRestaurationGDA(retourOAuth)) {
+        await deconnecterUtilisateurGDA(false);
+        return;
+      }
       const resultatProfil = await window.gdaSupabase.profil();
       const profil = resultatProfil.profile || {};
       const matriculeDemande = sessionStorage.getItem("gdaMatriculeConnexion") || "";
@@ -1211,7 +1357,7 @@ async function tenterRestaurationDiscord() {
         String(matriculeDemande).trim().toLocaleLowerCase("fr") !==
           String(profil.matricule || "").trim().toLocaleLowerCase("fr")
       ) {
-        await window.gdaSupabase.deconnexion();
+        await deconnecterUtilisateurGDA(false);
         afficherAccesRefuse(
           matriculeDemande,
           "Discord non vérifié",
@@ -1221,6 +1367,11 @@ async function tenterRestaurationDiscord() {
         return;
       }
       sessionStorage.removeItem("gdaMatriculeConnexion");
+      if (retourOAuth) {
+        memoriserPolitiqueConnexionGDA(choixResterConnecte === "1");
+      } else {
+        programmerSurveillanceSessionGDA();
+      }
       terminerConnexionDiscord({
         success: true,
         nom: profil.matricule,
@@ -1239,7 +1390,7 @@ async function tenterRestaurationDiscord() {
       return;
     } catch (erreur) {
       console.error("Connexion Supabase refusée :", erreur);
-      try { await window.gdaSupabase.deconnexion(); } catch (_) { /* rien */ }
+      await deconnecterUtilisateurGDA(false);
       afficherAccesRefuse(
         username.value.trim() || "Compte Discord",
         "Accès refusé",

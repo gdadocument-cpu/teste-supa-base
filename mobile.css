@@ -4,7 +4,7 @@
 
 @media (max-width: 750px) {
   :root {
-    --gda-mobile-hauteur-entete: 68px;
+    --gda-mobile-hauteur-entete: 74px;
     --gda-mobile-hauteur-navigation: 78px;
   }
 
@@ -21,19 +21,99 @@
   }
 
   #boot {
-    width: min(100% - 32px, 430px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: min(100%, 430px);
+    min-height: 100dvh;
     margin: auto;
-    padding: max(18px, env(safe-area-inset-top)) 0 max(18px, env(safe-area-inset-bottom));
+    padding: max(28px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
   }
 
   .logo-piece {
-    --diametre-piece: min(210px, 52vw);
-    --epaisseur-piece: 12px;
-    --demi-epaisseur: 6px;
+    --diametre-piece: min(116px, 31vw);
+    --epaisseur-piece: 8px;
+    --demi-epaisseur: 4px;
+    margin-bottom: 21px;
+    filter: drop-shadow(0 0 22px rgba(53, 169, 236, .48));
+  }
+
+  #boot > h1 {
+    margin: 0;
+    font-size: clamp(18px, 5.4vw, 21px);
+    font-weight: 650;
+    line-height: 1.28;
+    letter-spacing: 2px;
+    text-align: center;
+  }
+
+  #boot > h1::after {
+    content: "Connexion à l’intranet sécurisé";
+    display: block;
+    margin-top: 9px;
+    color: #8ea9be;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: 0;
+    text-shadow: none;
   }
 
   #login {
     width: 100%;
+    max-width: 350px;
+    gap: 14px;
+    margin: 30px auto 0;
+  }
+
+  .login-ligne {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 50px;
+    gap: 9px;
+  }
+
+  #username {
+    width: 100%;
+    min-height: 50px;
+    padding: 13px 14px;
+    border-color: #22618a;
+    border-radius: 13px;
+    background: rgba(4, 23, 41, .93);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035);
+  }
+
+  #loginButton {
+    width: 50px;
+    min-width: 50px;
+    height: 50px;
+    min-height: 50px;
+    border-radius: 13px;
+    background: linear-gradient(145deg, #249fd5, #0d699d);
+    box-shadow: 0 7px 20px rgba(17, 137, 194, .3), inset 0 1px 0 rgba(255, 255, 255, .18);
+  }
+
+  .login-memoriser {
+    width: 100%;
+    gap: 8px;
+    color: #a8bdce;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .login-memoriser input {
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  .login-memoriser > span {
+    font-size: 0;
+  }
+
+  .login-memoriser > span::after {
+    content: "Rester connecté pendant 7 jours sur ce téléphone";
+    font-size: 11px;
   }
 
   #login input,
@@ -99,22 +179,40 @@
   }
 
   #userInfo {
-    flex: 0 1 82px;
+    flex: 0 0 98px;
     min-width: 0;
-    max-width: 82px;
+    max-width: 98px;
+    min-height: 48px;
+    justify-content: center;
+    gap: 2px;
     padding: 5px 7px;
+    overflow: hidden;
+    border-radius: 10px;
   }
 
   #userInfo strong {
-    max-width: 68px;
-    overflow: hidden;
-    font-size: 10px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+    font-size: 9px;
+    line-height: 1.08;
+    text-align: right;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   #userInfo span {
-    display: none;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    color: #ffc1c1;
+    font-size: 9px;
+    line-height: 1.1;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   #workspace {
@@ -434,12 +532,31 @@
   }
 
   .defcon-entete {
-    min-width: 64px;
-    max-width: 88px;
+    min-width: 48px;
+    max-width: 68px;
+  }
+
+  #defconCommandeBouton,
+  #notificationsAbsenceBouton,
+  #presenceEnLigneBouton {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
   }
 
   #userInfo {
-    max-width: 65px;
+    flex-basis: 84px;
+    max-width: 84px;
+    padding-inline: 5px;
+  }
+
+  #userInfo strong {
+    font-size: 8px;
+  }
+
+  #userInfo span {
+    font-size: 8.5px;
   }
 
   #sidebar .menuButton {
@@ -1342,12 +1459,13 @@
   }
 
   .defcon-entete {
-    max-width: 78px;
+    min-width: 48px;
+    max-width: 68px;
   }
 
   #userInfo {
-    flex-basis: 60px;
-    max-width: 60px;
+    flex-basis: 84px;
+    max-width: 84px;
   }
 
   .effectif-header-actions,

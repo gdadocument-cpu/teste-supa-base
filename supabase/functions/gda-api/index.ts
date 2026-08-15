@@ -512,6 +512,7 @@ const authenticated = async (req: Request) => {
           id: member.id,
           nom: member.matricule,
           grade: member.grade,
+          discordId: member.discord_id || "",
           specialisations: member.specializations ?? [],
           absent: absentParMembre.has(member.id) || normalise(member.presence).includes("ABSENT"),
           tache: tache?.task_code ?? "NA",

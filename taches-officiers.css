@@ -55,6 +55,13 @@
 
 .taches-officiers-semaine strong { font-size: 13px; }
 
+.taches-officiers-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 7px;
+}
+
 .taches-officiers-semaine button,
 .taches-officiers-erreur button {
   justify-self: start;
@@ -67,6 +74,18 @@
   font-weight: 800;
   cursor: pointer;
 }
+
+.taches-officiers-semaine .taches-officiers-message-discord {
+  border-color: rgba(133, 150, 255, .78);
+  background: linear-gradient(135deg, #5865f2, #4752c4);
+  box-shadow: 0 7px 18px rgba(88, 101, 242, .22);
+}
+
+.taches-officiers-semaine .taches-officiers-message-discord:hover {
+  background: linear-gradient(135deg, #6875ff, #5562d9);
+}
+
+.taches-officiers-semaine button:disabled { opacity: .58; cursor: wait; }
 
 .taches-officiers-groupes { display: grid; gap: 22px; }
 
@@ -318,6 +337,8 @@
   .taches-officiers-module { gap: 14px; }
   .taches-officiers-entete { display: grid; padding: 18px; }
   .taches-officiers-semaine { min-width: 0; width: 100%; }
+  .taches-officiers-actions { display: grid; grid-template-columns: 1fr; }
+  .taches-officiers-actions button { width: 100%; min-height: 42px; }
   .taches-officiers-groupe { border-radius: 14px; }
   .taches-officiers-groupe > header { padding: 14px 15px; }
   .taches-officiers-groupe h4 { font-size: 16px; }

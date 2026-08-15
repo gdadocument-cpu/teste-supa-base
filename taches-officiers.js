@@ -16,6 +16,23 @@
     ["officiers", "Officiers", "Corps des officiers"],
     ["gerantsSpecialisation", "Gérants de spécialisation", "Responsables INST et MDC"]
   ];
+  const LIBELLES_MESSAGE_DISCORD = {
+    NA: "N/A",
+    GESTION_RAPPORT: "Gestion des rapports",
+    RECO_MISSION_GDA_OBSERVATION_HDR: "Reco Mission / Reco GDA / Observation HDR",
+    GESTION_DEMANDE_ENTRAINEMENT: "Gestion des demandes d’entraînement",
+    OBSERVATION_EZ: "Observation EZ",
+    GESTION_ABSENCES: "Gestion des absences",
+    GESTION_DOCUMENTS_GDA: "Gestion du bon fonctionnement des documents GDA"
+  };
+  const GRADES_MESSAGE_DISCORD = [
+    "LIEUTENANT-COLONEL", "COMMANDANT", "VICE-COMMANDANT", "CAPITAINE",
+    "LIEUTENANT", "SOUS-LIEUTENANT", "ASPIRANT"
+  ];
+  const SEPARATEUR_OFF_SUP_DISCORD =
+    "----------------------------------------------------------------------------OFF-SUP-----------------------------------------------------------------------------------";
+  const SEPARATEUR_OFF_DISCORD =
+    "-------------------------------------------------------------------------------OFF------------------------------------------------------------------------------------";
 
   let donneesTachesOfficiers = null;
   let chargementTachesOfficiers = false;
@@ -73,6 +90,107 @@
         (option[0] === selection ? " selected" : "") + ">" +
         echapperTachesOfficiers(option[1]) + "</option>";
     }).join("");
+  }
+
+  function membresMessageDiscord(superieurs) {
+    const groupes = donneesTachesOfficiers?.groupes || {};
+    const uniques = new Map();
+    ["officiersSuperieurs", "officiers", "gerantsSpecialisation"].forEach(function(cle) {
+      (Array.isArray(groupes[cle]) ? groupes[cle] : []).forEach(function(membre) {
+        uniques.set(Number(membre.id), membre);
+      });
+    });
+    return Array.from(uniques.values())
+      .filter(function(membre) {
+        const grade = normaliserTachesOfficiers(membre.grade);
+        const estSuperieur = GRADES_MESSAGE_DISCORD.slice(0, 3).includes(grade);
+        return superieurs ? estSuperieur : !estSuperieur && GRADES_MESSAGE_DISCORD.includes(grade);
+      })
+      .sort(function(a, b) {
+        const rangA = GRADES_MESSAGE_DISCORD.indexOf(normaliserTachesOfficiers(a.grade));
+        const rangB = GRADES_MESSAGE_DISCORD.indexOf(normaliserTachesOfficiers(b.grade));
+        return rangA - rangB || String(a.nom || "").localeCompare(String(b.nom || ""), "fr", { sensitivity: "base" });
+      });
+  }
+
+  function ligneMessageDiscord(membre, idsManquants) {
+    const discordId = String(membre.discordId || "").trim();
+    if (!/^\d{15,22}$/.test(discordId)) idsManquants.push(String(membre.nom || "Inconnu"));
+    const mention = /^\d{15,22}$/.test(discordId) ? `<@${discordId}>` : `@${membre.nom || "Inconnu"}`;
+    const tache = membre.absent === true
+      ? "Absent"
+      : LIBELLES_MESSAGE_DISCORD[membre.tache || "NA"] || "N/A";
+    return `${mention} : ${tache}`;
+  }
+
+  function genererMessageDiscord() {
+    const idsManquants = [];
+    const lignesSuperieurs = membresMessageDiscord(true).map(function(membre) {
+      return ligneMessageDiscord(membre, idsManquants);
+    });
+    const lignesOfficiers = membresMessageDiscord(false).map(function(membre) {
+      return ligneMessageDiscord(membre, idsManquants);
+    });
+    if (idsManquants.length) {
+      throw new Error("Discord ID manquant pour : " + idsManquants.join(", ") + ".");
+    }
+    const grade = sessionStorage.getItem("gradeEffectifPublicUtilisateur") ||
+      sessionStorage.getItem("gradeUtilisateur") || "Grade non renseigné";
+    const nom = sessionStorage.getItem("nomUtilisateur") || "Utilisateur";
+    const lignes = [
+      "# Roulement des taches semestrielle",
+      "",
+      "**`Courrier à l'attention de :`**  <@&1272570947102179444>",
+      "**`CC :`**  <@&1274098953100460133>",
+      "## **`Tache à réaliser sur le document Officiers GDA `**",
+      "",
+      SEPARATEUR_OFF_SUP_DISCORD,
+      "",
+      ...lignesSuperieurs.flatMap(function(ligne) { return [ligne, ""]; }),
+      SEPARATEUR_OFF_DISCORD,
+      "",
+      ...lignesOfficiers.flatMap(function(ligne) { return [ligne, ""]; }),
+      `Respectueusement *${grade} ${nom}*`
+    ];
+    const message = lignes.join("\n").trim();
+    if (message.length > 2000) {
+      throw new Error("Le message dépasse la limite Discord de 2 000 caractères.");
+    }
+    return message;
+  }
+
+  async function copierTexteDiscord(texte) {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(texte);
+      return;
+    }
+    const zone = document.createElement("textarea");
+    zone.value = texte;
+    zone.setAttribute("readonly", "");
+    zone.style.position = "fixed";
+    zone.style.opacity = "0";
+    document.body.appendChild(zone);
+    zone.select();
+    const copieReussie = document.execCommand("copy");
+    zone.remove();
+    if (!copieReussie) throw new Error("Le navigateur a refusé l’accès au presse-papiers.");
+  }
+
+  async function copierMessageDiscord() {
+    const bouton = document.getElementById("copierMessageDiscordTachesOfficiers");
+    if (bouton) bouton.disabled = true;
+    try {
+      await copierTexteDiscord(genererMessageDiscord());
+      if (typeof afficherNotificationGDA === "function") {
+        afficherNotificationGDA("Message Discord copié. Vous pouvez maintenant le coller dans Discord.", "succes");
+      }
+    } catch (erreur) {
+      if (typeof afficherNotificationGDA === "function") {
+        afficherNotificationGDA(erreur.message || "Impossible de copier le message Discord.", "erreur");
+      }
+    } finally {
+      if (bouton) bouton.disabled = false;
+    }
   }
 
   function ligneTachesOfficiers(membre) {
@@ -144,7 +262,10 @@
           <div class="taches-officiers-semaine">
             <span>Semaine actuelle</span>
             <strong>${echapperTachesOfficiers(formaterSemaineTachesOfficiers(donneesTachesOfficiers.semaine))}</strong>
-            <button id="actualiserTachesOfficiers" type="button">↻ Actualiser</button>
+            <div class="taches-officiers-actions">
+              <button id="copierMessageDiscordTachesOfficiers" class="taches-officiers-message-discord" type="button">💬 Message Discord</button>
+              <button id="actualiserTachesOfficiers" type="button">↻ Actualiser</button>
+            </div>
           </div>
         </header>
         <div class="taches-officiers-groupes">
@@ -158,6 +279,7 @@
     if (boutonActualiser) boutonActualiser.addEventListener("click", function() {
       chargerTachesOfficiers(true);
     });
+    document.getElementById("copierMessageDiscordTachesOfficiers")?.addEventListener("click", copierMessageDiscord);
     espace.querySelectorAll(".taches-officiers-select").forEach(function(selecteur) {
       selecteur.addEventListener("change", enregistrerTacheOfficier);
     });

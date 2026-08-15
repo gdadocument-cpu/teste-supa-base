@@ -82,7 +82,10 @@
         </header>
         <div class="gda-mobile-cartes">${cartes}</div>
         <div class="gda-mobile-deconnexion">
-          <span>Se déconnecter</span>
+          <div>
+            <strong>Déconnexion</strong>
+            <span>Fermer votre session sur cet appareil</span>
+          </div>
         </div>
       </section>`;
 

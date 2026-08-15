@@ -1742,6 +1742,185 @@ body.mode-boutons #contenuLienMDC{margin-top:140px;}
     .side-img { display: none; }
   }
 
+  /* Finition téléphone lorsque le module Médecin est intégré à l’intranet. */
+  @media (max-width: 750px) {
+    html,
+    body {
+      width: 100%;
+      min-width: 0;
+      overflow-x: hidden;
+    }
+    body {
+      padding: 5px;
+    }
+    .corner-controls {
+      inset: auto;
+      min-height: 0;
+      gap: 7px;
+      margin-bottom: 7px;
+      border-radius: 10px;
+    }
+    .corner-controls:not(:has(.visible)) {
+      display: none;
+    }
+    .badge-corner {
+      grid-template-columns: 38px minmax(0, 1fr);
+      padding: 8px;
+      border-radius: 9px;
+    }
+    .badge-corner .badge-insigne {
+      width: 38px;
+      min-width: 38px;
+    }
+    .badge-corner .grade-insigne {
+      max-width: 35px;
+      height: 42px;
+    }
+    .btn-refresh-corner {
+      min-height: 42px;
+      border-radius: 9px;
+    }
+    .admin-topbar-fixe {
+      position: static;
+      inset: auto;
+      left: auto;
+      top: auto;
+      transform: none;
+      display: flex;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      gap: 5px;
+      margin: 0 0 7px;
+      padding: 5px;
+      overflow-x: auto;
+      border-radius: 10px;
+    }
+    .btn-admin-tab {
+      flex: 1 0 115px;
+      min-height: 42px;
+      white-space: normal;
+    }
+    .console,
+    .console.expanded {
+      width: 100%;
+      max-width: 100%;
+      border-radius: 12px;
+    }
+    .header {
+      gap: 10px;
+      padding: 14px;
+    }
+    .crest {
+      width: 74px;
+      min-width: 74px;
+      height: 74px;
+      min-height: 74px;
+      margin-bottom: 4px;
+    }
+    .coin,
+    .coin-layer,
+    .coin-layer img {
+      width: 100%;
+      height: 100%;
+      aspect-ratio: 1;
+    }
+    .coin-layer img {
+      object-fit: contain;
+    }
+    .header-text h1 {
+      font-size: clamp(18px, 6vw, 24px);
+    }
+    .panel-body,
+    .rapport-mdc-wrap,
+    .reglement-wrap,
+    .materiel-wrap {
+      padding: 11px;
+    }
+    .menu-boutons,
+    .rapport-mdc-grid,
+    .rapport-fields,
+    .rapport-instructeur-historique-grille,
+    .log-add-form {
+      grid-template-columns: 1fr !important;
+    }
+    .btn-lien-mdc,
+    .rapport-validation-actions button,
+    .log-add-form button {
+      width: 100%;
+      min-height: 44px;
+    }
+    .rapport-mdc-header,
+    .reglement-header,
+    .materiel-header {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .rapport-mdc-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+    }
+    .rapport-mdc-card,
+    .materiel-card {
+      border-radius: 11px;
+    }
+    .rapport-mdc-card-head,
+    .rapport-mdc-form {
+      padding: 13px;
+    }
+    .effectif-wrap {
+      max-height: none;
+      overflow: visible;
+      border-radius: 10px;
+    }
+    .effectif-table,
+    .effectif-table tbody {
+      display: block;
+      width: 100%;
+    }
+    .effectif-table tbody tr {
+      display: grid;
+      grid-template-columns: 1fr !important;
+      gap: 6px;
+      margin-bottom: 9px;
+      padding: 10px;
+      border: 1px solid rgba(84, 145, 205, .28);
+      border-radius: 10px;
+    }
+    .effectif-table tbody td {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+      padding: 5px 0;
+      overflow-wrap: anywhere;
+    }
+    .effectif-modal-box {
+      width: calc(100vw - 14px);
+      max-width: calc(100vw - 14px);
+      max-height: calc(100dvh - 14px);
+      border-radius: 12px;
+    }
+    .effectif-modal-header {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .effectif-modal-close {
+      width: 100%;
+    }
+    .admin-liste {
+      padding-left: 18px;
+    }
+    .admin-liste li,
+    .admin-liste li.log-entry {
+      overflow-wrap: anywhere;
+    }
+  }
+
 
 </style>
 </head>

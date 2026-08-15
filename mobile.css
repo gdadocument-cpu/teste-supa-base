@@ -287,6 +287,10 @@
   }
 
   body.gda-mobile-sous-menu-accueil-actif #sidebar .menuRetour {
+    display: none !important;
+  }
+
+  body.gda-mobile-sous-menu-accueil-actif #sidebar .menuRetour:not([hidden]) {
     display: flex !important;
     flex: 0 1 190px;
     width: min(190px, calc(100vw - 24px));

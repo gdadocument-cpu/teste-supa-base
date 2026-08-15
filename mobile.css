@@ -1,0 +1,439 @@
+.menu-retour-mobile {
+  display: none;
+}
+
+@media (max-width: 750px) {
+  :root {
+    --gda-mobile-hauteur-entete: 68px;
+    --gda-mobile-hauteur-navigation: 78px;
+  }
+
+  html,
+  body {
+    min-height: 100%;
+    height: 100%;
+    overscroll-behavior: none;
+  }
+
+  body {
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  #boot {
+    width: min(100% - 32px, 430px);
+    margin: auto;
+    padding: max(18px, env(safe-area-inset-top)) 0 max(18px, env(safe-area-inset-bottom));
+  }
+
+  .logo-piece {
+    --diametre-piece: min(210px, 52vw);
+    --epaisseur-piece: 12px;
+    --demi-epaisseur: 6px;
+  }
+
+  #login {
+    width: 100%;
+  }
+
+  #login input,
+  #login button,
+  #workspace input,
+  #workspace select,
+  #workspace textarea {
+    font-size: 16px;
+  }
+
+  #desktop,
+  #desktop.visible {
+    width: 100%;
+    height: 100dvh;
+    min-height: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--gda-mobile-hauteur-entete) minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  #topbar {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    height: var(--gda-mobile-hauteur-entete);
+    gap: 7px;
+    padding: max(7px, env(safe-area-inset-top)) 8px 7px;
+    background: rgba(3, 13, 25, .96);
+    box-shadow: 0 5px 22px rgba(0, 0, 0, .28);
+  }
+
+  #smallLogo {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+  }
+
+  #topbar h2 {
+    display: none;
+  }
+
+  .defcon-entete {
+    flex: 1 1 auto;
+    min-width: 72px;
+    max-width: 126px;
+    height: 38px;
+    margin-left: 0;
+  }
+
+  #defconCommande,
+  #notificationsAbsence,
+  #presenceEnLigne {
+    flex: 0 0 auto;
+  }
+
+  #defconCommandeBouton,
+  #notificationsAbsenceBouton,
+  #presenceEnLigneBouton {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
+  }
+
+  #userInfo {
+    flex: 0 1 82px;
+    min-width: 0;
+    max-width: 82px;
+    padding: 5px 7px;
+  }
+
+  #userInfo strong {
+    max-width: 68px;
+    overflow: hidden;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #userInfo span {
+    display: none;
+  }
+
+  #workspace {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    min-height: 0;
+    width: auto;
+    margin: 8px 8px calc(var(--gda-mobile-hauteur-navigation) + 10px);
+    padding: 12px;
+    border-radius: 15px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body.gda-mobile-accueil-actif #workspace {
+    margin-bottom: 8px;
+  }
+
+  #sidebar {
+    position: fixed;
+    z-index: 400;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    width: 100%;
+    height: calc(var(--gda-mobile-hauteur-navigation) + env(safe-area-inset-bottom));
+    gap: 2px;
+    padding: 5px 4px max(6px, env(safe-area-inset-bottom));
+    overflow-x: auto;
+    overflow-y: hidden;
+    border: 0;
+    border-top: 1px solid rgba(75, 154, 218, .34);
+    background: rgba(2, 11, 22, .98);
+    box-shadow: 0 -8px 26px rgba(0, 0, 0, .42);
+    scrollbar-width: none;
+    backdrop-filter: blur(14px);
+  }
+
+  #sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  body.gda-mobile-accueil-actif #sidebar {
+    display: none !important;
+  }
+
+  #sidebar .menu-liens-dynamiques {
+    display: contents;
+  }
+
+  #sidebar .menuButton {
+    flex: 1 0 78px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    min-width: 78px;
+    max-width: 126px;
+    min-height: 62px;
+    margin: 0;
+    padding: 7px 6px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    box-shadow: none;
+    color: #bed2e3;
+    font-size: 10px;
+    font-weight: 750;
+    line-height: 1.18;
+    letter-spacing: 0;
+    text-align: center;
+    white-space: normal;
+    transform: none;
+  }
+
+  #sidebar .menuButton:hover,
+  #sidebar .menuButton:active,
+  #sidebar .menuButton:focus-visible {
+    border: 0;
+    background: rgba(55, 145, 211, .14);
+    box-shadow: inset 0 -2px 0 #4db8f1;
+    color: #fff;
+    transform: none;
+  }
+
+  #sidebar .menuButton[aria-current="page"],
+  #sidebar .menuButton.module-actif,
+  #sidebar .menuButton.actif {
+    background: rgba(46, 129, 190, .18);
+    box-shadow: inset 0 -2px 0 #54c1fa;
+    color: #fff;
+  }
+
+  #sidebar .menuRetour {
+    order: -1;
+    color: #79c9f2;
+  }
+
+  .menu-retour-desktop {
+    display: none;
+  }
+
+  .menu-retour-mobile {
+    display: inline;
+  }
+
+  #retourInstructeurButton .menu-retour-desktop,
+  #retourInstructeurButton:not(:has(.menu-retour-mobile)) {
+    display: flex;
+  }
+
+  .gda-mobile-accueil {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 5px 2px max(16px, env(safe-area-inset-bottom));
+  }
+
+  .gda-mobile-accueil-entete {
+    padding: 14px 10px 18px;
+  }
+
+  .gda-mobile-accueil-entete > span {
+    display: block;
+    margin-bottom: 8px;
+    color: #65c8fa;
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .gda-mobile-accueil-entete h3 {
+    margin: 0 0 8px;
+    color: #f4f9ff;
+    font-size: clamp(23px, 7vw, 31px);
+    line-height: 1.12;
+  }
+
+  .gda-mobile-accueil-entete p {
+    margin: 0;
+    color: #9cb5ca;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .gda-mobile-cartes {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .gda-mobile-carte {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr) 20px;
+    align-items: center;
+    min-height: 76px;
+    padding: 11px 12px;
+    border: 1px solid rgba(71, 157, 220, .27);
+    border-radius: 15px;
+    background: linear-gradient(135deg, rgba(10, 39, 65, .96), rgba(5, 24, 43, .98));
+    color: #fff;
+    text-align: left;
+    box-shadow: 0 9px 22px rgba(0, 0, 0, .18);
+  }
+
+  .gda-mobile-carte:active {
+    border-color: rgba(94, 198, 251, .72);
+    transform: scale(.985);
+  }
+
+  .gda-mobile-carte-icone {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border: 1px solid rgba(99, 198, 245, .3);
+    border-radius: 12px;
+    background: rgba(29, 119, 174, .18);
+    font-size: 20px;
+  }
+
+  .gda-mobile-carte-texte {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .gda-mobile-carte-texte strong {
+    font-size: 15px;
+  }
+
+  .gda-mobile-carte-texte small {
+    overflow: hidden;
+    color: #91abc0;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .gda-mobile-carte-fleche {
+    color: #67c9f7;
+    font-size: 26px;
+    text-align: right;
+  }
+
+  .gda-mobile-deconnexion {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    margin-top: auto;
+    padding: 36px 0 6px;
+    color: #8fa5b8;
+    font-size: 11px;
+  }
+
+  #logoutButton {
+    display: none;
+  }
+
+  body.gda-mobile-accueil-actif .gda-mobile-deconnexion #logoutButton {
+    position: static;
+    display: flex;
+    width: 46px;
+    height: 46px;
+    margin: 0;
+  }
+
+  #workspace img,
+  #workspace video,
+  #workspace iframe {
+    max-width: 100%;
+  }
+
+  #workspace iframe,
+  .integration-specialisation-frame {
+    min-height: calc(100dvh - 180px);
+  }
+
+  #workspace button,
+  #workspace a[role="button"] {
+    min-height: 42px;
+  }
+
+  #workspace table {
+    min-width: 680px;
+  }
+
+  #workspace .table-responsive,
+  #workspace .tableau-conteneur,
+  #workspace .effectif-table-wrapper {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #workspace [class*="entete"],
+  #workspace [class*="header"] {
+    max-width: 100%;
+  }
+
+  #workspace [class*="modal"],
+  #workspace [class*="dialog"] {
+    max-width: calc(100vw - 20px);
+    max-height: calc(100dvh - 24px);
+  }
+
+  #defconCommandePanneau,
+  #notificationsAbsencePanneau,
+  #presenceEnLignePanneau {
+    top: calc(var(--gda-mobile-hauteur-entete) + 5px);
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-height: calc(100dvh - var(--gda-mobile-hauteur-entete) - 18px);
+    overflow-y: auto;
+  }
+
+  #notificationsGDA,
+  #gdaSauvegardeEtat {
+    right: 8px;
+    bottom: calc(var(--gda-mobile-hauteur-navigation) + 10px);
+    width: calc(100vw - 16px);
+  }
+
+  body.gda-mobile-accueil-actif #notificationsGDA,
+  body.gda-mobile-accueil-actif #gdaSauvegardeEtat {
+    bottom: 10px;
+  }
+}
+
+@media (max-width: 390px) {
+  #topbar {
+    padding-inline: 5px;
+  }
+
+  #smallLogo {
+    display: block;
+    width: 34px;
+    height: 34px;
+  }
+
+  .defcon-entete {
+    min-width: 64px;
+    max-width: 88px;
+  }
+
+  #userInfo {
+    max-width: 65px;
+  }
+
+  #sidebar .menuButton {
+    flex-basis: 72px;
+    min-width: 72px;
+    font-size: 9px;
+  }
+}

@@ -6,7 +6,10 @@ let parametresSiteConfiguration = {
   heureActualisation: "20:00",
   themeActif: "gda-classique"
 };
-let parametresSiteThemes = [{ id: "gda-classique", nom: "GDA Classique", description: "Interface officielle actuelle de l’intranet GDA." }];
+let parametresSiteThemes = [
+  { id: "gda-classique", nom: "GDA Classique", description: "Interface officielle actuelle de l’intranet GDA." },
+  { id: "theme-test", nom: "Thème Test", description: "Interface PC moderne, aérée et organisée en cartes." }
+];
 let parametresSiteLiens = [];
 let parametresSitePeutGerer = false;
 let parametresSiteCharges = false;

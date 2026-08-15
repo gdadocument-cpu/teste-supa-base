@@ -52,6 +52,11 @@ const THEMES_SITE = [
     nom: "GDA Classique",
     description: "Interface officielle actuelle de l’intranet GDA.",
   },
+  {
+    id: "theme-test",
+    nom: "Thème Test",
+    description: "Interface PC moderne, aérée et organisée en cartes.",
+  },
 ]
 
 const json = (body: unknown, status = 200) =>

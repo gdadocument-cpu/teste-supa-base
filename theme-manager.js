@@ -3,11 +3,18 @@
 
   const THEME_PAR_DEFAUT = "gda-classique";
   const CLE_THEME_CACHE = "gdaThemeGlobalActif";
-  let themesDisponibles = [{
-    id: THEME_PAR_DEFAUT,
-    nom: "GDA Classique",
-    description: "Interface officielle actuelle de l’intranet GDA."
-  }];
+  let themesDisponibles = [
+    {
+      id: THEME_PAR_DEFAUT,
+      nom: "GDA Classique",
+      description: "Interface officielle actuelle de l’intranet GDA."
+    },
+    {
+      id: "theme-test",
+      nom: "Thème Test",
+      description: "Interface PC moderne, aérée et organisée en cartes."
+    }
+  ];
 
   function identifiantThemeValide(valeur) {
     return /^[a-z0-9][a-z0-9-]{0,63}$/.test(String(valeur || ""));

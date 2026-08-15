@@ -407,6 +407,7 @@ function extraireActionCorpsRequeteGDA(options) {
 }
 
 const ACTIONS_LECTURE_GDA = new Set([
+  "recupererTableauAccueil",
   "recupererTachesOfficiers",
   "recupererMaTacheOfficier",
   "recupererEffectif",
@@ -452,6 +453,9 @@ let sessionPrechargeeGDA = "";
 let sessionCacheHydrateGDA = "";
 let minuteurSauvegardeCacheGDA = null;
 const INVALIDATIONS_CACHE_GDA = {
+  creerAnnonceAccueil: ["recupererTableauAccueil"],
+  supprimerAnnonceAccueil: ["recupererTableauAccueil"],
+  definirDefcon: ["recupererTableauAccueil"],
   enregistrerTacheOfficier: ["recupererTachesOfficiers", "recupererMaTacheOfficier", "recupererNotifications"],
   prendreConnaissanceTacheOfficier: ["recupererMaTacheOfficier", "recupererNotifications"],
   appliquerGestionPersonnel: ["recupererGestionPersonnel", "recupererEffectif", "recupererEffectifPublic", "recupererDeparts"],
@@ -1824,6 +1828,9 @@ function afficherUtilisateur() {
   }
   initialiserDefconGDA(blocUtilisateur);
   appliquerVisibiliteModulesGDA();
+  if (typeof window.afficherTableauAccueilGDA === "function") {
+    window.afficherTableauAccueilGDA();
+  }
   if (typeof chargerPostItsInstructeurGDA === "function") {
     chargerPostItsInstructeurGDA();
   }
@@ -1936,6 +1943,7 @@ function utilisateurPeutAccederTachesOfficiersGDA() {
 }
 
 function utilisateurPeutGererDefconGDA() {
+  if (utilisateurEstVisiteurGDA()) return false;
   if (
     sessionStorage.getItem("proprietaireUtilisateur") === "true" ||
     sessionStorage.getItem("coproprietaireUtilisateur") === "true" ||
@@ -1952,7 +1960,10 @@ function utilisateurPeutGererDefconGDA() {
     .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase()
     .replace(/[^A-Z]/g, "");
-  return ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(grade);
+  return [
+    "LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT", "CAPITAINE",
+    "LIEUTENANT", "SOUSLIEUTENANT", "ASPIRANT"
+  ].includes(grade);
 }
 
 function utilisateurEstProprietaireOuCoproprietaireGDA() {
@@ -2248,6 +2259,9 @@ function appliquerVisibiliteModulesGDA() {
         </p>
       </section>
     `;
+    if (typeof window.afficherTableauAccueilGDA === "function") {
+      window.afficherTableauAccueilGDA();
+    }
   }
 }
 
@@ -2667,6 +2681,12 @@ function afficherAccueilMenuGDA(titre, message) {
       <p>${echapperHTML(message)}</p>
     </section>
   `;
+  if (
+    titre === "Bienvenue dans l’interface GDA" &&
+    typeof window.afficherTableauAccueilGDA === "function"
+  ) {
+    window.afficherTableauAccueilGDA();
+  }
   if (typeof chargerPostItsInstructeurGDA === "function") {
     chargerPostItsInstructeurGDA();
   }
@@ -2837,6 +2857,9 @@ async function definirDefconGDA(niveau) {
         : "DEFCON désactivé.",
       "succes"
     );
+    if (typeof window.actualiserTableauAccueilGDA === "function") {
+      window.actualiserTableauAccueilGDA(true);
+    }
   } catch (erreur) {
     afficherDefconGDA({ niveau: ancienNiveau });
     afficherNotificationGDA(erreur.message || "Impossible de modifier le DEFCON.", "erreur");

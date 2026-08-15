@@ -307,7 +307,7 @@ const authenticated = async (req: Request) => {
       const rangCible = rangGrade(member?.grade)
       return officer && rangAuteurNotes >= 0 && rangCible > rangAuteurNotes
     }
-    const peutGererDefcon = !visitor && (property || staff || ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(actorGradeNormalise))
+    const peutGererDefcon = officer
     const peutCommencerNouvelleSemaine = !visitor && (has("recommandations_nouvelle_semaine") ||
       ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(actorGradeNormalise))
     const gradeOfficierInstantane = normalise(ownMember?.grade).replace(/[^A-Z]/g, "")
@@ -494,6 +494,77 @@ const authenticated = async (req: Request) => {
           peutTerminer: base === "VALIDEE" && row.starts_on <= today && row.ends_on >= today,
         }
       })
+    }
+
+    const annoncesAccueilClient = async () => {
+      const maintenant = Date.now()
+      const { data, error } = await admin.from("home_announcements")
+        .select("id,title,body,announcement_type,created_by_profile_id,created_by_snapshot,automated,defcon_level,expires_at,created_at")
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(100)
+      if (error) throw error
+      return (data ?? [])
+        .filter((row: any) => !row.expires_at || new Date(row.expires_at).getTime() > maintenant)
+        .map((row: any) => ({
+          id: row.id,
+          titre: row.title,
+          description: row.body,
+          type: row.announcement_type,
+          auteur: row.created_by_snapshot || "Officier GDA",
+          automatique: row.automated === true,
+          niveauDefcon: row.defcon_level,
+          expireLe: row.expires_at || "",
+          creeLe: row.created_at,
+          peutSupprimer: officer && (officierSuperieur || row.created_by_profile_id === profile.id),
+        }))
+    }
+
+    const tableauAccueilClient = async (message = "") => {
+      const totalEffectif = (members ?? []).length
+      const disponibles = (members ?? []).filter((member: any) =>
+        !normalise(member.presence).includes("ABSENT")
+      ).length
+      const pourcentageDisponibles = totalEffectif
+        ? Math.round((disponibles / totalEffectif) * 100)
+        : 0
+
+      let rapportsEnAttente = 0
+      let absencesEnAttente = 0
+      let mesRapportsEnregistres = 0
+      if (officer) {
+        const [rapports, absences] = await Promise.all([
+          admin.from("reports").select("id", { count: "exact", head: true }).eq("status", "EN_ATTENTE"),
+          admin.from("absence_requests").select("id", { count: "exact", head: true }).eq("status", "EN_ATTENTE"),
+        ])
+        if (rapports.error) throw rapports.error
+        if (absences.error) throw absences.error
+        rapportsEnAttente = rapports.count ?? 0
+        absencesEnAttente = absences.count ?? 0
+      } else if (profile.member_id) {
+        const { count, error } = await admin.from("reports")
+          .select("id", { count: "exact", head: true })
+          .eq("member_id", profile.member_id)
+          .in("status", ["LU", "ARCHIVE"])
+        if (error) throw error
+        mesRapportsEnregistres = count ?? 0
+      }
+
+      return {
+        success: true,
+        message,
+        officier,
+        officierSuperieur,
+        statistiques: {
+          effectifActif: totalEffectif,
+          pourcentageDisponibles,
+          rapportsEnAttente,
+          absencesEnAttente,
+          mesRapportsEnregistres,
+        },
+        annonces: await annoncesAccueilClient(),
+        peutCreerAnnonce: officer,
+      }
     }
 
     const disponibilites = async (message = "") => {
@@ -957,6 +1028,50 @@ const authenticated = async (req: Request) => {
         })
       case "recupererEffectifPublic":
         return json({ success: true, membres: membresPublic, ...metadonneesEffectifGda(derniereVersionEffectif?.published_at, heurePublicationEffectif), peutActualiser: has("effectif_public_actualiser"), actualisationForcee: false })
+      case "recupererTableauAccueil":
+        return json(await tableauAccueilClient())
+      case "creerAnnonceAccueil": {
+        requireOfficer()
+        const titre = texte(payload.titre)
+        const description = texte(payload.description)
+        const type = normalise(payload.type)
+        if (!titre || titre.length > 120) throw new Error("Le titre doit contenir entre 1 et 120 caractères.")
+        if (!description || description.length > 1200) throw new Error("La description doit contenir entre 1 et 1 200 caractères.")
+        if (!["INFO", "IMPORTANT", "MISSION", "SUCCESS"].includes(type)) throw new Error("Type d’annonce invalide.")
+        const expiration = texte(payload.expireLe)
+        const expiresAt = expiration ? new Date(expiration) : null
+        if (expiresAt && (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now())) {
+          throw new Error("La date d’expiration doit être située dans le futur.")
+        }
+        const { error } = await admin.from("home_announcements").insert({
+          title: titre,
+          body: description,
+          announcement_type: type,
+          created_by_profile_id: profile.id,
+          created_by_snapshot: actorName,
+          expires_at: expiresAt ? expiresAt.toISOString() : null,
+        })
+        if (error) throw error
+        await audit("Annonce d’accueil ajoutée", titre, type)
+        return json(await tableauAccueilClient("Annonce publiée."))
+      }
+      case "supprimerAnnonceAccueil": {
+        requireOfficer()
+        const annonceId = nombre(payload.annonceId)
+        const { data: annonce, error: lectureError } = await admin.from("home_announcements")
+          .select("id,title,created_by_profile_id")
+          .eq("id", annonceId)
+          .eq("active", true)
+          .maybeSingle()
+        if (lectureError || !annonce) throw new Error("Annonce introuvable.")
+        if (!officierSuperieur && annonce.created_by_profile_id !== profile.id) {
+          throw new Error("Vous pouvez uniquement supprimer vos propres annonces.")
+        }
+        const { error } = await admin.from("home_announcements").delete().eq("id", annonce.id)
+        if (error) throw error
+        await audit("Annonce d’accueil supprimée", annonce.title)
+        return json(await tableauAccueilClient("Annonce supprimée."))
+      }
       case "recupererTachesOfficiers":
         return json(await tachesOfficiersClient())
       case "recupererMaTacheOfficier":
@@ -2426,11 +2541,28 @@ const authenticated = async (req: Request) => {
         return json({ success: true, message: "Archive supprimée." })
       }
       case "definirDefcon": {
-        if (!peutGererDefcon) throw new Error("Modification DEFCON réservée aux officiers supérieurs, au propriétaire et au Staff.")
+        if (!peutGererDefcon) throw new Error("Modification DEFCON réservée aux officiers.")
         const niveau = Math.max(0, Math.min(4, nombre(payload.niveau)))
         const modifieLe = new Date().toISOString()
+        const titreAnnonce = niveau ? `DEFCON N-${niveau} en cours` : "DEFCON désactivé"
+        const corpsAnnonce = niveau
+          ? `Le niveau DEFCON N-${niveau} est désormais actif. Changement effectué par ${actorName}.`
+          : `Le niveau DEFCON a été désactivé par ${actorName}.`
+        const { data: annonceDefcon, error: annonceError } = await admin.from("home_announcements").insert({
+          title: titreAnnonce,
+          body: corpsAnnonce,
+          announcement_type: niveau ? "IMPORTANT" : "SUCCESS",
+          created_by_profile_id: profile.id,
+          created_by_snapshot: actorName,
+          automated: true,
+          defcon_level: niveau,
+        }).select("id").single()
+        if (annonceError) throw annonceError
         const { error } = await admin.from("defcon_state").update({ level: niveau, updated_by_profile_id: profile.id, updated_at: modifieLe }).eq("singleton", true)
-        if (error) throw error
+        if (error) {
+          await admin.from("home_announcements").delete().eq("id", annonceDefcon.id)
+          throw error
+        }
         await audit("DEFCON modifié", texte(payload.niveau))
         return json({ success: true, defcon: { niveau, modifiePar: actorName, modifieLe }, message: niveau ? `DEFCON ${niveau} activé.` : "DEFCON désactivé." })
       }

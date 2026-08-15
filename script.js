@@ -1340,11 +1340,11 @@ loginForm.addEventListener("submit", async function(e) {
 
 async function tenterRestaurationDiscord() {
   if (window.gdaSupabase) {
+    const choixResterConnecte = sessionStorage.getItem("gdaResterConnecte");
+    const retourOAuth = choixResterConnecte === "0" || choixResterConnecte === "1";
     try {
       const session = await window.gdaSupabase.session();
       if (!session) return;
-      const choixResterConnecte = sessionStorage.getItem("gdaResterConnecte");
-      const retourOAuth = choixResterConnecte === "0" || choixResterConnecte === "1";
       if (!politiqueConnexionAutoriseRestaurationGDA(retourOAuth)) {
         await deconnecterUtilisateurGDA(false);
         return;
@@ -1391,6 +1391,18 @@ async function tenterRestaurationDiscord() {
     } catch (erreur) {
       console.error("Connexion Supabase refusée :", erreur);
       await deconnecterUtilisateurGDA(false);
+      const messageErreur = String(erreur?.message || "");
+      const ancienneSessionInvalide = !retourOAuth &&
+        /non-2xx|jwt|session|token|unauthorized|auth/i.test(messageErreur);
+      if (ancienneSessionInvalide) {
+        if (alertOverlay) alertOverlay.classList.remove("visible");
+        loginForm.style.display = "flex";
+        loading.style.display = "none";
+        username.disabled = false;
+        rememberDiscord.disabled = false;
+        loginButton.disabled = false;
+        return;
+      }
       afficherAccesRefuse(
         username.value.trim() || "Compte Discord",
         "Accès refusé",

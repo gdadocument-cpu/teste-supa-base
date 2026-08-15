@@ -52,6 +52,7 @@ let utilisateursEnLigne = [];
 let minuteurNotificationsAbsence = null;
 let notificationsAbsenceGDA = [];
 let minuteurPolitiqueSessionGDA = null;
+let menuOfficiersSuperieursOuvert = false;
 let menuOfficierOuvert = false;
 let menuEspaceGdaOuvert = false;
 let menuSpecialisationsOuvert = false;
@@ -232,6 +233,9 @@ function formaterDateHeureGDA(valeur, valeurVide) {
     deuxChiffres(date.getSeconds());
 }
 
+const officiersSuperieursButton = document.getElementById("officiersSuperieursButton");
+const tachesOfficiersButton = document.getElementById("tachesOfficiersButton");
+const retourOfficiersSuperieursButton = document.getElementById("retourOfficiersSuperieursButton");
 const officierGdaButton = document.getElementById("officierGdaButton");
 const retourOfficierButton = document.getElementById("retourOfficierButton");
 const espaceGdaButton = document.getElementById("espaceGdaButton");
@@ -257,6 +261,19 @@ const recommandationsObservationsButton = document.getElementById("recommandatio
 const administrationButton = document.getElementById("administrationButton");
 const retourAdministrationButton = document.getElementById("retourAdministrationButton");
 
+if (officiersSuperieursButton) {
+  officiersSuperieursButton.addEventListener("click", ouvrirMenuOfficiersSuperieursGDA);
+}
+if (tachesOfficiersButton) {
+  tachesOfficiersButton.addEventListener("click", function() {
+    if (typeof window.ouvrirTachesOfficiersGDA === "function") {
+      window.ouvrirTachesOfficiersGDA();
+    }
+  });
+}
+if (retourOfficiersSuperieursButton) {
+  retourOfficiersSuperieursButton.addEventListener("click", fermerMenuOfficiersSuperieursGDA);
+}
 if (officierGdaButton) {
   officierGdaButton.addEventListener("click", ouvrirMenuOfficierGDA);
 }
@@ -390,6 +407,7 @@ function extraireActionCorpsRequeteGDA(options) {
 }
 
 const ACTIONS_LECTURE_GDA = new Set([
+  "recupererTachesOfficiers",
   "recupererEffectif",
   "recupererRecommandationsObservations",
   "recupererEffectifPublic",
@@ -433,6 +451,7 @@ let sessionPrechargeeGDA = "";
 let sessionCacheHydrateGDA = "";
 let minuteurSauvegardeCacheGDA = null;
 const INVALIDATIONS_CACHE_GDA = {
+  enregistrerTacheOfficier: ["recupererTachesOfficiers"],
   appliquerGestionPersonnel: ["recupererGestionPersonnel", "recupererEffectif", "recupererEffectifPublic", "recupererDeparts"],
   modifierLogGestionPersonnel: ["recupererGestionPersonnel"],
   supprimerLogGestionPersonnel: ["recupererGestionPersonnel"],
@@ -546,6 +565,14 @@ async function actualiserModuleVisibleGDA(evenement) {
   const cibles = new Set(Array.isArray(detail.cibles) ? detail.cibles : []);
 
   const actualisateurs = {
+    "taches-officiers": {
+      action: "recupererTachesOfficiers",
+      executer: function () {
+        return typeof window.chargerTachesOfficiersGDA === "function"
+          ? window.chargerTachesOfficiersGDA(true)
+          : null;
+      }
+    },
     "effectif-officier": {
       action: "recupererEffectif",
       executer: function () {
@@ -1887,6 +1914,13 @@ function utilisateurEstOfficierSuperieurGDA() {
   return ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(grade);
 }
 
+function utilisateurPeutAccederTachesOfficiersGDA() {
+  return !utilisateurEstVisiteurGDA() && (
+    utilisateurEstProprietaireOuCoproprietaireGDA() ||
+    utilisateurEstOfficierSuperieurGDA()
+  );
+}
+
 function utilisateurPeutGererDefconGDA() {
   if (
     sessionStorage.getItem("proprietaireUtilisateur") === "true" ||
@@ -2006,6 +2040,7 @@ function appliquerVisibiliteModulesGDA() {
   appliquerModeVisiteurGDA();
   const visiteur = utilisateurEstVisiteurGDA();
   const officier = utilisateurEstOfficierGDA();
+  const accesOfficiersSuperieurs = utilisateurPeutAccederTachesOfficiersGDA();
   const specialisationInstructeur =
     utilisateurPossedeSpecialisationGDA("Instructeur");
   const accesSuivisFormation = utilisateurPeutConsulterSuivisFormationGDA();
@@ -2033,12 +2068,29 @@ function appliquerVisibiliteModulesGDA() {
   if (menuAdministrationOuvert && !accesStaffAdministration) {
     menuAdministrationOuvert = false;
   }
+  if (menuOfficiersSuperieursOuvert && !accesOfficiersSuperieurs) {
+    menuOfficiersSuperieursOuvert = false;
+  }
   const sousMenuOuvert =
+    menuOfficiersSuperieursOuvert ||
     menuOfficierOuvert ||
     menuEspaceGdaOuvert ||
     menuSpecialisationsOuvert ||
     menuLiensUtilesOuvert ||
     menuAdministrationOuvert;
+
+  const entreeOfficiersSuperieurs = document.getElementById("officiersSuperieursButton");
+  const tachesOfficiers = document.getElementById("tachesOfficiersButton");
+  const retourOfficiersSuperieurs = document.getElementById("retourOfficiersSuperieursButton");
+  if (entreeOfficiersSuperieurs) {
+    entreeOfficiersSuperieurs.hidden = !accesOfficiersSuperieurs || sousMenuOuvert;
+  }
+  if (tachesOfficiers) {
+    tachesOfficiers.hidden = !accesOfficiersSuperieurs || !menuOfficiersSuperieursOuvert;
+  }
+  if (retourOfficiersSuperieurs) {
+    retourOfficiersSuperieurs.hidden = !accesOfficiersSuperieurs || !menuOfficiersSuperieursOuvert;
+  }
   const boutonsOfficiers = [
     "effectifButton",
     "recommandationsObservationsButton",
@@ -2184,6 +2236,33 @@ function appliquerVisibiliteModulesGDA() {
   }
 }
 
+function ouvrirMenuOfficiersSuperieursGDA() {
+  if (!utilisateurPeutAccederTachesOfficiersGDA()) return;
+  menuOfficiersSuperieursOuvert = true;
+  menuOfficierOuvert = false;
+  menuEspaceGdaOuvert = false;
+  menuSpecialisationsOuvert = false;
+  menuInstructeurOuvert = false;
+  menuLiensUtilesOuvert = false;
+  menuAdministrationOuvert = false;
+  definirModuleGdaActif("");
+  appliquerVisibiliteModulesGDA();
+  afficherAccueilMenuGDA(
+    "Espace Officiers supérieurs",
+    "Sélectionnez Tâches officiers dans le menu de gauche."
+  );
+}
+
+function fermerMenuOfficiersSuperieursGDA() {
+  menuOfficiersSuperieursOuvert = false;
+  definirModuleGdaActif("");
+  appliquerVisibiliteModulesGDA();
+  afficherAccueilMenuGDA(
+    "Bienvenue dans l’interface GDA",
+    "Sélectionnez un espace dans le menu de gauche."
+  );
+}
+
 function ouvrirMenuAdministrationGDA() {
   const accesParametres = typeof utilisateurPeutGererParametresSiteGDA === "function" &&
     utilisateurPeutGererParametresSiteGDA();
@@ -2192,6 +2271,7 @@ function ouvrirMenuAdministrationGDA() {
     (!utilisateurAPermission("administration_staff") && !accesParametres)
   ) return;
 
+  menuOfficiersSuperieursOuvert = false;
   menuOfficierOuvert = false;
   menuEspaceGdaOuvert = false;
   menuSpecialisationsOuvert = false;
@@ -2234,6 +2314,7 @@ function fermerMenuAdministrationGDA() {
 
 function ouvrirMenuOfficierGDA() {
   if (!utilisateurEstOfficierGDA()) return;
+  menuOfficiersSuperieursOuvert = false;
   menuEspaceGdaOuvert = false;
   menuSpecialisationsOuvert = false;
   menuInstructeurOuvert = false;
@@ -2258,6 +2339,7 @@ function fermerMenuOfficierGDA() {
 }
 
 function ouvrirMenuEspaceGDA() {
+  menuOfficiersSuperieursOuvert = false;
   menuOfficierOuvert = false;
   menuSpecialisationsOuvert = false;
   menuInstructeurOuvert = false;
@@ -2313,6 +2395,7 @@ function ouvrirDemandeAbsenceGDA() {
 
 function ouvrirMenuSpecialisationsGDA() {
   if (!utilisateurPossedeSpecialisationVisibleGDA()) return;
+  menuOfficiersSuperieursOuvert = false;
   menuOfficierOuvert = false;
   menuEspaceGdaOuvert = false;
   menuLiensUtilesOuvert = false;
@@ -2345,6 +2428,7 @@ function fermerMenuSpecialisationsGDA() {
 }
 
 function ouvrirMenuLiensUtilesGDA() {
+  menuOfficiersSuperieursOuvert = false;
   menuOfficierOuvert = false;
   menuEspaceGdaOuvert = false;
   menuSpecialisationsOuvert = false;

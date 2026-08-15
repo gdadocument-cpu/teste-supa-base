@@ -29,6 +29,15 @@ const MEDAILLES = [
   "🏅 | Insigne Médecin", "🏅 | Insigne GSPR", "🏅 | Insigne Instructeur",
   "⚜️ | Ancien Gérant",
 ]
+const TACHES_OFFICIERS = [
+  "NA",
+  "GESTION_RAPPORT",
+  "RECO_MISSION_GDA_OBSERVATION_HDR",
+  "GESTION_DEMANDE_ENTRAINEMENT",
+  "OBSERVATION_EZ",
+  "GESTION_ABSENCES",
+  "GESTION_DOCUMENTS_GDA",
+]
 
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: corsHeaders })
@@ -77,6 +86,13 @@ const dateHeureFr = (value: unknown) => {
   }).format(date)
 }
 const aujourdHui = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(new Date())
+const debutSemaineParis = () => {
+  const aujourd = aujourdHui()
+  const date = new Date(`${aujourd}T12:00:00Z`)
+  const jour = date.getUTCDay() || 7
+  date.setUTCDate(date.getUTCDate() - jour + 1)
+  return date.toISOString().slice(0, 10)
+}
 const partiesDateHeureParis = (date: Date) => {
   const parties = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Paris",
@@ -266,6 +282,12 @@ const authenticated = async (req: Request) => {
     const peutGererDefcon = owner || permissions.has("role_staff_total") || ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(actorGradeNormalise)
     const peutCommencerNouvelleSemaine = has("recommandations_nouvelle_semaine") ||
       ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(actorGradeNormalise)
+    const gradeOfficierInstantane = normalise(ownMember?.grade).replace(/[^A-Z]/g, "")
+    const officierSuperieur = owner || permissions.has("role_staff_total") ||
+      ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(gradeOfficierInstantane)
+    const requireSeniorOfficer = () => {
+      if (!officierSuperieur) throw new Error("Accès réservé aux officiers supérieurs.")
+    }
     const peutGererParametres = owner || permissions.has("role_staff_total") ||
       (ownMember?.specializations ?? []).some((item: string) => normalise(item) === "GERANT GDA")
     const maximumGda = Math.max(1, Math.min(200, nombre(configurationSite?.max_gda) || 35))
@@ -457,6 +479,59 @@ const authenticated = async (req: Request) => {
         peutGerer: has("absences_gerer"),
         peutModifier: has("absences_gerer") || has("disponibilites_modifier_supprimer"),
         peutSupprimer: has("disponibilites_modifier_supprimer"),
+      }
+    }
+
+    const tachesOfficiersClient = async (message = "") => {
+      requireSeniorOfficer()
+      const semaine = debutSemaineParis()
+      const today = aujourdHui()
+      const { data: taches, error } = await admin
+        .from("officer_weekly_tasks")
+        .select("member_id,task_code,updated_at")
+        .eq("week_start", semaine)
+      if (error) throw error
+
+      const tacheParMembre = new Map((taches ?? []).map((item: any) => [item.member_id, item]))
+      const absentParMembre = new Set(
+        (absencesSuivis ?? [])
+          .filter((absence: any) => absence.member_id && absence.starts_on <= today && absence.ends_on >= today)
+          .map((absence: any) => absence.member_id)
+      )
+      const ligne = (member: any) => {
+        const tache = tacheParMembre.get(member.id)
+        return {
+          id: member.id,
+          nom: member.matricule,
+          grade: member.grade,
+          specialisations: member.specializations ?? [],
+          absent: absentParMembre.has(member.id) || normalise(member.presence).includes("ABSENT"),
+          tache: tache?.task_code ?? "NA",
+          modifieLe: tache?.updated_at ?? "",
+        }
+      }
+      const estSuperieur = (member: any) => ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"]
+        .includes(normalise(member.grade).replace(/[^A-Z]/g, ""))
+      const estOfficier = (member: any) => ["CAPITAINE", "LIEUTENANT", "SOUSLIEUTENANT", "ASPIRANT"]
+        .includes(normalise(member.grade).replace(/[^A-Z]/g, ""))
+      const estGerantSpecialisation = (member: any) => {
+        const specialisations = normalise((member.specializations ?? []).join("; "))
+        return specialisations.includes("RESPONSABLE INST") || specialisations.includes("RESPONSABLE MDC")
+      }
+      const parGrade = (a: any, b: any) => {
+        const difference = rangGrade(a.grade) - rangGrade(b.grade)
+        return difference || texte(a.nom).localeCompare(texte(b.nom), "fr", { sensitivity: "base" })
+      }
+
+      return {
+        success: true,
+        message,
+        semaine,
+        groupes: {
+          officiersSuperieurs: (members ?? []).filter(estSuperieur).sort(parGrade).map(ligne),
+          officiers: (members ?? []).filter(estOfficier).sort(parGrade).map(ligne),
+          gerantsSpecialisation: (members ?? []).filter(estGerantSpecialisation).sort(parGrade).map(ligne),
+        },
       }
     }
 
@@ -788,6 +863,49 @@ const authenticated = async (req: Request) => {
         })
       case "recupererEffectifPublic":
         return json({ success: true, membres: membresPublic, ...metadonneesEffectifGda(derniereVersionEffectif?.published_at, heurePublicationEffectif), peutActualiser: has("effectif_public_actualiser"), actualisationForcee: false })
+      case "recupererTachesOfficiers":
+        return json(await tachesOfficiersClient())
+      case "enregistrerTacheOfficier": {
+        requireSeniorOfficer()
+        const memberId = nombre(payload.memberId)
+        const tache = normalise(payload.tache).replace(/[^A-Z0-9_]/g, "_") || "NA"
+        if (!TACHES_OFFICIERS.includes(tache)) throw new Error("Tâche officier invalide.")
+        const member = (members ?? []).find((item: any) => item.id === memberId)
+        if (!member) throw new Error("Officier introuvable.")
+        const grade = normalise(member.grade).replace(/[^A-Z]/g, "")
+        const specialisations = normalise((member.specializations ?? []).join("; "))
+        const eligible = [
+          "LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT", "CAPITAINE",
+          "LIEUTENANT", "SOUSLIEUTENANT", "ASPIRANT",
+        ].includes(grade) || specialisations.includes("RESPONSABLE INST") || specialisations.includes("RESPONSABLE MDC")
+        if (!eligible) throw new Error("Cette personne ne fait pas partie de la liste des tâches officiers.")
+
+        const today = aujourdHui()
+        const absent = normalise(member.presence).includes("ABSENT") || (absencesSuivis ?? []).some((absence: any) =>
+          absence.member_id === member.id && absence.starts_on <= today && absence.ends_on >= today
+        )
+        if (absent) throw new Error("Impossible d’attribuer une tâche à une personne absente.")
+
+        const semaine = debutSemaineParis()
+        if (tache === "NA") {
+          const { error } = await admin.from("officer_weekly_tasks")
+            .delete().eq("week_start", semaine).eq("member_id", member.id)
+          if (error) throw error
+        } else {
+          const { error } = await admin.from("officer_weekly_tasks").upsert({
+            week_start: semaine,
+            member_id: member.id,
+            task_code: tache,
+            member_name_snapshot: member.matricule,
+            member_grade_snapshot: member.grade,
+            assigned_by_profile_id: profile.id,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "week_start,member_id" })
+          if (error) throw error
+        }
+        await audit("Tâche officier modifiée", member.matricule, tache)
+        return json(await tachesOfficiersClient("Tâche enregistrée pour la semaine."))
+      }
       case "actualiserEffectifPublic": { // publication volontaire de l'instantané retardé
         requirePermission("effectif_public_actualiser")
         const { data: version, error: versionError } = await admin.from("gda_roster_versions").insert({ published_by_profile_id: profile.id, note: "Actualisation depuis le site Supabase" }).select("id,published_at").single()

@@ -1,0 +1,258 @@
+.taches-officiers-module {
+  display: grid;
+  gap: 22px;
+  color: #eef7ff;
+}
+
+.taches-officiers-entete {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 26px;
+  border: 1px solid rgba(135, 166, 190, .32);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(5, 10, 16, .98), rgba(16, 28, 41, .94));
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .28), inset 0 0 28px rgba(138, 178, 207, .05);
+}
+
+.taches-officiers-kicker {
+  color: #7fd3ff;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1.7px;
+  text-transform: uppercase;
+}
+
+.taches-officiers-entete h3 {
+  margin: 7px 0 8px;
+  font-size: clamp(25px, 3vw, 36px);
+}
+
+.taches-officiers-entete p,
+.taches-officiers-groupe header p {
+  margin: 0;
+  color: #9db3c6;
+}
+
+.taches-officiers-semaine {
+  display: grid;
+  gap: 5px;
+  min-width: 270px;
+  padding: 14px 16px;
+  border: 1px solid rgba(119, 160, 192, .26);
+  border-radius: 13px;
+  background: rgba(4, 12, 21, .72);
+}
+
+.taches-officiers-semaine span {
+  color: #7f99ac;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+}
+
+.taches-officiers-semaine strong { font-size: 13px; }
+
+.taches-officiers-semaine button,
+.taches-officiers-erreur button {
+  justify-self: start;
+  margin-top: 7px;
+  padding: 8px 13px;
+  border: 1px solid rgba(90, 186, 239, .6);
+  border-radius: 9px;
+  background: rgba(14, 105, 157, .55);
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.taches-officiers-groupes { display: grid; gap: 22px; }
+
+.taches-officiers-groupe {
+  overflow: hidden;
+  border: 1px solid rgba(103, 139, 166, .3);
+  border-radius: 18px;
+  background: rgba(5, 20, 33, .87);
+  box-shadow: 0 15px 36px rgba(0, 0, 0, .22);
+}
+
+.taches-officiers-groupe > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 17px 21px;
+  background: linear-gradient(90deg, rgba(63, 6, 12, .96), rgba(28, 14, 20, .92));
+  border-bottom: 1px solid rgba(255, 92, 100, .2);
+}
+
+.taches-officiers-groupe-officiersSuperieurs > header {
+  background: linear-gradient(90deg, #050608, #15191f);
+  border-bottom-color: rgba(180, 196, 210, .2);
+}
+
+.taches-officiers-groupe-gerantsSpecialisation > header {
+  background: linear-gradient(90deg, rgba(18, 18, 29, .98), rgba(36, 24, 48, .94));
+  border-bottom-color: rgba(171, 116, 244, .25);
+}
+
+.taches-officiers-groupe h4 {
+  margin: 0 0 4px;
+  color: #ffb7bc;
+  font-size: 19px;
+  letter-spacing: .6px;
+}
+
+.taches-officiers-groupe-officiersSuperieurs h4 { color: #f1f5f8; }
+.taches-officiers-groupe-gerantsSpecialisation h4 { color: #d7b9ff; }
+
+.taches-officiers-groupe > header > span {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .28);
+  font-weight: 900;
+}
+
+.taches-officiers-ligne {
+  display: grid;
+  grid-template-columns: minmax(360px, .95fr) minmax(360px, 1.05fr);
+  align-items: center;
+  gap: 24px;
+  min-height: 76px;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(110, 145, 170, .17);
+}
+
+.taches-officiers-ligne:last-child { border-bottom: 0; }
+.taches-officiers-ligne:hover { background: rgba(47, 103, 139, .08); }
+.taches-officiers-ligne.est-absent { background: rgba(84, 23, 30, .15); }
+
+.taches-officiers-identite {
+  display: grid;
+  grid-template-columns: 42px 160px minmax(110px, 1fr);
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+}
+
+.taches-officiers-grade-icone {
+  width: 34px;
+  height: 46px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 7px rgba(0, 0, 0, .5));
+}
+
+.taches-officiers-grade {
+  display: inline-flex;
+  justify-content: center;
+  padding: 7px 11px;
+  border: 1px solid #e7353d;
+  border-radius: 999px;
+  background: rgba(129, 12, 20, .76);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.taches-officiers-grade-officier {
+  border-color: rgba(255, 171, 178, .78);
+  background: #f2a5ab;
+  color: #82131b;
+}
+
+.taches-officiers-nom { min-width: 0; }
+.taches-officiers-nom strong { display: block; font-size: 15px; }
+.taches-officiers-nom small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: #88a2b5;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taches-officiers-affectation {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.taches-officiers-affectation label { width: min(100%, 540px); }
+
+.taches-officiers-select {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 36px 9px 13px;
+  border: 1px solid rgba(99, 166, 205, .48);
+  border-radius: 10px;
+  background: #071a2b;
+  color: #eaf7ff;
+  font-weight: 750;
+}
+
+.taches-officiers-select:focus {
+  outline: 2px solid rgba(81, 190, 247, .45);
+  outline-offset: 2px;
+}
+
+.taches-officiers-select:disabled {
+  border-color: rgba(255, 95, 104, .28);
+  opacity: .52;
+  cursor: not-allowed;
+}
+
+.taches-officiers-absent {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 87, 98, .55);
+  border-radius: 999px;
+  background: rgba(112, 11, 20, .6);
+  color: #ffadb3;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.taches-officiers-vide,
+.taches-officiers-chargement,
+.taches-officiers-erreur {
+  margin: 0;
+  padding: 30px;
+  color: #9db3c6;
+  text-align: center;
+}
+
+@media (max-width: 980px) {
+  .taches-officiers-ligne { grid-template-columns: 1fr; gap: 10px; }
+  .taches-officiers-affectation { justify-content: stretch; }
+  .taches-officiers-affectation label { width: 100%; max-width: none; }
+}
+
+@media (max-width: 750px) {
+  .taches-officiers-module { gap: 14px; }
+  .taches-officiers-entete { display: grid; padding: 18px; }
+  .taches-officiers-semaine { min-width: 0; width: 100%; }
+  .taches-officiers-groupe { border-radius: 14px; }
+  .taches-officiers-groupe > header { padding: 14px 15px; }
+  .taches-officiers-groupe h4 { font-size: 16px; }
+  .taches-officiers-groupe header p { font-size: 11px; }
+  .taches-officiers-ligne { min-height: 0; padding: 13px 14px; }
+  .taches-officiers-identite {
+    grid-template-columns: 34px minmax(105px, 135px) minmax(90px, 1fr);
+    gap: 8px;
+  }
+  .taches-officiers-grade-icone { width: 28px; height: 38px; }
+  .taches-officiers-grade { padding: 6px 8px; font-size: 10px; }
+  .taches-officiers-nom strong { font-size: 13px; }
+  .taches-officiers-nom small { display: none; }
+  .taches-officiers-affectation { align-items: stretch; flex-direction: column; gap: 7px; }
+  .taches-officiers-absent { align-self: flex-start; }
+  .taches-officiers-select { min-height: 44px; font-size: 12px; }
+}

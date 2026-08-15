@@ -3,6 +3,16 @@
 }
 
 @media (max-width: 750px) {
+  .gda-mobile-carte[data-cible-menu="officiersSuperieursButton"] {
+    border-color: rgba(185, 202, 216, .5);
+    background: linear-gradient(135deg, rgba(5, 7, 10, .98), rgba(27, 32, 38, .96));
+    box-shadow: inset 0 0 20px rgba(215, 231, 242, .04);
+  }
+
+  .gda-mobile-carte[data-cible-menu="officiersSuperieursButton"] .gda-mobile-carte-icone {
+    border-color: rgba(205, 219, 230, .38);
+    background: rgba(255, 255, 255, .06);
+  }
   :root {
     --gda-mobile-hauteur-entete: 74px;
     --gda-mobile-hauteur-navigation: 78px;

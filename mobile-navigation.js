@@ -3,6 +3,7 @@
 
   const requeteMobile = window.matchMedia("(max-width: 750px)");
   const idsPrincipaux = [
+    "officiersSuperieursButton",
     "officierGdaButton",
     "espaceGdaButton",
     "specialisationsButton",
@@ -10,6 +11,7 @@
     "administrationButton"
   ];
   const descriptions = {
+    officiersSuperieursButton: "Répartir les tâches de la semaine",
     officierGdaButton: "Effectif, rapports et gestion du personnel",
     espaceGdaButton: "Votre effectif, vos rapports et vos absences",
     specialisationsButton: "Espaces Instructeur et Médecin",
@@ -17,6 +19,7 @@
     administrationButton: "Permissions, journaux et paramètres"
   };
   const descriptionsModules = {
+    tachesOfficiersButton: "Attribuer les responsabilités hebdomadaires",
     effectifButton: "Consulter et gérer l’effectif officier",
     recommandationsObservationsButton: "Suivre les recommandations de la semaine",
     disponibilitesButton: "Consulter les disponibilités et les absences",

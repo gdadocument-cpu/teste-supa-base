@@ -10,10 +10,11 @@
   <link rel="preconnect" href="https://script.googleusercontent.com">
 
   <!-- STYLE PRINCIPAL -->
-<link rel="stylesheet" href="style.css?v=20260815-1">
+<link rel="stylesheet" href="style.css?v=20260815-2">
 
   <!-- STYLE DE L'EFFECTIF -->
 <link rel="stylesheet" href="effectif.css?v=20260719-14">
+<link rel="stylesheet" href="taches-officiers.css?v=20260815-1">
 <link rel="stylesheet" href="recommandations-observations.css?v=20260719-3">
 <link rel="stylesheet" href="effectif-public.css?v=20260717-5">
 <link rel="stylesheet" href="disponibilites.css?v=20260717-8">
@@ -32,7 +33,7 @@
 <link rel="stylesheet" href="instructeur-suivis-highlight.css?v=20260717-15">
 <link rel="stylesheet" href="extensions.css?v=20260722-1">
 <link rel="stylesheet" href="instructeur-suivis-compact.css?v=20260719-1">
-<link rel="stylesheet" href="mobile.css?v=20260815-6">
+<link rel="stylesheet" href="mobile.css?v=20260815-7">
 </head>
 
 <body>
@@ -160,6 +161,34 @@
 
     <!-- MENU LATÉRAL -->
     <aside id="sidebar">
+
+      <button
+        id="officiersSuperieursButton"
+        class="menuButton menuButtonPrincipal"
+        type="button"
+        hidden
+      >
+        ♟️ Officiers supérieurs
+      </button>
+
+      <button
+        id="tachesOfficiersButton"
+        class="menuButton menuOfficiersSuperieurs"
+        type="button"
+        hidden
+      >
+        📌 Tâches officiers
+      </button>
+
+      <button
+        id="retourOfficiersSuperieursButton"
+        class="menuButton menuOfficiersSuperieurs menuRetour"
+        type="button"
+        hidden
+      >
+        <span class="menu-retour-desktop">← Retour</span>
+        <span class="menu-retour-mobile">⌂ Accueil</span>
+      </button>
 
       <button
         id="officierGdaButton"
@@ -473,10 +502,11 @@
 <script src="supabase-app.bundle.js?v=20260815-2"></script>
 
   <!-- Script principal : connexion et bureau -->
-<script src="script.js?v=20260815-2"></script>
+<script src="script.js?v=20260815-3"></script>
 
   <!-- Module Effectif -->
 <script src="effectif.js?v=20260809-1"></script>
+<script src="taches-officiers.js?v=20260815-1"></script>
 <script src="recommandations-observations.js?v=20260810-2"></script>
 <script src="effectif-public.js?v=20260809-1"></script>
 <script src="disponibilites.js?v=20260728-1"></script>
@@ -492,7 +522,7 @@
 <script src="instructeur-archives.js?v=20260722-1"></script>
 <script src="instructeur-rapports.js?v=20260722-1"></script>
 <script src="instructeur-suivis.js?v=20260808-3"></script>
-<script src="mobile-navigation.js?v=20260815-6"></script>
+<script src="mobile-navigation.js?v=20260815-7"></script>
 
 </body>
 </html>

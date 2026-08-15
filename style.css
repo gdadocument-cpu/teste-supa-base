@@ -1390,6 +1390,18 @@ h1 {
     inset 0 0 18px rgba(255, 92, 92, .12);
 }
 
+#officiersSuperieursButton {
+  border-color: rgba(187, 202, 215, .66);
+  background: linear-gradient(
+    135deg,
+    rgba(8, 10, 13, .98),
+    rgba(25, 29, 35, .96)
+  );
+  box-shadow:
+    0 0 15px rgba(0, 0, 0, .65),
+    inset 0 0 20px rgba(205, 222, 234, .06);
+}
+
 #specialisationsButton,
 #liensUtilesButton {
   border-color: rgba(255, 211, 76, .9);
@@ -1478,6 +1490,18 @@ h1 {
   box-shadow:
     0 0 24px rgba(255, 48, 58, .48),
     inset 0 0 18px rgba(255, 116, 116, .15);
+}
+
+#officiersSuperieursButton:hover {
+  border-color: #eef6fb;
+  background: linear-gradient(
+    135deg,
+    rgba(21, 25, 30, .99),
+    rgba(45, 51, 59, .98)
+  );
+  box-shadow:
+    0 0 22px rgba(145, 173, 194, .28),
+    inset 0 0 18px rgba(255, 255, 255, .06);
 }
 
 #specialisationsButton:hover,

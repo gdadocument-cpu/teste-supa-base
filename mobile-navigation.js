@@ -163,8 +163,13 @@
   }
 
   function actualiserNavigationMobile() {
-    const mobileActif = requeteMobile.matches && desktop.classList.contains("visible");
-    const accueilActif = mobileActif && navigationPrincipaleActive();
+    const bureauActif = desktop.classList.contains("visible");
+    const accueilPrincipalActif = bureauActif && navigationPrincipaleActive();
+    const mobileActif = requeteMobile.matches && bureauActif;
+    const accueilActif = mobileActif && accueilPrincipalActif;
+    if (logoutButton) {
+      logoutButton.hidden = !accueilPrincipalActif;
+    }
     const boutonsSousMenu = mobileActif && !accueilActif
       ? boutonsSousMenuDisponibles()
       : [];

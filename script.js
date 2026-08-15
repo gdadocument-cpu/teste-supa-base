@@ -379,6 +379,31 @@ function lireJetonUtilisateurSupabaseGDA() {
   return "";
 }
 
+function synchroniserJetonSessionSupabaseGDA(evenement, session) {
+  const nouveauJeton = session && session.access_token
+    ? String(session.access_token)
+    : "";
+  if (nouveauJeton && estJetonUtilisateurSupabaseGDA(nouveauJeton)) {
+    const ancienJeton = sessionStorage.getItem("sessionTokenDiscord") || "";
+    sessionStorage.setItem("sessionTokenDiscord", nouveauJeton);
+    if (ancienJeton && ancienJeton !== nouveauJeton) {
+      sessionCacheHydrateGDA = "";
+      sessionPrechargeeGDA = "";
+    }
+    return;
+  }
+  if (evenement === "SIGNED_OUT") {
+    sessionStorage.removeItem("sessionTokenDiscord");
+  }
+}
+
+if (
+  window.gdaSupabase &&
+  typeof window.gdaSupabase.surveillerSession === "function"
+) {
+  window.gdaSupabase.surveillerSession(synchroniserJetonSessionSupabaseGDA);
+}
+
 function extraireActionCorpsRequeteGDA(options) {
   const corps = options && options.body;
   if (!corps) return "";

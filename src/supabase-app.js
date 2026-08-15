@@ -22,6 +22,12 @@ window.gdaSupabase = Object.freeze({
     if (error) throw error
     return data.session
   },
+  surveillerSession(callback) {
+    const { data } = client.auth.onAuthStateChange((evenement, session) => {
+      callback(evenement, session)
+    })
+    return data.subscription
+  },
   async connexionDiscord(redirectTo) {
     const { data, error } = await client.auth.signInWithOAuth({
       provider: "discord",

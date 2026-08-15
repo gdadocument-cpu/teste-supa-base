@@ -17,13 +17,19 @@ listeBlancheButton?.addEventListener("click", function() {
 function utilisateurPeutGererListeBlancheGDA() {
   return sessionStorage.getItem("proprietaireUtilisateur") === "true" ||
     sessionStorage.getItem("coproprietaireUtilisateur") === "true" ||
-    (typeof utilisateurAPermission === "function" &&
-      utilisateurAPermission("role_staff_total"));
+    (typeof utilisateurPossedeRoleDirectGDA === "function" &&
+      utilisateurPossedeRoleDirectGDA("role_staff_total"));
+}
+
+function utilisateurPeutConsulterListeBlancheGDA() {
+  return (typeof utilisateurEstVisiteurGDA === "function" && utilisateurEstVisiteurGDA()) ||
+    utilisateurPeutGererListeBlancheGDA();
 }
 
 function utilisateurPeutSupprimerListeBlancheGDA() {
   return sessionStorage.getItem("proprietaireUtilisateur") === "true" ||
-    sessionStorage.getItem("coproprietaireUtilisateur") === "true";
+    sessionStorage.getItem("coproprietaireUtilisateur") === "true" ||
+    (typeof utilisateurPossedeRoleDirectGDA === "function" && utilisateurPossedeRoleDirectGDA("role_staff_total"));
 }
 
 async function requeteListeBlancheGDA(action, donnees) {
@@ -43,7 +49,7 @@ async function requeteListeBlancheGDA(action, donnees) {
 }
 
 async function chargerListeBlancheGDA() {
-  if (!utilisateurPeutGererListeBlancheGDA()) return;
+  if (!utilisateurPeutConsulterListeBlancheGDA()) return;
   definirModuleGdaActif("administration-liste-blanche");
   const workspace = document.getElementById("workspace");
   if (!workspace) return;
@@ -76,12 +82,12 @@ function afficherListeBlancheGDA() {
           <p>Autorisez des personnes extérieures à se connecter avec leur compte Discord.</p></div>
         <button id="listeBlancheActualiser" type="button">↻ Actualiser</button>
       </header>
-      <form id="listeBlancheAjout" class="liste-blanche-ajout">
+      ${utilisateurPeutGererListeBlancheGDA() ? `<form id="listeBlancheAjout" class="liste-blanche-ajout">
         <label><span>Identifiant *</span><input name="nouvelIdentifiant" maxlength="80" required autocomplete="off"></label>
         <label><span>Discord ID *</span><input name="discordId" inputmode="numeric" pattern="[0-9]{15,22}" required autocomplete="off"></label>
         <button type="submit">＋ Ajouter</button>
         <p class="liste-blanche-retour" aria-live="polite"></p>
-      </form>
+      </form>` : ""}
       <div class="liste-blanche-colonnes">
         <section class="liste-blanche-membres">
           <div class="liste-blanche-titre"><h4>Membres autorisés</h4><span>${listeBlanchePersonnes.length}</span></div>
@@ -103,8 +109,8 @@ function creerLigneListeBlancheGDA(personne) {
       ${personne.roleVisiteur ? '<b class="liste-blanche-badge visiteur">Visiteur</b>' :
         (personne.roleStaff ? '<b class="liste-blanche-badge">Staff</b>' : "")}
     </button>
-    <button type="button" class="liste-blanche-crayon" data-liste-blanche-editer="${echapperListeBlancheGDA(personne.id)}"
-      title="Modifier cette personne" aria-label="Modifier ${echapperListeBlancheGDA(personne.identifiant)}">✎</button>
+    ${utilisateurPeutGererListeBlancheGDA() ? `<button type="button" class="liste-blanche-crayon" data-liste-blanche-editer="${echapperListeBlancheGDA(personne.id)}"
+      title="Modifier cette personne" aria-label="Modifier ${echapperListeBlancheGDA(personne.identifiant)}">✎</button>` : ""}
   </div>`;
 }
 
@@ -112,11 +118,12 @@ function creerPanneauListeBlancheGDA() {
   const personne = listeBlanchePersonnes.find(p => p.id === listeBlancheSelectionId);
   if (!personne) return '<div class="liste-blanche-message">Sélectionnez une personne pour gérer ses permissions.</div>';
   const accordees = Array.isArray(personne.permissions) ? personne.permissions : [];
+  const peutGerer = utilisateurPeutGererListeBlancheGDA();
   const cases = listeBlanchePermissions.map(permission => {
     const staff = permission.cle === "role_staff_total";
     const visiteur = permission.cle === "role_visiteur";
     return `<label class="liste-blanche-permission ${staff ? "role-staff" : ""} ${visiteur ? "role-visiteur" : ""}">
-      <input type="checkbox" data-permission="${echapperListeBlancheGDA(permission.cle)}"
+      <input type="checkbox" data-permission="${echapperListeBlancheGDA(permission.cle)}" ${peutGerer ? "" : "disabled"}
         ${staff ? "data-role-staff-total" : ""} ${visiteur ? "data-role-visiteur" : ""} ${accordees.includes(permission.cle) ? "checked" : ""}>
       <span>${echapperListeBlancheGDA(permission.libelle || permission.nom || permission.cle)}</span>
     </label>`;
@@ -136,7 +143,7 @@ function creerPanneauListeBlancheGDA() {
     <div class="liste-blanche-permissions">${cases}</div>
     <div class="liste-blanche-actions">
       <span class="liste-blanche-retour" aria-live="polite"></span>
-      <button type="button" data-liste-blanche-enregistrer>Enregistrer</button>
+      ${peutGerer ? '<button type="button" data-liste-blanche-enregistrer>Enregistrer</button>' : ""}
       ${listeBlancheModeEdition ? '<button type="button" data-liste-blanche-annuler>Annuler</button>' +
         (peutSupprimer ? '<button type="button" class="danger" data-liste-blanche-supprimer>Supprimer</button>' : "") : ""}
     </div>

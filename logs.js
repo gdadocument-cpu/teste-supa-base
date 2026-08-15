@@ -9,12 +9,14 @@ let rechercheJournalActionsGDA = "";
 let filtreJournalActionsGDA = "";
 let journalActionsPeutSupprimerGDA = false;
 
+function utilisateurPeutConsulterLogsGDA() {
+  return (typeof utilisateurEstVisiteurGDA === "function" && utilisateurEstVisiteurGDA()) ||
+    (utilisateurAPermission("administration_staff") && utilisateurAPermission("administration_logs"));
+}
+
 if (logsButton) {
   logsButton.addEventListener("click", function () {
-    if (
-      !utilisateurAPermission("administration_staff") ||
-      !utilisateurAPermission("administration_logs")
-    ) return;
+    if (!utilisateurPeutConsulterLogsGDA()) return;
     definirModuleGdaActif("administration-logs");
     if (journalActionsChargeGDA) {
       afficherJournalActionsGDA();
@@ -25,10 +27,7 @@ if (logsButton) {
 }
 
 async function chargerJournalActionsGDA(forcer, silencieux) {
-  if (
-    !utilisateurAPermission("administration_staff") ||
-    !utilisateurAPermission("administration_logs")
-  ) return;
+  if (!utilisateurPeutConsulterLogsGDA()) return;
 
   if (forcer && typeof gdaForcerActualisation === "function") {
     gdaForcerActualisation("recupererJournalActions");
@@ -81,10 +80,7 @@ async function chargerJournalActionsGDA(forcer, silencieux) {
 
 function afficherJournalActionsGDA() {
   if (!moduleGdaEstActif("administration-logs")) return;
-  if (
-    !utilisateurAPermission("administration_staff") ||
-    !utilisateurAPermission("administration_logs")
-  ) return;
+  if (!utilisateurPeutConsulterLogsGDA()) return;
 
   const actions = Array.from(new Set(
     journalActionsGDA.map(function (log) {

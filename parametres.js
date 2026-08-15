@@ -14,8 +14,9 @@ let parametresSiteChargement = null;
 let parametresAjoutCategorie = "";
 
 function utilisateurPeutGererParametresSiteGDA() {
+  if (typeof utilisateurEstVisiteurGDA === "function" && utilisateurEstVisiteurGDA()) return false;
+  if (typeof utilisateurPossedeRoleDirectGDA === "function" && utilisateurPossedeRoleDirectGDA("role_staff_total")) return false;
   return utilisateurEstProprietaireOuCoproprietaireGDA() ||
-    utilisateurAPermission("role_staff_total") ||
     String(sessionStorage.getItem("specialisationUtilisateur") || "")
       .split(/[;,]/)
       .some(function (specialisation) {
@@ -154,7 +155,7 @@ if (parametresButton) {
 }
 
 async function ouvrirParametresSiteGDA() {
-  if (!utilisateurPeutGererParametresSiteGDA()) return;
+  if (!utilisateurPeutConsulterParametresSiteGDA()) return;
   definirModuleGdaActif("administration-parametres");
   const zone = document.getElementById("workspace");
   if (!zone) return;
@@ -170,7 +171,7 @@ async function ouvrirParametresSiteGDA() {
 function afficherParametresSiteGDA() {
   if (!moduleGdaEstActif("administration-parametres")) return;
   const zone = document.getElementById("workspace");
-  if (!zone || !parametresSitePeutGerer) return;
+  if (!zone) return;
   zone.innerHTML = `
     <section id="parametresSiteModule">
       <header class="parametres-entete">
@@ -191,6 +192,12 @@ function afficherParametresSiteGDA() {
       </div>
     </section>`;
   brancherParametresSiteGDA();
+  if (typeof appliquerModeVisiteurGDA === "function") appliquerModeVisiteurGDA();
+}
+
+function utilisateurPeutConsulterParametresSiteGDA() {
+  return (typeof utilisateurEstVisiteurGDA === "function" && utilisateurEstVisiteurGDA()) ||
+    utilisateurPeutGererParametresSiteGDA();
 }
 
 function creerSelectionThemesParametresGDA() {

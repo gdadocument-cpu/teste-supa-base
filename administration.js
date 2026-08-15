@@ -11,6 +11,7 @@ let administrationPermissions = [];
 let rechercheAdministration = "";
 let administrationPersonneOuverte = "";
 let administrationAuteurProprietaire = false;
+let administrationModeVisiteur = false;
 let administrationProprietaireNom = "Milo";
 let administrationChargee = false;
 
@@ -35,9 +36,11 @@ if (permissionsButton) {
 }
 
 async function chargerAdministration() {
+  const visiteur = typeof utilisateurEstVisiteurGDA === "function" && utilisateurEstVisiteurGDA();
   if (
-    !utilisateurAPermission("administration_staff") ||
-    !utilisateurAPermission("administration_permissions")
+    !visiteur &&
+    (!utilisateurAPermission("administration_staff") ||
+      !utilisateurAPermission("administration_permissions"))
   ) {
     appliquerVisibiliteAdministration();
     return;
@@ -81,6 +84,7 @@ async function chargerAdministration() {
       : [];
     administrationAuteurProprietaire =
       resultat.auteurProprietaire === true;
+    administrationModeVisiteur = resultat.visiteur === true || visiteur;
     administrationProprietaireNom =
       resultat.proprietaireNom || "Milo";
     rechercheAdministration = "";
@@ -103,7 +107,7 @@ function afficherAdministration() {
   if (!moduleGdaEstActif("administration-permissions")) return;
   const totalStaff = administrationUtilisateurs.filter(function (utilisateur) {
     return Array.isArray(utilisateur.permissions) &&
-      utilisateur.permissions.includes("administration_staff");
+      utilisateur.permissions.includes("role_staff_total");
   }).length;
 
   administrationWorkspace.innerHTML = `
@@ -114,9 +118,9 @@ function afficherAdministration() {
           <p>Attribuez les rôles et droits d’accès de chaque membre.</p>
         </div>
         <div class="administration-header-actions">
-          <button id="administrationSynchroniserSheets" type="button">
+          ${administrationModeVisiteur ? "" : `<button id="administrationSynchroniserSheets" type="button">
             ↻ Synchroniser Google Sheets
-          </button>
+          </button>`}
           <button id="administrationActualiser" type="button">
             ↻ Actualiser
           </button>
@@ -157,7 +161,7 @@ function afficherAdministration() {
     });
 
   document.getElementById("administrationSynchroniserSheets")
-    .addEventListener("click", synchroniserGoogleSheetsAdministration);
+    ?.addEventListener("click", synchroniserGoogleSheetsAdministration);
 
   document.getElementById("administrationRecherche")
     .addEventListener("input", function (evenement) {
@@ -313,7 +317,7 @@ function creerCasePermissionAdministration(permission, cochee, accesPermanent) {
         type="checkbox"
         data-permission="${echapperHTMLAdministration(cle)}"
         ${cochee ? "checked" : ""}
-        ${accesPermanent ? "disabled" : ""}
+        ${accesPermanent || administrationModeVisiteur ? "disabled" : ""}
       >
       <span>${echapperHTMLAdministration(permission.libelle || permission.nom || cle)}</span>
     </label>
@@ -421,8 +425,8 @@ function creerCarteAdministration(utilisateur) {
 
         <div class="administration-actions">
           <span class="administration-retour" aria-live="polite"></span>
-          ${accesPermanent
-            ? '<span class="administration-verrou">Tous les droits sont permanents</span>'
+          ${accesPermanent || administrationModeVisiteur
+            ? `<span class="administration-verrou">${administrationModeVisiteur ? "Mode Visiteur : consultation uniquement" : "Tous les droits sont permanents"}</span>`
             : `<button type="button" data-enregistrer-permissions="${index}">Enregistrer</button>`}
         </div>
 

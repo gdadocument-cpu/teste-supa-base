@@ -21,6 +21,7 @@ function sessionPeutAdministrerRapportsInstructeur() {
   );
   return sessionStorage.getItem("proprietaireUtilisateur") === "true" ||
     sessionStorage.getItem("coproprietaireUtilisateur") === "true" ||
+    (typeof utilisateurPossedeRoleDirectGDA === "function" && utilisateurPossedeRoleDirectGDA("role_staff_total")) ||
     specialisation.includes("RESPONSABLE INST");
 }
 

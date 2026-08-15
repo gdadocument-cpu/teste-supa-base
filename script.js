@@ -1862,18 +1862,22 @@ function utilisateurAPermission(permission) {
   ].includes(permission);
 }
 
+function utilisateurPossedeRoleDirectGDA(role) {
+  return obtenirPermissionsUtilisateur().includes(role);
+}
+
 function utilisateurEstVisiteurGDA() {
-  return utilisateurAPermission("role_visiteur") &&
+  return utilisateurPossedeRoleDirectGDA("role_visiteur") &&
     sessionStorage.getItem("proprietaireUtilisateur") !== "true" &&
     sessionStorage.getItem("coproprietaireUtilisateur") !== "true" &&
-    !utilisateurAPermission("role_staff_total");
+    !utilisateurPossedeRoleDirectGDA("role_staff_total");
 }
 
 function appliquerModeVisiteurGDA() {
   const visiteur = utilisateurEstVisiteurGDA();
   document.body.classList.toggle("mode-visiteur", visiteur);
   if (!visiteur) return;
-  document.querySelectorAll("form input, form textarea, form select, form button").forEach(function (controle) {
+  document.querySelectorAll("input, textarea, select, form button").forEach(function (controle) {
     const recherche = controle.matches('[type="search"], [data-recherche]') ||
       /recherch/i.test(controle.id || "") ||
       /recherch/i.test(controle.getAttribute("placeholder") || "");
@@ -1881,6 +1885,10 @@ function appliquerModeVisiteurGDA() {
       controle.disabled = true;
       controle.title = "Mode Visiteur : consultation uniquement";
     }
+  });
+  document.querySelectorAll('[contenteditable="true"]').forEach(function (controle) {
+    controle.setAttribute("contenteditable", "false");
+    controle.setAttribute("title", "Mode Visiteur : consultation uniquement");
   });
 }
 
@@ -1891,7 +1899,7 @@ new MutationObserver(function () {
 
 function utilisateurEstOfficierGDA() {
   if (utilisateurEstVisiteurGDA()) return true;
-  if (utilisateurAPermission("role_staff_total")) return true;
+  if (utilisateurPossedeRoleDirectGDA("role_staff_total")) return true;
   const grade = String(sessionStorage.getItem("gradeUtilisateur") || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -1911,7 +1919,7 @@ function utilisateurEstOfficierGDA() {
 
 function utilisateurEstOfficierSuperieurGDA() {
   if (utilisateurEstVisiteurGDA()) return true;
-  if (utilisateurAPermission("role_staff_total")) return true;
+  if (utilisateurPossedeRoleDirectGDA("role_staff_total")) return true;
   const grade = String(sessionStorage.getItem("gradeUtilisateur") || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -1921,7 +1929,7 @@ function utilisateurEstOfficierSuperieurGDA() {
 }
 
 function utilisateurPeutAccederTachesOfficiersGDA() {
-  return !utilisateurEstVisiteurGDA() && (
+  return utilisateurEstVisiteurGDA() || (
     utilisateurEstProprietaireOuCoproprietaireGDA() ||
     utilisateurEstOfficierSuperieurGDA()
   );
@@ -1931,7 +1939,7 @@ function utilisateurPeutGererDefconGDA() {
   if (
     sessionStorage.getItem("proprietaireUtilisateur") === "true" ||
     sessionStorage.getItem("coproprietaireUtilisateur") === "true" ||
-    utilisateurAPermission("role_staff_total")
+    utilisateurPossedeRoleDirectGDA("role_staff_total")
   ) {
     return true;
   }
@@ -1949,8 +1957,7 @@ function utilisateurPeutGererDefconGDA() {
 
 function utilisateurEstProprietaireOuCoproprietaireGDA() {
   return sessionStorage.getItem("proprietaireUtilisateur") === "true" ||
-    sessionStorage.getItem("coproprietaireUtilisateur") === "true" ||
-    utilisateurAPermission("role_staff_total");
+    sessionStorage.getItem("coproprietaireUtilisateur") === "true";
 }
 
 function utilisateurEstProprietaireOuCoproprietaireReelGDA() {
@@ -1970,6 +1977,7 @@ function normaliserSpecialisationsUtilisateurGDA() {
 
 function utilisateurPossedeSpecialisationGDA(specialisation) {
   if (utilisateurEstVisiteurGDA()) return true;
+  if (utilisateurPossedeRoleDirectGDA("role_staff_total")) return true;
   const specialisations = normaliserSpecialisationsUtilisateurGDA();
   const cible = String(specialisation || "")
     .normalize("NFD")
@@ -2062,12 +2070,13 @@ function appliquerVisibiliteModulesGDA() {
   if (menuInstructeurOuvert && !accesEspaceInstructeur) {
     menuInstructeurOuvert = false;
   }
-  const accesParametresSite = !visiteur &&
+  const accesGestionParametresSite = !visiteur &&
     typeof utilisateurPeutGererParametresSiteGDA === "function" &&
     utilisateurPeutGererParametresSiteGDA();
-  const accesStaffAdministration = !visiteur && (
+  const accesParametresSite = visiteur || accesGestionParametresSite;
+  const accesStaffAdministration = visiteur || (
     utilisateurEstProprietaireOuCoproprietaireGDA() ||
-    utilisateurAPermission("role_staff_total") ||
+    utilisateurPossedeRoleDirectGDA("role_staff_total") ||
     utilisateurAPermission("administration_staff") ||
     accesParametresSite
   );
@@ -2201,19 +2210,19 @@ function appliquerVisibiliteModulesGDA() {
     permissions.hidden =
       !menuAdministrationOuvert ||
       !accesStaffAdministration ||
-      !utilisateurAPermission("administration_permissions");
+      (!visiteur && !utilisateurAPermission("administration_permissions"));
   }
   if (logs) {
     logs.hidden =
       !menuAdministrationOuvert ||
       !accesStaffAdministration ||
-      !utilisateurAPermission("administration_logs");
+      (!visiteur && !utilisateurAPermission("administration_logs"));
   }
   if (listeBlanche) {
     listeBlanche.hidden =
       !menuAdministrationOuvert ||
-      !(utilisateurEstProprietaireOuCoproprietaireReelGDA() ||
-        utilisateurAPermission("role_staff_total"));
+      !(visiteur || utilisateurEstProprietaireOuCoproprietaireReelGDA() ||
+        utilisateurPossedeRoleDirectGDA("role_staff_total"));
   }
   if (parametres) {
     parametres.hidden = !menuAdministrationOuvert || !accesParametresSite;
@@ -2270,11 +2279,13 @@ function fermerMenuOfficiersSuperieursGDA() {
 }
 
 function ouvrirMenuAdministrationGDA() {
+  const visiteur = utilisateurEstVisiteurGDA();
   const accesParametres = typeof utilisateurPeutGererParametresSiteGDA === "function" &&
     utilisateurPeutGererParametresSiteGDA();
   if (
-    utilisateurEstVisiteurGDA() ||
-    (!utilisateurAPermission("administration_staff") && !accesParametres)
+    !visiteur &&
+    !utilisateurAPermission("administration_staff") &&
+    !accesParametres
   ) return;
 
   menuOfficiersSuperieursOuvert = false;
@@ -2288,16 +2299,16 @@ function ouvrirMenuAdministrationGDA() {
   appliquerVisibiliteModulesGDA();
 
   const modules = [];
-  if (utilisateurAPermission("administration_permissions")) {
+  if (visiteur || utilisateurAPermission("administration_permissions")) {
     modules.push("Permissions");
   }
-  if (utilisateurAPermission("administration_logs")) {
+  if (visiteur || utilisateurAPermission("administration_logs")) {
     modules.push("Logs");
   }
-  if (utilisateurEstProprietaireOuCoproprietaireReelGDA()) {
+  if (visiteur || utilisateurEstProprietaireOuCoproprietaireReelGDA() || utilisateurPossedeRoleDirectGDA("role_staff_total")) {
     modules.push("Liste blanche");
   }
-  if (accesParametres) {
+  if (visiteur || accesParametres) {
     modules.push("Paramètres");
   }
   afficherAccueilMenuGDA(

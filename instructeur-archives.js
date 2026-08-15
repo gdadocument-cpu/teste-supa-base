@@ -17,7 +17,8 @@ window.invaliderCacheArchivesInstructeurGDA = function() {
 
 function sessionPeutSupprimerArchivesInstructeur() {
   return sessionStorage.getItem("proprietaireUtilisateur") === "true" ||
-    sessionStorage.getItem("coproprietaireUtilisateur") === "true";
+    sessionStorage.getItem("coproprietaireUtilisateur") === "true" ||
+    (typeof utilisateurPossedeRoleDirectGDA === "function" && utilisateurPossedeRoleDirectGDA("role_staff_total"));
 }
 
 function cleCacheArchivesInstructeur() {

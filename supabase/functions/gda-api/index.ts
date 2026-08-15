@@ -217,10 +217,17 @@ const authenticated = async (req: Request) => {
 
     const permissions = new Set((grants ?? []).map((grant: any) => grant.permission_code))
     const owner = normalise(profile.display_name) === "MILO" || profile.access_level === "owner"
-    const officer = owner || profile.access_level === "officer"
-    const has = (permission: string) => owner || permissions.has("role_staff_total") || permissions.has(permission)
+    const coOwner = !owner && permissions.has("role_coproprietaire")
+    const staff = !owner && !coOwner && permissions.has("role_staff_total")
+    const visitor = !owner && !coOwner && !staff && permissions.has("role_visiteur")
+    const property = owner || coOwner
+    const officer = !visitor && (property || staff || profile.access_level === "officer")
+    const canReadOfficer = officer || visitor
+    const has = (permission: string) => property || staff || (!visitor && permissions.has(permission))
     const requireOfficer = () => { if (!officer) throw new Error("Accès réservé aux officiers.") }
+    const requireOfficerRead = () => { if (!canReadOfficer) throw new Error("Consultation réservée aux officiers et aux visiteurs.") }
     const requirePermission = (permission: string) => { if (!has(permission)) throw new Error("Permission insuffisante.") }
+    const requireReadPermission = (permission: string) => { if (!visitor && !has(permission)) throw new Error("Permission de consultation insuffisante.") }
     const memberById = new Map((members ?? []).map((member: any) => [member.id, member]))
     const delayedById = new Map((delayed ?? []).filter((member: any) => member.member_id).map((member: any) => [member.member_id, member]))
     const delayedByName = new Map((delayed ?? []).map((member: any) => [normalise(member.matricule), member]))
@@ -229,8 +236,8 @@ const authenticated = async (req: Request) => {
     const specialisationsAuteur = normalise((ownMember?.specializations ?? []).join("; "))
     const roleGestionInstructeur = specialisationsAuteur.includes("RESPONSABLE INST") ||
       specialisationsAuteur.includes("INSTRUCTEUR EN CHEF")
-    const instructor = owner || (ownMember?.specializations ?? []).some((item: string) => normalise(item).includes("INSTRUCTEUR"))
-    const peutAdministrerSuivis = owner || permissions.has("role_staff_total") || roleGestionInstructeur
+    const instructor = !visitor && (property || staff || (ownMember?.specializations ?? []).some((item: string) => normalise(item).includes("INSTRUCTEUR")))
+    const peutAdministrerSuivis = !visitor && (property || staff || roleGestionInstructeur)
     const requireInstructor = () => { if (!instructor) throw new Error("Accès réservé aux instructeurs.") }
     const requireTrainingManager = () => {
       if (!peutAdministrerSuivis) {
@@ -246,7 +253,7 @@ const authenticated = async (req: Request) => {
       if (!trouve) throw new Error(message)
       return trouve
     }
-    const privilegieGestionPersonnel = owner || permissions.has("role_staff_total") || permissions.has("role_visiteur")
+    const privilegieGestionPersonnel = property || staff
     const exigerAutoriteGestionPersonnel = (cible: any) => {
       if (privilegieGestionPersonnel) return
       const rangAuteur = rangGrade(actorGrade)
@@ -291,20 +298,21 @@ const authenticated = async (req: Request) => {
     }
     const rangAuteurNotes = rangGrade(actorGrade)
     const peutNoterMembre = (member: any) => {
+      if (property || staff) return true
       const rangCible = rangGrade(member?.grade)
       return officer && rangAuteurNotes >= 0 && rangCible > rangAuteurNotes
     }
-    const peutGererDefcon = owner || permissions.has("role_staff_total") || ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(actorGradeNormalise)
-    const peutCommencerNouvelleSemaine = has("recommandations_nouvelle_semaine") ||
-      ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(actorGradeNormalise)
+    const peutGererDefcon = !visitor && (property || staff || ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(actorGradeNormalise))
+    const peutCommencerNouvelleSemaine = !visitor && (has("recommandations_nouvelle_semaine") ||
+      ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(actorGradeNormalise))
     const gradeOfficierInstantane = normalise(ownMember?.grade).replace(/[^A-Z]/g, "")
-    const officierSuperieur = owner || permissions.has("role_staff_total") ||
-      ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(gradeOfficierInstantane)
+    const officierSuperieur = !visitor && (property || staff ||
+      ["LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT"].includes(gradeOfficierInstantane))
     const requireSeniorOfficer = () => {
       if (!officierSuperieur) throw new Error("Accès réservé aux officiers supérieurs.")
     }
-    const peutGererParametres = owner || permissions.has("role_staff_total") ||
-      (ownMember?.specializations ?? []).some((item: string) => normalise(item) === "GERANT GDA")
+    const peutGererParametres = !visitor && !staff && (property ||
+      (ownMember?.specializations ?? []).some((item: string) => normalise(item) === "GERANT GDA"))
     const maximumGda = Math.max(1, Math.min(200, nombre(configurationSite?.max_gda) || 35))
     const heurePublicationEffectif = texte(configurationSite?.roster_publish_time).slice(0, 5) || "20:00"
     const suivisProbatoiresActifs = (suivisProbatoires ?? []).filter((suivi: any) => !!suivi.end_on)
@@ -498,7 +506,7 @@ const authenticated = async (req: Request) => {
     }
 
     const tachesOfficiersClient = async (message = "") => {
-      requireSeniorOfficer()
+      if (!visitor) requireSeniorOfficer()
       const semaine = debutSemaineParis()
       const today = aujourdHui()
       const { data: taches, error } = await admin
@@ -885,6 +893,11 @@ const authenticated = async (req: Request) => {
       }
     }
 
+    const actionLectureVisiteur = action === "presenceEnLigne" || action.startsWith("recuperer")
+    if (visitor && !actionLectureVisiteur) {
+      throw new Error("Mode Visiteur : cette action est disponible uniquement en consultation.")
+    }
+
     switch (action) {
       case "recupererVersionDonnees":
         return json({ success: true, revision: Date.now(), action: "supabase", defcon: defconClient })
@@ -922,7 +935,7 @@ const authenticated = async (req: Request) => {
           total: utilisateurs.length,
           permissions: [...permissions],
           proprietaire: owner,
-          coproprietaire: !owner && permissions.has("role_staff_total"),
+          coproprietaire: coOwner,
           peutGererDefcon,
           utilisateurs,
           defcon: defconClient,
@@ -934,7 +947,7 @@ const authenticated = async (req: Request) => {
           membres: membresClient,
           maximumGda,
           peutModifier: has("effectif_modifier"),
-          peutAjouter: owner || ["LIEUTENANT-COLONEL", "COMMANDANT", "VICE-COMMANDANT"].includes(normalise(ownMember?.grade)),
+          peutAjouter: !visitor && (property || staff || ["LIEUTENANT-COLONEL", "COMMANDANT", "VICE-COMMANDANT"].includes(normalise(ownMember?.grade))),
           grades: GRADES, sanctions: SANCTIONS, medailles: MEDAILLES, specialisations: SPECIALISATIONS,
         })
       case "recupererEffectifPublic":
@@ -1108,7 +1121,7 @@ const authenticated = async (req: Request) => {
         })
       }
       case "ajouterMembreEffectif": {
-        if (!owner) throw new Error("Ajout réservé au propriétaire.")
+        if (!property && !staff) throw new Error("Ajout réservé à la propriété et au Staff.")
         if ((members ?? []).length >= maximumGda) throw new Error(`L’effectif a atteint sa limite de ${maximumGda} GDA.`)
         const matricule = texte(payload.nom || payload.matricule)
         const { error } = await admin.from("members").insert({
@@ -1121,7 +1134,7 @@ const authenticated = async (req: Request) => {
         return json({ success: true, message: "Membre ajouté dans l’effectif officier." })
       }
       case "recupererRapports":
-        requireOfficer()
+        requireOfficerRead()
         return json({ success: true, membres: membresPublic.map((m: any) => ({ nom: m.nom, grade: m.grade, gradeEffectifOfficier: m.gradeEffectifOfficier })), rapports: await rapportsClient(), peutValider: officer, peutArchiver: has("rapports_gerer"), peutSupprimer: has("rapports_supprimer") })
       case "recupererMesRapports":
         return json({ success: true, message: "", nom: actorName, grade: actorGrade, rapports: await rapportsClient(true) })
@@ -1289,7 +1302,7 @@ const authenticated = async (req: Request) => {
         return json({ success: true, message: "Demande mise à jour.", nom: actorName, grade: actorGrade, demandes: await demandesClient(true) })
       }
       case "recupererDisponibilites":
-        requireOfficer()
+        requireOfficerRead()
         return json(await disponibilites())
       case "traiterDemandeAbsence": {
         requirePermission("absences_gerer")
@@ -1381,7 +1394,7 @@ const authenticated = async (req: Request) => {
         return json(await notificationsAbsenceClient())
       }
       case "recupererDeparts": {
-        requireOfficer()
+        requireOfficerRead()
         return json(await departsDonnees())
       }
       case "ajouterDepart": {
@@ -1443,7 +1456,7 @@ const authenticated = async (req: Request) => {
         return json(await departsDonnees(action === "supprimerDepart" ? "Dossier supprimé." : "Dossier modifié."))
       }
       case "recupererRecommandationsObservations": {
-        requireOfficer()
+        requireOfficerRead()
         const { data, error } = await admin.from("recommendations_observations").select("*,profiles!recommendations_observations_recorded_by_profile_id_fkey(display_name)").order("created_at", { ascending: false })
         if (error) throw error
         const historique = (data ?? []).map((row: any) => ({ id: row.external_id, date: dateFr(row.occurred_on), personne: row.matricule_snapshot, grade: row.grade_snapshot || "", type: row.entry_type, nature: row.nature || "", emetteur: row.transmitted_by || "", raison: row.reason || "", enregistrePar: row.profiles?.display_name || row.recorded_by_snapshot || "", creeLe: dateHeureFr(row.created_at) }))
@@ -1489,7 +1502,7 @@ const authenticated = async (req: Request) => {
         return json({ success: true, message: "Les compteurs ont été remis à zéro." })
       }
       case "recupererGestionPersonnel": {
-        requireOfficer()
+        requireOfficerRead()
         return json(await gestionPersonnelDonnees())
       }
       case "appliquerGestionPersonnel": {
@@ -1659,7 +1672,7 @@ const authenticated = async (req: Request) => {
         return json(await gestionPersonnelDonnees("Ligne supprimée."))
       }
       case "recupererListeBlanche": {
-        requirePermission("administration_permissions")
+        requireReadPermission("administration_permissions")
         const [{ data, error }, { data: permissionRows }, { data: profileRows }, { data: grantRows }] = await Promise.all([
           admin.from("whitelist").select("*").order("created_at", { ascending: false }),
           admin.from("permissions").select("code,label").order("code"),
@@ -1673,7 +1686,7 @@ const authenticated = async (req: Request) => {
           const assigned = linked ? (grantRows ?? []).filter((grant: any) => grant.profile_id === linked.id).map((grant: any) => grant.permission_code) : []
           return { id: row.external_id, identifiant: row.login_identifier, discordId: row.discord_id, actif: row.active, permissions: assigned, roleStaff: assigned.includes("role_staff_total"), roleVisiteur: assigned.includes("role_visiteur"), creeLe: dateHeureFr(row.created_at), modifieLe: dateHeureFr(row.updated_at) }
         })
-        return json({ success: true, personnes, permissions: (permissionRows ?? []).map((item: any) => ({ cle: item.code, libelle: item.label })), peutModifier: true, peutSupprimer: owner })
+        return json({ success: true, personnes, permissions: (permissionRows ?? []).filter((item: any) => item.code !== "role_coproprietaire").map((item: any) => ({ cle: item.code, libelle: item.label })), peutModifier: !visitor, peutSupprimer: property || staff })
       }
       case "ajouterListeBlanche":
       case "modifierListeBlanche":
@@ -1738,14 +1751,14 @@ const authenticated = async (req: Request) => {
         return json({ success: true, message: action === "ajouterListeBlanche" ? "Personne ajoutée à la liste blanche." : "Liste blanche et permissions modifiées.", permissions: requested })
       }
       case "recupererJournalActions": {
-        requirePermission("administration_logs")
+        requireReadPermission("administration_logs")
         const { data, error } = await admin.from("audit_logs").select("*").order("occurred_at", { ascending: false }).limit(1000)
         if (error) throw error
-        return json({ success: true, logs: (data ?? []).map((row: any) => ({ ligne: row.id, date: dateHeureFr(row.occurred_at), auteur: row.actor_name_snapshot || "", grade: row.actor_grade_snapshot || "", action: row.action, cible: row.target || "", details: row.details || "" })), peutSupprimer: owner })
+        return json({ success: true, logs: (data ?? []).map((row: any) => ({ ligne: row.id, date: dateHeureFr(row.occurred_at), auteur: row.actor_name_snapshot || "", grade: row.actor_grade_snapshot || "", action: row.action, cible: row.target || "", details: row.details || "" })), peutSupprimer: !visitor && (property || staff) })
       }
       case "supprimerJournalAction":
       case "viderJournalActions": {
-        if (!owner) throw new Error("Suppression des logs réservée au propriétaire.")
+        if (!property && !staff) throw new Error("Suppression des logs réservée à la propriété et au Staff.")
         const { error } = action === "viderJournalActions"
           ? await admin.from("audit_logs").delete().gt("id", 0)
           : await admin.from("audit_logs").delete().eq("id", nombre(payload.ligne))
@@ -1835,19 +1848,19 @@ const authenticated = async (req: Request) => {
         return json(await parametresSiteDonnees("Lien supprimé."))
       }
       case "recupererAdministration": {
-        requirePermission("administration_permissions")
+        requireReadPermission("administration_permissions")
         const [{ data: allProfiles }, { data: allGrants }, { data: allPermissions }] = await Promise.all([
           admin.from("profiles").select("id,member_id,display_name,discord_id,access_level,active"),
           admin.from("profile_permissions").select("profile_id,permission_code"),
           admin.from("permissions").select("code,label").order("code"),
         ])
         return json({
-          success: true, auteurProprietaire: owner, auteurCoproprietaire: !owner && permissions.has("role_staff_total"), proprietaireNom: (allProfiles ?? []).find((item: any) => item.access_level === "owner")?.display_name || "Milo",
-          permissions: (allPermissions ?? []).map((item: any) => ({ cle: item.code, libelle: item.label })),
+          success: true, auteurProprietaire: owner, auteurCoproprietaire: coOwner, visiteur, proprietaireNom: (allProfiles ?? []).find((item: any) => item.access_level === "owner")?.display_name || "Milo",
+          permissions: (allPermissions ?? []).filter((item: any) => item.code !== "role_coproprietaire").map((item: any) => ({ cle: item.code, libelle: item.label })),
           utilisateurs: (allProfiles ?? []).map((item: any) => ({
             id: item.id, nom: item.display_name, grade: delayedById.get(item.member_id)?.grade ?? memberById.get(item.member_id)?.grade ?? "Visiteur",
             discordId: item.discord_id, niveauAcces: item.access_level, actif: item.active,
-            proprietaire: item.access_level === "owner" || normalise(item.display_name) === "MILO", coproprietaire: item.access_level !== "owner" && (allGrants ?? []).some((grant: any) => grant.profile_id === item.id && grant.permission_code === "role_staff_total"),
+            proprietaire: item.access_level === "owner" || normalise(item.display_name) === "MILO", coproprietaire: item.access_level !== "owner" && (allGrants ?? []).some((grant: any) => grant.profile_id === item.id && grant.permission_code === "role_coproprietaire"),
             permissions: (allGrants ?? []).filter((grant: any) => grant.profile_id === item.id).map((grant: any) => grant.permission_code),
           })),
         })
@@ -1895,11 +1908,20 @@ const authenticated = async (req: Request) => {
       case "enregistrerPermissions":
       case "definirCoproprietaire":
       case "transfererPropriete": {
-        if (!owner && !permissions.has("role_staff_total")) throw new Error("Action réservée à la propriété.")
         const { data: target, error } = await admin.from("profiles").select("id,display_name,access_level").ilike("display_name", texte(payload.personne)).maybeSingle()
         if (error || !target) throw new Error("Utilisateur introuvable.")
         if (action === "enregistrerPermissions") {
+          if (!property && !staff) throw new Error("Modification des permissions réservée à la propriété et au Staff.")
+          const { data: targetProperty } = await admin.from("profile_permissions")
+            .select("permission_code").eq("profile_id", target.id).eq("permission_code", "role_coproprietaire").maybeSingle()
+          if (target.access_level === "owner" || targetProperty) {
+            throw new Error("Les droits de la propriété ne se modifient pas depuis les permissions ordinaires.")
+          }
           const requested = texte(payload.permissions).split(",").map(texte).filter(Boolean)
+            .filter((code) => code !== "role_coproprietaire")
+          if (requested.includes("role_staff_total") && requested.includes("role_visiteur")) {
+            throw new Error("Une personne ne peut pas être Staff et Visiteur en même temps.")
+          }
           await admin.from("profile_permissions").delete().eq("profile_id", target.id)
           if (requested.length) {
             const { error: grantError } = await admin.from("profile_permissions").insert(requested.map((code) => ({ profile_id: target.id, permission_code: code, granted_by_profile_id: profile.id })))
@@ -1909,11 +1931,13 @@ const authenticated = async (req: Request) => {
           return json({ success: true, message: "Permissions enregistrées.", permissions: requested })
         }
         if (action === "definirCoproprietaire") {
+          if (!owner) throw new Error("Seul le propriétaire peut nommer ou retirer un co-propriétaire.")
           const active = bool(payload.actif)
           if (active) {
-            await admin.from("profile_permissions").upsert({ profile_id: target.id, permission_code: "role_staff_total", granted_by_profile_id: profile.id })
+            await admin.from("profile_permissions").delete().eq("profile_id", target.id).in("permission_code", ["role_staff_total", "role_visiteur"])
+            await admin.from("profile_permissions").upsert({ profile_id: target.id, permission_code: "role_coproprietaire", granted_by_profile_id: profile.id })
           } else {
-            await admin.from("profile_permissions").delete().eq("profile_id", target.id).eq("permission_code", "role_staff_total")
+            await admin.from("profile_permissions").delete().eq("profile_id", target.id).eq("permission_code", "role_coproprietaire")
           }
           return json({ success: true, message: active ? "Co-propriétaire nommé." : "Co-propriétaire retiré.", coproprietaire: active, permissions: [] })
         }
@@ -1925,12 +1949,12 @@ const authenticated = async (req: Request) => {
       case "recupererArchivesInstructeur": {
         const { data, error } = await admin.from("instructor_archives").select("*").order("created_at", { ascending: false })
         if (error) throw error
-        return json({ success: true, archives: (data ?? []).map((row: any) => ({ ligne: row.id, id: row.external_id, matricule: row.matricule_snapshot, steamId: row.steam_id || "", discordId: row.discord_id || "", rapports: row.reports_count, prisesService: row.service_count, dateFin: dateFr(row.ended_on), instructeur: row.instructor_snapshot || "", gerant: row.manager_snapshot || "", commentaire: row.comment || "", sanction: row.sanction || "", resultat: row.result || "", raison: row.reason || "", importeLe: dateHeureFr(row.imported_at), source: row.source || "" })), peutSupprimer: owner })
+        return json({ success: true, archives: (data ?? []).map((row: any) => ({ ligne: row.id, id: row.external_id, matricule: row.matricule_snapshot, steamId: row.steam_id || "", discordId: row.discord_id || "", rapports: row.reports_count, prisesService: row.service_count, dateFin: dateFr(row.ended_on), instructeur: row.instructor_snapshot || "", gerant: row.manager_snapshot || "", commentaire: row.comment || "", sanction: row.sanction || "", resultat: row.result || "", raison: row.reason || "", importeLe: dateHeureFr(row.imported_at), source: row.source || "" })), peutSupprimer: !visitor && (property || staff) })
       }
       case "recupererRapportsInstructeur": {
         const { data, error } = await admin.from("instructor_reports").select("*").order("submitted_at", { ascending: false })
         if (error) throw error
-        return json({ success: true, rapports: (data ?? []).map(rapportInstructeurClient), peutAdministrer: officer || instructor, peutModifier: officer || instructor, peutSupprimer: owner })
+        return json({ success: true, rapports: (data ?? []).map(rapportInstructeurClient), peutAdministrer: !visitor && (officer || instructor), peutModifier: !visitor && (officer || instructor), peutSupprimer: !visitor && (property || staff) })
       }
       case "verifierMatriculeRapportTestInstructeur": {
         requireInstructor()
@@ -2037,7 +2061,7 @@ const authenticated = async (req: Request) => {
         return json({ success: true, message: "Suivi enregistré." })
       }
       case "recupererCandidatsRapportFormationInstructeur": {
-        requireInstructor()
+        if (!visitor) requireInstructor()
         const { data: suivis, error: suivisError } = await admin
           .from("training_followups")
           .select("external_id,matricule_snapshot,steam_id,discord_id")
@@ -2175,7 +2199,7 @@ const authenticated = async (req: Request) => {
         return json({ success: true, message: "Rapport Instructeur modifié.", rapport: rapportInstructeurClient(updated) })
       }
       case "supprimerRapportInstructeur": {
-        if (!owner) throw new Error("Suppression réservée au propriétaire.")
+        if (!property && !staff) throw new Error("Suppression réservée à la propriété et au Staff.")
         const id = texte(payload.rapportId)
         const query = admin.from("instructor_reports").delete()
         const { error } = /^\d+$/.test(id) ? await query.eq("id", Number(id)) : await query.eq("external_id", id)
@@ -2389,7 +2413,7 @@ const authenticated = async (req: Request) => {
         return json({ success: true, message: "Suivi de formation mis à jour." })
       }
       case "supprimerArchiveInstructeur": {
-        if (!owner) throw new Error("Suppression réservée au propriétaire.")
+        if (!property && !staff) throw new Error("Suppression réservée à la propriété et au Staff.")
         const id = texte(payload.archiveId)
         const query = admin.from("instructor_archives").delete()
         const { error } = /^\d+$/.test(id) ? await query.eq("id", Number(id)) : await query.eq("external_id", id)

@@ -87,6 +87,7 @@ const authenticated = async (req: Request) => {
     ? "owner"
     : profile.access_level
   const grantedCodes = grants?.map((grant) => grant.permission_code) ?? []
+  const isCoOwner = accessLevel !== "owner" && grantedCodes.includes("role_coproprietaire")
   const permissionCodes = accessLevel === "owner"
     ? (allPermissions?.map((permission) => permission.code) ?? grantedCodes)
     : grantedCodes
@@ -102,7 +103,7 @@ const authenticated = async (req: Request) => {
       sanction: rosterMember?.sanction || "Clean",
       specialisations: rosterMember?.specializations ?? [],
       accessLevel,
-      coproprietaire: accessLevel !== "owner" && permissionCodes.includes("role_staff_total"),
+      coproprietaire: isCoOwner,
       permissions: permissionCodes,
     },
     defcon: {

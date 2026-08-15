@@ -263,6 +263,45 @@
     display: none !important;
   }
 
+  body.gda-mobile-sous-menu-accueil-actif #workspace {
+    margin-bottom: 70px;
+  }
+
+  body.gda-mobile-sous-menu-accueil-actif #sidebar {
+    right: 12px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: 12px;
+    justify-content: center;
+    width: auto;
+    height: auto;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  body.gda-mobile-sous-menu-accueil-actif #sidebar .menuButton:not(.menuRetour) {
+    display: none !important;
+  }
+
+  body.gda-mobile-sous-menu-accueil-actif #sidebar .menuRetour {
+    display: flex !important;
+    flex: 0 1 190px;
+    width: min(190px, calc(100vw - 24px));
+    min-width: 0;
+    max-width: 190px;
+    min-height: 48px;
+    padding: 9px 18px;
+    border: 1px solid rgba(91, 184, 239, .55);
+    border-radius: 999px;
+    background: rgba(3, 24, 42, .98);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .45), 0 0 15px rgba(46, 154, 220, .12);
+    color: #91d8fb;
+    font-size: 12px;
+  }
+
   #sidebar .menu-liens-dynamiques {
     display: contents;
   }
@@ -328,7 +367,8 @@
     display: flex;
   }
 
-  .gda-mobile-accueil {
+  .gda-mobile-accueil,
+  .gda-mobile-sous-menu-accueil {
     min-height: 100%;
     display: flex;
     flex-direction: column;

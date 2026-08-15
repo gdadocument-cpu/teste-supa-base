@@ -16,6 +16,26 @@
     liensUtilesButton: "Documents et ressources GDA",
     administrationButton: "Permissions, journaux et paramètres"
   };
+  const descriptionsModules = {
+    effectifButton: "Consulter et gérer l’effectif officier",
+    recommandationsObservationsButton: "Suivre les recommandations de la semaine",
+    disponibilitesButton: "Consulter les disponibilités et les absences",
+    rapportsButton: "Consulter et valider les rapports",
+    departButton: "Départs, licenciements et liste noire",
+    gestionPersonnelButton: "Historique et actions sur le personnel",
+    effectifMembreGdaButton: "Consulter l’effectif GDA",
+    rapportMembreGdaButton: "Créer et consulter vos rapports",
+    demandeAbsenceGdaButton: "Envoyer et suivre une demande d’absence",
+    instructeurButton: "Ouvrir l’espace de formation",
+    medecinButton: "Ouvrir l’espace médical GDA",
+    suivisFormationInstructeurButton: "Gérer les dossiers de formation",
+    rapportInstructeurButton: "Créer les rapports instructeur",
+    archivesInstructeurButton: "Consulter les anciennes formations",
+    permissionsButton: "Attribuer les rôles et les autorisations",
+    logsButton: "Consulter l’historique technique",
+    listeBlancheButton: "Gérer les accès à l’intranet",
+    parametresButton: "Configurer le fonctionnement du site"
+  };
 
   const desktop = document.getElementById("desktop");
   const sidebar = document.getElementById("sidebar");
@@ -31,6 +51,11 @@
   function boutonsPrincipauxDisponibles() {
     return idsPrincipaux
       .map(function (id) { return document.getElementById(id); })
+      .filter(boutonAffiche);
+  }
+
+  function boutonsSousMenuDisponibles() {
+    return Array.from(sidebar.querySelectorAll("button:not(.menuButtonPrincipal):not(.menuRetour)"))
       .filter(boutonAffiche);
   }
 
@@ -97,15 +122,73 @@
     }
   }
 
+  function construireAccueilSousMenuMobile(boutons) {
+    if (!boutons.length) return;
+
+    const panneauActuel = workspace.querySelector("#welcomePanel");
+    const titre = panneauActuel?.querySelector("h3")?.textContent?.trim() || "Choisissez un module";
+    const signature = boutons.map(function (bouton) { return bouton.id; }).join("|");
+    const accueilExistant = workspace.querySelector(".gda-mobile-sous-menu-accueil");
+    if (accueilExistant?.dataset.cibles === signature) return;
+
+    const cartes = boutons.map(function (bouton) {
+      const libelle = decomposerLibelle(bouton.textContent);
+      return `
+        <button class="gda-mobile-carte" type="button" data-cible-menu="${bouton.id}">
+          <span class="gda-mobile-carte-icone" aria-hidden="true">${libelle.icone}</span>
+          <span class="gda-mobile-carte-texte">
+            <strong>${libelle.titre}</strong>
+            <small>${descriptionsModules[bouton.id] || "Ouvrir ce module"}</small>
+          </span>
+          <span class="gda-mobile-carte-fleche" aria-hidden="true">›</span>
+        </button>`;
+    }).join("");
+
+    workspace.innerHTML = `
+      <section class="gda-mobile-sous-menu-accueil" data-cibles="${signature}" aria-labelledby="gdaMobileSousMenuTitre">
+        <header class="gda-mobile-accueil-entete">
+          <span>Modules disponibles</span>
+          <h3 id="gdaMobileSousMenuTitre">${titre}</h3>
+          <p>Choisissez l’onglet que vous souhaitez ouvrir.</p>
+        </header>
+        <div class="gda-mobile-cartes">${cartes}</div>
+      </section>`;
+
+    workspace.querySelectorAll("[data-cible-menu]").forEach(function (carte) {
+      carte.addEventListener("click", function () {
+        const cible = document.getElementById(carte.dataset.cibleMenu || "");
+        if (cible) cible.click();
+      });
+    });
+  }
+
   function actualiserNavigationMobile() {
     const mobileActif = requeteMobile.matches && desktop.classList.contains("visible");
     const accueilActif = mobileActif && navigationPrincipaleActive();
+    const boutonsSousMenu = mobileActif && !accueilActif
+      ? boutonsSousMenuDisponibles()
+      : [];
+    const accueilSousMenuActif = Boolean(
+      boutonsSousMenu.length &&
+      (workspace.querySelector("#welcomePanel") ||
+        workspace.querySelector(".gda-mobile-sous-menu-accueil"))
+    );
 
     document.body.classList.toggle("gda-mobile-actif", mobileActif);
     document.body.classList.toggle("gda-mobile-accueil-actif", accueilActif);
+    document.body.classList.toggle(
+      "gda-mobile-sous-menu-accueil-actif",
+      accueilSousMenuActif
+    );
 
     if (!mobileActif) {
       restaurerDeconnexion();
+      return;
+    }
+
+    if (accueilSousMenuActif) {
+      restaurerDeconnexion();
+      construireAccueilSousMenuMobile(boutonsSousMenu);
       return;
     }
 

@@ -1667,7 +1667,7 @@ const authenticated = async (req: Request) => {
         return json(await gestionPersonnelDonnees())
       }
       case "appliquerGestionPersonnel": {
-        requirePermission("personnel_historique_modifier")
+        requireOfficer()
         const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(payload.personne))
         if (!member) throw new Error("Membre introuvable.")
         exigerAutoriteGestionPersonnel(member)
@@ -2037,7 +2037,7 @@ const authenticated = async (req: Request) => {
           admin.from("permissions").select("code,label").order("code"),
         ])
         return json({
-          success: true, auteurProprietaire: owner, auteurCoproprietaire: coOwner, visiteur, proprietaireNom: (allProfiles ?? []).find((item: any) => item.access_level === "owner")?.display_name || "Milo",
+          success: true, auteurProprietaire: owner, auteurCoproprietaire: coOwner, visiteur: visitor, proprietaireNom: (allProfiles ?? []).find((item: any) => item.access_level === "owner")?.display_name || "Milo",
           permissions: (allPermissions ?? []).filter((item: any) => item.code !== "role_coproprietaire").map((item: any) => ({ cle: item.code, libelle: item.label })),
           utilisateurs: (allProfiles ?? []).map((item: any) => ({
             id: item.id, nom: item.display_name, grade: delayedById.get(item.member_id)?.grade ?? memberById.get(item.member_id)?.grade ?? "Visiteur",

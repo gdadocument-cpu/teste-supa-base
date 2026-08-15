@@ -48,6 +48,7 @@ const ICONES_ANNONCES = new Set([
   "help", "training", "rewards", "energy", "resources", "health", "incident", "climate", "deployment",
   "transport", "equipment", "grade", "distinction", "planning", "control", "ethics", "environment",
   "partners", "wellbeing",
+  "active-personnel", "edit", "network", "scan", "laboratory", "field-operations", "fuel", "delay",
 ])
 const LIBELLES_TACHES_OFFICIERS: Record<string, string> = {
   GESTION_RAPPORT: "Gestion des rapports",

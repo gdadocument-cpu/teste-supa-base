@@ -229,6 +229,85 @@
   text-align: center;
 }
 
+.rappel-tache-officier {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 15px;
+  width: min(760px, 100%);
+  margin-top: 24px;
+  padding: 16px 18px;
+  border: 1px solid rgba(91, 194, 247, .5);
+  border-radius: 15px;
+  background: linear-gradient(135deg, rgba(8, 41, 65, .96), rgba(9, 25, 43, .96));
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .24), inset 0 0 24px rgba(69, 181, 239, .06);
+  color: #eef8ff;
+  text-align: left;
+}
+
+.rappel-tache-officier.est-a-confirmer {
+  border-color: rgba(242, 193, 78, .72);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .24), 0 0 18px rgba(242, 193, 78, .1);
+}
+
+.rappel-tache-officier-icone {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(112, 208, 255, .42);
+  border-radius: 13px;
+  background: rgba(16, 94, 137, .42);
+  font-size: 22px;
+}
+
+.rappel-tache-officier-contenu { min-width: 0; }
+.rappel-tache-officier-contenu > span {
+  display: block;
+  color: #7fd3ff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.rappel-tache-officier-contenu strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 15px;
+  line-height: 1.35;
+}
+.rappel-tache-officier-contenu small {
+  display: block;
+  margin-top: 4px;
+  color: #8fa9bd;
+  font-size: 10px;
+}
+
+.rappel-tache-officier-bouton,
+.notification-tache-confirmer {
+  border: 1px solid rgba(90, 190, 241, .68);
+  border-radius: 9px;
+  background: rgba(16, 111, 163, .72);
+  color: #fff;
+  font-weight: 850;
+  cursor: pointer;
+}
+.rappel-tache-officier-bouton { min-height: 40px; padding: 9px 13px; }
+.rappel-tache-officier-bouton:hover,
+.notification-tache-confirmer:hover { background: rgba(22, 139, 201, .84); }
+.rappel-tache-officier-bouton:disabled { opacity: .6; cursor: wait; }
+.rappel-tache-officier-confirmee {
+  color: #78d9ad;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.notification-tache-confirmer {
+  margin-top: 8px;
+  padding: 6px 9px;
+  font-size: 10px;
+}
+
 @media (max-width: 980px) {
   .taches-officiers-ligne { grid-template-columns: 1fr; gap: 10px; }
   .taches-officiers-affectation { justify-content: stretch; }
@@ -255,4 +334,22 @@
   .taches-officiers-affectation { align-items: stretch; flex-direction: column; gap: 7px; }
   .taches-officiers-absent { align-self: flex-start; }
   .taches-officiers-select { min-height: 44px; font-size: 12px; }
+  .rappel-tache-officier {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 10px;
+    width: auto;
+    margin: 0 14px 15px;
+    padding: 13px;
+    border-radius: 13px;
+  }
+  #welcomePanel > .rappel-tache-officier { margin: 18px 0 0; }
+  .rappel-tache-officier-icone { width: 38px; height: 38px; border-radius: 11px; font-size: 19px; }
+  .rappel-tache-officier-contenu strong { font-size: 13px; }
+  .rappel-tache-officier-bouton,
+  .rappel-tache-officier-confirmee {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    text-align: center;
+  }
+  .rappel-tache-officier-bouton { width: 100%; min-height: 42px; }
 }

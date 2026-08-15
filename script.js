@@ -408,6 +408,7 @@ function extraireActionCorpsRequeteGDA(options) {
 
 const ACTIONS_LECTURE_GDA = new Set([
   "recupererTachesOfficiers",
+  "recupererMaTacheOfficier",
   "recupererEffectif",
   "recupererRecommandationsObservations",
   "recupererEffectifPublic",
@@ -451,7 +452,8 @@ let sessionPrechargeeGDA = "";
 let sessionCacheHydrateGDA = "";
 let minuteurSauvegardeCacheGDA = null;
 const INVALIDATIONS_CACHE_GDA = {
-  enregistrerTacheOfficier: ["recupererTachesOfficiers"],
+  enregistrerTacheOfficier: ["recupererTachesOfficiers", "recupererMaTacheOfficier", "recupererNotifications"],
+  prendreConnaissanceTacheOfficier: ["recupererMaTacheOfficier", "recupererNotifications"],
   appliquerGestionPersonnel: ["recupererGestionPersonnel", "recupererEffectif", "recupererEffectifPublic", "recupererDeparts"],
   modifierLogGestionPersonnel: ["recupererGestionPersonnel"],
   supprimerLogGestionPersonnel: ["recupererGestionPersonnel"],
@@ -1816,6 +1818,9 @@ function afficherUtilisateur() {
   afficherDefconGDA(lireDefconMemoriseGDA());
   initialiserPresenceEnLigne(blocUtilisateur);
   initialiserNotificationsAbsenceGDA(blocUtilisateur);
+  if (typeof window.initialiserRappelTacheOfficierGDA === "function") {
+    window.initialiserRappelTacheOfficierGDA();
+  }
   initialiserDefconGDA(blocUtilisateur);
   appliquerVisibiliteModulesGDA();
   if (typeof chargerPostItsInstructeurGDA === "function") {
@@ -2890,6 +2895,9 @@ async function actualiserNotificationsAbsenceGDA(silencieux) {
     if (!resultat.success) return;
     notificationsAbsenceGDA = Array.isArray(resultat.notifications) ? resultat.notifications : [];
     afficherNotificationsAbsenceGDA(Number(resultat.nonLues) || 0);
+    if (typeof window.actualiserRappelTacheOfficierGDA === "function") {
+      window.actualiserRappelTacheOfficierGDA();
+    }
   } catch (erreur) {
     console.warn("Notifications indisponibles :", erreur);
   }
@@ -2907,13 +2915,20 @@ function afficherNotificationsAbsenceGDA(nonLues) {
     <header><div><strong>Notifications</strong><span>${nonLues} non lue${nonLues > 1 ? "s" : ""}</span></div></header>
     <div class="notifications-absence-liste">
       ${notificationsAbsenceGDA.length ? notificationsAbsenceGDA.map(function (notification) {
-        return `<article class="notification-absence-item ${notification.lue ? "lue" : "non-lue"}"><span aria-hidden="true">${notification.type === "refus" ? "✕" : "✓"}</span><div><strong>${echapperHTML(notification.titre)}</strong><p>${echapperHTML(notification.message)}</p><small>${echapperHTML(formaterDateHeureGDA(notification.date))}</small></div></article>`;
+        return `<article class="notification-absence-item ${notification.lue ? "lue" : "non-lue"}"><span aria-hidden="true">${notification.tacheOfficier ? "📌" : notification.type === "refus" ? "✕" : "✓"}</span><div><strong>${echapperHTML(notification.titre)}</strong><p>${echapperHTML(notification.message)}</p><small>${echapperHTML(formaterDateHeureGDA(notification.date))}</small>${notification.tacheOfficier && !notification.lue ? '<button type="button" class="notification-tache-confirmer">J’ai pris connaissance</button>' : ""}</div></article>`;
       }).join("") : '<p class="notifications-absence-vide">Vous n’avez aucune notification.</p>'}
     </div>
     ${notificationsAbsenceGDA.length ? '<footer><button id="notificationsToutLire" type="button">Tout marquer comme lu</button><button id="notificationsToutEffacer" type="button">Tout effacer</button></footer>' : ""}
   `;
   document.getElementById("notificationsToutLire")?.addEventListener("click", function () { actionNotificationsAbsenceGDA("marquerNotificationsLues"); });
   document.getElementById("notificationsToutEffacer")?.addEventListener("click", function () { actionNotificationsAbsenceGDA("effacerNotifications"); });
+  panneau.querySelectorAll(".notification-tache-confirmer").forEach(function(bouton) {
+    bouton.addEventListener("click", function() {
+      if (typeof window.confirmerPriseEnCompteTacheOfficierGDA === "function") {
+        window.confirmerPriseEnCompteTacheOfficierGDA();
+      }
+    });
+  });
 }
 
 async function actionNotificationsAbsenceGDA(action) {
@@ -2924,6 +2939,9 @@ async function actionNotificationsAbsenceGDA(action) {
     if (!resultat.success) throw new Error(resultat.message || "Action impossible.");
     notificationsAbsenceGDA = Array.isArray(resultat.notifications) ? resultat.notifications : [];
     afficherNotificationsAbsenceGDA(Number(resultat.nonLues) || 0);
+    if (typeof window.actualiserRappelTacheOfficierGDA === "function") {
+      window.actualiserRappelTacheOfficierGDA();
+    }
   } catch (erreur) {
     afficherNotificationGDA(erreur.message, "erreur");
   }

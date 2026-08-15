@@ -38,6 +38,14 @@ const TACHES_OFFICIERS = [
   "GESTION_ABSENCES",
   "GESTION_DOCUMENTS_GDA",
 ]
+const LIBELLES_TACHES_OFFICIERS: Record<string, string> = {
+  GESTION_RAPPORT: "Gestion des rapports",
+  RECO_MISSION_GDA_OBSERVATION_HDR: "Reco Mission / Reco GDA / Observation HDR",
+  GESTION_DEMANDE_ENTRAINEMENT: "Gestion des demandes d’entraînement",
+  OBSERVATION_EZ: "Observation EZ",
+  GESTION_ABSENCES: "Gestion des absences",
+  GESTION_DOCUMENTS_GDA: "Gestion du bon fonctionnement des documents GDA",
+}
 
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: corsHeaders })
@@ -544,6 +552,48 @@ const authenticated = async (req: Request) => {
       }
     }
 
+    const maTacheOfficierClient = async (message = "") => {
+      if (!profile.member_id) return { success: true, message, tache: null }
+      const semaine = debutSemaineParis()
+      const { data: tache, error } = await admin.from("officer_weekly_tasks")
+        .select("id,week_start,task_code,member_name_snapshot,member_grade_snapshot,updated_at")
+        .eq("week_start", semaine)
+        .eq("member_id", profile.member_id)
+        .maybeSingle()
+      if (error) throw error
+      if (!tache || tache.task_code === "NA") return { success: true, message, tache: null }
+
+      const membre = memberById.get(profile.member_id)
+      const today = aujourdHui()
+      const absent = normalise(membre?.presence).includes("ABSENT") || (absencesSuivis ?? []).some((absence: any) =>
+        absence.member_id === profile.member_id && absence.starts_on <= today && absence.ends_on >= today
+      )
+      if (absent) return { success: true, message, tache: null }
+
+      const { data: notification, error: notificationError } = await admin.from("notifications")
+        .select("id,read_at,deleted_at")
+        .eq("profile_id", profile.id)
+        .eq("notification_type", "TACHE_OFFICIER")
+        .eq("related_table", "officer_weekly_tasks")
+        .eq("related_id", tache.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (notificationError) throw notificationError
+      return {
+        success: true,
+        message,
+        tache: {
+          id: tache.id,
+          code: tache.task_code,
+          libelle: LIBELLES_TACHES_OFFICIERS[tache.task_code] || tache.task_code,
+          semaine: tache.week_start,
+          modifieLe: tache.updated_at,
+          priseEnCompte: !notification || !!notification.read_at || !!notification.deleted_at,
+        },
+      }
+    }
+
     const notificationsAbsenceClient = async () => {
       if (!profile.member_id) return { success: true, notifications: [], nonLues: 0 }
       const demandes = await demandesClient(true)
@@ -560,21 +610,26 @@ const authenticated = async (req: Request) => {
           type: item.statutBase === "VALIDEE" ? "succes" : "refus",
         }))
       const { data: notificationsGenerales, error: notificationsError } = await admin.from("notifications")
-        .select("id,notification_type,title,message,read_at,created_at")
+        .select("id,notification_type,title,message,related_table,related_id,read_at,created_at")
         .eq("profile_id", profile.id)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(100)
       if (notificationsError) throw notificationsError
+      const maTache = await maTacheOfficierClient()
+      const idTacheActive = maTache.tache?.id ?? null
       const notifications = [
         ...notificationsAbsence,
-        ...(notificationsGenerales ?? []).map((item: any) => ({
+        ...(notificationsGenerales ?? [])
+          .filter((item: any) => item.notification_type !== "TACHE_OFFICIER" || item.related_id === idTacheActive)
+          .map((item: any) => ({
           id: `notification-${item.id}`,
           titre: item.title,
           message: item.message || "",
           date: item.created_at,
           lue: !!item.read_at,
           type: normalise(item.notification_type).includes("REFUS") ? "refus" : "succes",
+          tacheOfficier: item.notification_type === "TACHE_OFFICIER",
         })),
       ].sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
       return {
@@ -874,6 +929,8 @@ const authenticated = async (req: Request) => {
         return json({ success: true, membres: membresPublic, ...metadonneesEffectifGda(derniereVersionEffectif?.published_at, heurePublicationEffectif), peutActualiser: has("effectif_public_actualiser"), actualisationForcee: false })
       case "recupererTachesOfficiers":
         return json(await tachesOfficiersClient())
+      case "recupererMaTacheOfficier":
+        return json(await maTacheOfficierClient())
       case "enregistrerTacheOfficier": {
         requireSeniorOfficer()
         const memberId = nombre(payload.memberId)
@@ -882,13 +939,10 @@ const authenticated = async (req: Request) => {
         const member = (members ?? []).find((item: any) => item.id === memberId)
         if (!member) throw new Error("Officier introuvable.")
         const grade = normalise(member.grade).replace(/[^A-Z]/g, "")
-        const responsableSpecialisation = (member.specializations ?? []).some((specialisation: string) =>
-          ["RESPONSABLE INST", "RESPONSABLE MDC"].includes(normalise(specialisation))
-        )
         const eligible = [
           "LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT", "CAPITAINE",
           "LIEUTENANT", "SOUSLIEUTENANT", "ASPIRANT",
-        ].includes(grade) || responsableSpecialisation
+        ].includes(grade)
         if (!eligible) throw new Error("Cette personne ne fait pas partie de la liste des tâches officiers.")
 
         const today = aujourdHui()
@@ -898,12 +952,19 @@ const authenticated = async (req: Request) => {
         if (absent) throw new Error("Impossible d’attribuer une tâche à une personne absente.")
 
         const semaine = debutSemaineParis()
+        const { data: ancienneTache, error: ancienneTacheError } = await admin.from("officer_weekly_tasks")
+          .select("id,task_code")
+          .eq("week_start", semaine)
+          .eq("member_id", member.id)
+          .maybeSingle()
+        if (ancienneTacheError) throw ancienneTacheError
+        let tacheEnregistree: any = null
         if (tache === "NA") {
           const { error } = await admin.from("officer_weekly_tasks")
             .delete().eq("week_start", semaine).eq("member_id", member.id)
           if (error) throw error
         } else {
-          const { error } = await admin.from("officer_weekly_tasks").upsert({
+          const { data, error } = await admin.from("officer_weekly_tasks").upsert({
             week_start: semaine,
             member_id: member.id,
             task_code: tache,
@@ -911,11 +972,69 @@ const authenticated = async (req: Request) => {
             member_grade_snapshot: member.grade,
             assigned_by_profile_id: profile.id,
             updated_at: new Date().toISOString(),
-          }, { onConflict: "week_start,member_id" })
+          }, { onConflict: "week_start,member_id" }).select("id,task_code").single()
           if (error) throw error
+          tacheEnregistree = data
+        }
+
+        if (ancienneTache?.task_code !== tache) {
+          const { data: profilsDestinataires, error: profilsError } = await admin.from("profiles")
+            .select("id")
+            .eq("member_id", member.id)
+            .eq("active", true)
+          if (profilsError) throw profilsError
+          const profilsIds = (profilsDestinataires ?? []).map((item: any) => item.id)
+          if (profilsIds.length) {
+            const maintenant = new Date().toISOString()
+            const { error: anciennesNotificationsError } = await admin.from("notifications")
+              .update({ deleted_at: maintenant })
+              .in("profile_id", profilsIds)
+              .eq("notification_type", "TACHE_OFFICIER")
+              .is("deleted_at", null)
+            if (anciennesNotificationsError) throw anciennesNotificationsError
+
+            const libelle = LIBELLES_TACHES_OFFICIERS[tache] || tache
+            const notifications = profilsIds.map((profileId: number) => tache === "NA"
+              ? {
+                  profile_id: profileId,
+                  notification_type: "TACHE_OFFICIER_RETIREE",
+                  title: "Tâche hebdomadaire retirée",
+                  message: "Vous n’avez plus de tâche attribuée pour cette semaine.",
+                }
+              : {
+                  profile_id: profileId,
+                  notification_type: "TACHE_OFFICIER",
+                  title: ancienneTache ? "Tâche hebdomadaire modifiée" : "Nouvelle tâche hebdomadaire",
+                  message: `Votre tâche de la semaine : ${libelle}.`,
+                  related_table: "officer_weekly_tasks",
+                  related_id: tacheEnregistree.id,
+                })
+            const { error: notificationError } = await admin.from("notifications").insert(notifications)
+            if (notificationError) throw notificationError
+          }
         }
         await audit("Tâche officier modifiée", member.matricule, tache)
         return json(await tachesOfficiersClient("Tâche enregistrée pour la semaine."))
+      }
+      case "prendreConnaissanceTacheOfficier": {
+        const semaine = debutSemaineParis()
+        if (!profile.member_id) throw new Error("Aucune tâche liée à ce profil.")
+        const { data: tache, error: tacheError } = await admin.from("officer_weekly_tasks")
+          .select("id")
+          .eq("week_start", semaine)
+          .eq("member_id", profile.member_id)
+          .maybeSingle()
+        if (tacheError) throw tacheError
+        if (!tache) throw new Error("Aucune tâche active cette semaine.")
+        const { error } = await admin.from("notifications")
+          .update({ read_at: new Date().toISOString() })
+          .eq("profile_id", profile.id)
+          .eq("notification_type", "TACHE_OFFICIER")
+          .eq("related_table", "officer_weekly_tasks")
+          .eq("related_id", tache.id)
+          .is("read_at", null)
+        if (error) throw error
+        return json(await maTacheOfficierClient("Tâche prise en compte."))
       }
       case "actualiserEffectifPublic": { // publication volontaire de l'instantané retardé
         requirePermission("effectif_public_actualiser")

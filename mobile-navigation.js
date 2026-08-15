@@ -81,12 +81,7 @@
           <p>Choisissez l’espace que vous souhaitez consulter.</p>
         </header>
         <div class="gda-mobile-cartes">${cartes}</div>
-        <div class="gda-mobile-deconnexion">
-          <div>
-            <strong>Déconnexion</strong>
-            <span>Fermer votre session sur cet appareil</span>
-          </div>
-        </div>
+        <div class="gda-mobile-deconnexion"></div>
       </section>`;
 
     workspace.querySelectorAll("[data-cible-menu]").forEach(function (carte) {

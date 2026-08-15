@@ -326,31 +326,11 @@
   }
 
   .gda-mobile-deconnexion {
-    display: grid;
-    grid-template-columns: 54px minmax(0, 1fr);
+    display: flex;
     align-items: center;
-    gap: 13px;
-    width: 100%;
+    justify-content: flex-end;
     margin-top: auto;
     padding: 34px 8px 8px;
-    color: #dceaf5;
-  }
-
-  .gda-mobile-deconnexion > div {
-    display: grid;
-    gap: 3px;
-    min-width: 0;
-  }
-
-  .gda-mobile-deconnexion strong {
-    color: #ffd9de;
-    font-size: 13px;
-  }
-
-  .gda-mobile-deconnexion span {
-    color: #8299ad;
-    font-size: 10px;
-    line-height: 1.35;
   }
 
   #logoutButton {
@@ -361,17 +341,22 @@
     position: static !important;
     inset: auto !important;
     display: flex;
-    grid-column: 1;
-    grid-row: 1;
-    width: 50px;
-    min-width: 50px;
-    height: 50px;
-    min-height: 50px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
     margin: 0;
     padding: 0;
     opacity: 1;
     visibility: visible;
     z-index: 1;
+  }
+
+  #logoutButton svg {
+    display: block;
+    width: 21px;
+    height: 21px;
+    flex: 0 0 21px;
   }
 
   #workspace img,
@@ -633,27 +618,92 @@
   }
 
   .effectif-member {
-    gap: 10px;
-    padding: 13px;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center;
+    gap: 5px 8px;
+    padding: 8px 9px;
     border-left: 3px solid rgba(73, 178, 237, .65);
-    border-radius: 12px;
+    border-radius: 9px;
     background: rgba(7, 30, 50, .92);
   }
 
   .effectif-identite-groupe {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-  }
-
-  .effectif-name {
-    font-size: 16px;
-    font-weight: 850;
-    text-align: left;
+    grid-column: 1;
+    grid-row: 1;
+    grid-template-columns: 30px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 1px 7px;
+    width: 100%;
   }
 
   .effectif-grade-groupe {
-    justify-content: flex-start;
+    display: contents;
+  }
+
+  .effectif-grade-icone {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    width: 28px;
+    height: 32px;
+    min-width: 28px;
+  }
+
+  .effectif-grade {
+    grid-column: 2;
+    grid-row: 2;
+    width: fit-content !important;
+    min-width: 0;
+    padding: 2px 7px;
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .effectif-name {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 14px;
+    font-weight: 850;
+    text-align: left;
+    line-height: 1.2;
+  }
+
+  .effectif-member > .effectif-badges {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    justify-content: flex-end;
+    width: auto;
+    gap: 4px;
+  }
+
+  .effectif-member > .effectif-specialisation {
+    display: flex;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  .effectif-member > .effectif-specialisation .effectif-info-label {
+    margin: 0;
+    font-size: 8px;
+  }
+
+  .effectif-member .effectif-badges {
+    gap: 4px;
+  }
+
+  .effectif-member .effectif-badge {
+    flex: 0 1 auto;
+    min-height: 0;
+    padding: 3px 6px;
+    font-size: 9px;
+    line-height: 1.2;
+    white-space: nowrap;
   }
 
   .effectif-fiche,
@@ -718,16 +768,103 @@
   }
 
   .effectif-public-resume {
-    gap: 7px;
-    padding: 13px;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 3px 8px;
+    min-height: 0;
+    padding: 7px 9px;
   }
 
-  .effectif-public-statut,
-  .effectif-public-chevron,
+  .effectif-public-identite {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .effectif-public-identite strong {
+    font-size: 13px;
+    line-height: 1.2;
+  }
+
   .effectif-public-grade {
     grid-column: 1;
-    grid-row: auto;
+    grid-row: 2;
     justify-self: start;
+    gap: 6px;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  .effectif-public-grade img {
+    width: 25px;
+    height: 25px;
+  }
+
+  .effectif-public-statut {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 3px 6px;
+    font-size: 9px;
+  }
+
+  .effectif-public-chevron {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: center;
+    justify-self: center;
+    font-size: 16px;
+  }
+
+  .effectif-public-section-liste {
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .effectif-public-liste {
+    gap: 9px;
+  }
+
+  .effectif-public-section {
+    border-radius: 10px;
+  }
+
+  .effectif-public-banniere {
+    min-height: 0;
+    gap: 7px;
+    padding: 7px 9px;
+  }
+
+  .effectif-public-banniere > div {
+    gap: 6px;
+  }
+
+  .effectif-public-banniere > div > span {
+    font-size: 15px;
+  }
+
+  .effectif-public-banniere strong {
+    font-size: 12px;
+  }
+
+  .effectif-public-total-categorie {
+    min-width: 0;
+    padding: 3px 7px;
+    font-size: 9px;
+  }
+
+  .effectif-public-personne {
+    border-radius: 9px;
+  }
+
+  .effectif-public-details {
+    gap: 6px;
+    padding: 7px;
+  }
+
+  .effectif-public-detail-champ,
+  .effectif-public-detail-medailles {
+    gap: 3px;
+    padding: 7px;
+    border-radius: 7px;
   }
 
   /* Disponibilités et absences */

@@ -46,6 +46,13 @@ const LIBELLES_TACHES_OFFICIERS: Record<string, string> = {
   GESTION_ABSENCES: "Gestion des absences",
   GESTION_DOCUMENTS_GDA: "Gestion du bon fonctionnement des documents GDA",
 }
+const THEMES_SITE = [
+  {
+    id: "gda-classique",
+    nom: "GDA Classique",
+    description: "Interface officielle actuelle de l’intranet GDA.",
+  },
+]
 
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: corsHeaders })
@@ -205,7 +212,7 @@ const authenticated = async (req: Request) => {
       admin.from("training_followups").select("*").eq("status", "EN_ATTENTE"),
       admin.from("absences").select("member_id,matricule_snapshot,starts_on,ends_on"),
       admin.from("gda_roster_versions").select("published_at").order("published_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle(),
-      admin.from("site_configuration").select("max_gda,roster_publish_time,updated_at").eq("singleton", true).maybeSingle(),
+      admin.from("site_configuration").select("max_gda,roster_publish_time,active_theme,updated_at").eq("singleton", true).maybeSingle(),
     ])
 
     const permissions = new Set((grants ?? []).map((grant: any) => grant.permission_code))
@@ -714,7 +721,7 @@ const authenticated = async (req: Request) => {
 
     const parametresSiteDonnees = async (message = "") => {
       const [{ data: configuration, error: configurationError }, { data: liens, error: liensError }] = await Promise.all([
-        admin.from("site_configuration").select("max_gda,roster_publish_time,updated_at").eq("singleton", true).single(),
+        admin.from("site_configuration").select("max_gda,roster_publish_time,active_theme,updated_at").eq("singleton", true).single(),
         admin.from("navigation_links").select("external_id,category,label,icon,url,display_mode,sort_order,updated_at")
           .eq("active", true).order("category", { ascending: true }).order("sort_order", { ascending: true }).order("id", { ascending: true }),
       ])
@@ -727,8 +734,12 @@ const authenticated = async (req: Request) => {
         configuration: {
           maximumGda: Math.max(1, Math.min(200, nombre(configuration?.max_gda) || 35)),
           heureActualisation: texte(configuration?.roster_publish_time).slice(0, 5) || "20:00",
+          themeActif: THEMES_SITE.some((theme) => theme.id === texte(configuration?.active_theme))
+            ? texte(configuration?.active_theme)
+            : "gda-classique",
           modifieLe: configuration?.updated_at || "",
         },
+        themes: THEMES_SITE,
         liens: (liens ?? []).map((lien: any) => ({
           id: lien.external_id,
           categorie: lien.category,
@@ -1760,6 +1771,19 @@ const authenticated = async (req: Request) => {
         if (error) throw error
         await audit("Paramètres du site modifiés", "Configuration", `Maximum ${maximum} GDA · actualisation ${heure}`)
         return json(await parametresSiteDonnees("Paramètres enregistrés."))
+      }
+      case "enregistrerThemeSite": {
+        if (!peutGererParametres) throw new Error("Modification réservée à la propriété et aux Gérant GDA.")
+        const theme = texte(payload.theme)
+        const themeDisponible = THEMES_SITE.find((item) => item.id === theme)
+        if (!themeDisponible) throw new Error("Thème du site invalide.")
+        const { error } = await admin.from("site_configuration").update({
+          active_theme: theme,
+          updated_by_profile_id: profile.id,
+        }).eq("singleton", true)
+        if (error) throw error
+        await audit("Thème du site modifié", themeDisponible.nom)
+        return json(await parametresSiteDonnees(`Thème « ${themeDisponible.nom} » activé.`))
       }
       case "enregistrerLienSite": {
         if (!peutGererParametres) throw new Error("Modification réservée à la propriété et aux Gérant GDA.")

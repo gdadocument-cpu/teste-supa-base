@@ -8,6 +8,7 @@
 }
 
 .parametres-entete,
+.parametres-themes-section > header,
 .parametres-liens-section > header {
   display: flex;
   align-items: center;
@@ -64,6 +65,61 @@
 .parametres-retour { grid-column: 1 / -1; min-height: 18px; color: #77e6bc; }
 .parametres-retour.erreur,
 .parametres-erreur { color: #ff8d9a; }
+.parametres-themes-section { margin-bottom: 22px; }
+.parametres-themes-section > header { padding-bottom: 16px; border-bottom: 1px solid #153e59; }
+.parametres-themes-liste {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  padding-top: 16px;
+}
+.parametres-theme-carte {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid #184a69;
+  border-radius: 13px;
+  background: rgba(7, 38, 60, .72);
+}
+.parametres-theme-carte.est-actif {
+  border-color: #39b9f3;
+  box-shadow: inset 0 0 22px rgba(57, 185, 243, .08);
+}
+.parametres-theme-carte strong { display: block; margin-bottom: 5px; font-size: 15px; }
+.parametres-theme-carte p { font-size: 11px; line-height: 1.45; }
+.parametres-theme-carte button:disabled { border-color: #278f73; background: #0b4b3d; color: #9df3d1; opacity: 1; cursor: default; }
+.parametres-theme-apercu {
+  position: relative;
+  overflow: hidden;
+  width: 92px;
+  height: 58px;
+  border: 1px solid #1e628c;
+  border-radius: 9px;
+  background: #071725;
+}
+.parametres-theme-apercu span {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 12px;
+  background: #07111e;
+  border-bottom: 1px solid #1b4b6d;
+}
+.parametres-theme-apercu i {
+  position: absolute;
+  inset: 12px auto 0 0;
+  width: 22px;
+  background: #080f1a;
+  border-right: 1px solid #b42333;
+}
+.parametres-theme-apercu b {
+  position: absolute;
+  inset: 21px 9px 9px 31px;
+  border: 1px solid #174a6c;
+  border-radius: 5px;
+  background: #0a2137;
+}
 .parametres-categories { display: grid; gap: 22px; }
 .parametres-liens-section > header { padding-bottom: 16px; border-bottom: 1px solid #153e59; }
 .parametres-liens-liste { display: grid; gap: 12px; padding-top: 16px; }
@@ -95,8 +151,12 @@
 @media (max-width: 680px) {
   #parametresSiteModule { padding: 15px; }
   .parametres-entete,
+  .parametres-themes-section > header,
   .parametres-liens-section > header { align-items: flex-start; flex-direction: column; }
   .parametres-generaux,
   .parametres-lien-formulaire { grid-template-columns: 1fr; }
   .parametres-lien-actions { grid-column: 1; flex-wrap: wrap; }
+  .parametres-theme-carte { grid-template-columns: 72px minmax(0, 1fr); }
+  .parametres-theme-apercu { width: 72px; height: 52px; }
+  .parametres-theme-carte button { grid-column: 1 / -1; width: 100%; }
 }

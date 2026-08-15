@@ -499,6 +499,7 @@ const INVALIDATIONS_CACHE_GDA = {
   definirCoproprietaire: ["recupererAdministration", "recupererListeBlanche"],
   transfererPropriete: ["recupererAdministration", "recupererListeBlanche"],
   enregistrerParametresSite: ["recupererParametresSite", "recupererEffectif", "recupererEffectifPublic"],
+  enregistrerThemeSite: ["recupererParametresSite"],
   enregistrerLienSite: ["recupererParametresSite"],
   supprimerLienSite: ["recupererParametresSite"],
   marquerNotificationsLues: ["recupererNotifications"],

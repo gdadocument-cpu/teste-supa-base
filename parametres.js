@@ -3,8 +3,10 @@ const PARAMETRES_SITE_API_URL = API_URL;
 
 let parametresSiteConfiguration = {
   maximumGda: 35,
-  heureActualisation: "20:00"
+  heureActualisation: "20:00",
+  themeActif: "gda-classique"
 };
+let parametresSiteThemes = [{ id: "gda-classique", nom: "GDA Classique", description: "Interface officielle actuelle de l’intranet GDA." }];
 let parametresSiteLiens = [];
 let parametresSitePeutGerer = false;
 let parametresSiteCharges = false;
@@ -26,8 +28,18 @@ function appliquerConfigurationSiteGDA(resultat) {
   parametresSiteConfiguration = {
     maximumGda: Math.max(1, Number(configuration.maximumGda || 35)),
     heureActualisation: String(configuration.heureActualisation || "20:00").slice(0, 5),
+    themeActif: String(configuration.themeActif || "gda-classique"),
     modifieLe: configuration.modifieLe || ""
   };
+  parametresSiteThemes = Array.isArray(resultat && resultat.themes) && resultat.themes.length
+    ? resultat.themes.slice()
+    : parametresSiteThemes;
+  if (typeof window.enregistrerThemesDisponiblesGDA === "function") {
+    window.enregistrerThemesDisponiblesGDA(parametresSiteThemes);
+  }
+  if (typeof window.appliquerThemeGDA === "function") {
+    parametresSiteConfiguration.themeActif = window.appliquerThemeGDA(parametresSiteConfiguration.themeActif);
+  }
   parametresSiteLiens = Array.isArray(resultat && resultat.liens)
     ? resultat.liens.slice().sort(function (a, b) {
         if (a.categorie !== b.categorie) return String(a.categorie).localeCompare(String(b.categorie));
@@ -172,12 +184,29 @@ function afficherParametresSiteGDA() {
         <button type="submit">Enregistrer les paramètres</button>
         <output class="parametres-retour" aria-live="polite"></output>
       </form>
+      ${creerSelectionThemesParametresGDA()}
       <div class="parametres-categories">
         ${creerCategorieParametresLiensGDA("LIENS_UTILES")}
         ${creerCategorieParametresLiensGDA("INSTRUCTEUR")}
       </div>
     </section>`;
   brancherParametresSiteGDA();
+}
+
+function creerSelectionThemesParametresGDA() {
+  return `<section class="parametres-bloc parametres-themes-section">
+    <header><div><h4>🎨 Thème de l’intranet</h4><p>Le thème choisi est appliqué globalement à tous les utilisateurs.</p></div></header>
+    <div class="parametres-themes-liste">
+      ${parametresSiteThemes.map(function(theme) {
+        const actif = theme.id === parametresSiteConfiguration.themeActif;
+        return `<article class="parametres-theme-carte ${actif ? "est-actif" : ""}">
+          <div class="parametres-theme-apercu" data-theme-apercu="${echapperHTML(theme.id)}" aria-hidden="true"><span></span><i></i><b></b></div>
+          <div><strong>${echapperHTML(theme.nom)}</strong><p>${echapperHTML(theme.description || "Thème visuel GDA")}</p></div>
+          <button type="button" data-activer-theme="${echapperHTML(theme.id)}" ${actif ? "disabled" : ""}>${actif ? "✓ Thème actif" : "Activer ce thème"}</button>
+        </article>`;
+      }).join("")}
+    </div>
+  </section>`;
 }
 
 function creerCategorieParametresLiensGDA(categorie) {
@@ -210,6 +239,9 @@ function creerFormulaireLienParametresGDA(lien) {
 function brancherParametresSiteGDA() {
   document.getElementById("parametresActualiser")?.addEventListener("click", ouvrirParametresSiteGDA);
   document.getElementById("parametresGenerauxFormulaire")?.addEventListener("submit", enregistrerParametresGenerauxGDA);
+  document.querySelectorAll("[data-activer-theme]").forEach(function(bouton) {
+    bouton.addEventListener("click", activerThemeParametresGDA);
+  });
   document.querySelectorAll("[data-ajouter-lien]").forEach(function (bouton) {
     bouton.addEventListener("click", function () {
       parametresAjoutCategorie = bouton.dataset.ajouterLien;
@@ -230,6 +262,20 @@ function brancherParametresSiteGDA() {
       afficherParametresSiteGDA();
     });
   });
+}
+
+async function activerThemeParametresGDA(evenement) {
+  const bouton = evenement.currentTarget;
+  const theme = bouton.dataset.activerTheme || "";
+  bouton.disabled = true;
+  try {
+    const resultat = await requeteMutationParametresGDA("enregistrerThemeSite", { theme: theme });
+    afficherParametresSiteGDA();
+    afficherNotificationGDA(resultat.message, "succes");
+  } catch (erreur) {
+    bouton.disabled = false;
+    afficherNotificationGDA(erreur.message || "Impossible d’activer ce thème.", "erreur");
+  }
 }
 
 async function requeteMutationParametresGDA(action, donnees) {
@@ -307,3 +353,19 @@ async function supprimerLienParametresGDA(evenement) {
 function normaliserParametresSite(valeur) {
   return String(valeur || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 }
+
+window.addEventListener("gda-donnees-modifiees", function(evenement) {
+  if (evenement.detail?.action !== "enregistrerThemeSite") return;
+  chargerConfigurationSiteGDA(true).then(function() {
+    if (moduleGdaEstActif("administration-parametres")) afficherParametresSiteGDA();
+  }).catch(function(erreur) {
+    console.warn("Actualisation du thème indisponible :", erreur);
+  });
+});
+
+window.setInterval(function() {
+  if (document.hidden || !sessionStorage.getItem("sessionTokenDiscord")) return;
+  chargerConfigurationSiteGDA(true).catch(function(erreur) {
+    console.warn("Synchronisation du thème indisponible :", erreur);
+  });
+}, 30000);

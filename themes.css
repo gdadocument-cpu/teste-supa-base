@@ -1,0 +1,12 @@
+/*
+ * Registre visuel des thèmes GDA.
+ *
+ * GDA Classique correspond à l’intégralité des feuilles de style historiques
+ * chargées avant ce fichier. Les prochains thèmes devront uniquement ajouter
+ * des surcharges ciblées sous html[data-gda-theme="identifiant-du-theme"].
+ * Cette séparation empêche un prototype de modifier le thème officiel.
+ */
+
+html[data-gda-theme="gda-classique"] {
+  color-scheme: dark;
+}

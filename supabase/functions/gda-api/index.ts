@@ -38,6 +38,17 @@ const TACHES_OFFICIERS = [
   "GESTION_ABSENCES",
   "GESTION_DOCUMENTS_GDA",
 ]
+const ICONES_ANNONCES = new Set([
+  "personnel", "shield", "report", "calendar", "performance", "objective", "operations", "clock",
+  "alert", "info", "success", "waiting", "maintenance", "security", "update", "announcement",
+  "reminder", "follow-up", "surveillance", "new", "danger", "lock", "protection", "system",
+  "database", "server", "folder", "file", "documents", "backup", "upload", "download", "sync",
+  "history", "message", "location", "search", "filters", "statistics", "analysis", "global", "link",
+  "communication", "connection", "signal", "confidential", "identity", "access", "verified", "error",
+  "help", "training", "rewards", "energy", "resources", "health", "incident", "climate", "deployment",
+  "transport", "equipment", "grade", "distinction", "planning", "control", "ethics", "environment",
+  "partners", "wellbeing",
+])
 const LIBELLES_TACHES_OFFICIERS: Record<string, string> = {
   GESTION_RAPPORT: "Gestion des rapports",
   RECO_MISSION_GDA_OBSERVATION_HDR: "Reco Mission / Reco GDA / Observation HDR",
@@ -499,7 +510,7 @@ const authenticated = async (req: Request) => {
     const annoncesAccueilClient = async () => {
       const maintenant = Date.now()
       const { data, error } = await admin.from("home_announcements")
-        .select("id,title,body,announcement_type,created_by_profile_id,created_by_snapshot,automated,defcon_level,expires_at,created_at")
+        .select("id,title,body,announcement_type,icon_code,created_by_profile_id,created_by_snapshot,automated,defcon_level,expires_at,created_at")
         .eq("active", true)
         .order("created_at", { ascending: false })
         .limit(100)
@@ -511,6 +522,7 @@ const authenticated = async (req: Request) => {
           titre: row.title,
           description: row.body,
           type: row.announcement_type,
+          icone: row.icon_code || "info",
           auteur: row.created_by_snapshot || "Officier GDA",
           automatique: row.automated === true,
           niveauDefcon: row.defcon_level,
@@ -1035,9 +1047,11 @@ const authenticated = async (req: Request) => {
         const titre = texte(payload.titre)
         const description = texte(payload.description)
         const type = normalise(payload.type)
+        const icone = texte(payload.icone).toLowerCase() || "info"
         if (!titre || titre.length > 120) throw new Error("Le titre doit contenir entre 1 et 120 caractères.")
         if (!description || description.length > 1200) throw new Error("La description doit contenir entre 1 et 1 200 caractères.")
         if (!["INFO", "IMPORTANT", "MISSION", "SUCCESS"].includes(type)) throw new Error("Type d’annonce invalide.")
+        if (!ICONES_ANNONCES.has(icone)) throw new Error("Icône d’annonce invalide.")
         const expiration = texte(payload.expireLe)
         const expiresAt = expiration ? new Date(expiration) : null
         if (expiresAt && (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now())) {
@@ -1047,6 +1061,7 @@ const authenticated = async (req: Request) => {
           title: titre,
           body: description,
           announcement_type: type,
+          icon_code: icone,
           created_by_profile_id: profile.id,
           created_by_snapshot: actorName,
           expires_at: expiresAt ? expiresAt.toISOString() : null,
@@ -2552,6 +2567,7 @@ const authenticated = async (req: Request) => {
           title: titreAnnonce,
           body: corpsAnnonce,
           announcement_type: niveau ? "IMPORTANT" : "SUCCESS",
+          icon_code: niveau ? "alert" : "verified",
           created_by_profile_id: profile.id,
           created_by_snapshot: actorName,
           automated: true,

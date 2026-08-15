@@ -4,10 +4,7 @@
   let donnees = null;
   let chargement = null;
   let afficherTout = false;
-  const TYPES = {
-    IMPORTANT: ["!", "Important"], INFO: ["i", "Information"],
-    MISSION: ["▦", "Mission"], SUCCESS: ["✓", "Terminé"]
-  };
+  const TYPES = { IMPORTANT: "Important", INFO: "Information", MISSION: "Mission", SUCCESS: "Terminé" };
 
   function h(v) {
     return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;")
@@ -33,42 +30,53 @@
     return `Il y a ${Math.floor(heures / 24)} j`;
   }
 
-  function carte(icone, valeur, libelle, classe) {
-    return `<article class="accueil-statistique ${classe}"><b aria-hidden="true">${icone}</b><strong>${h(valeur)}</strong><span>${h(libelle)}</span></article>`;
+  function icone(code, classe) {
+    return typeof window.iconeGDA === "function" ? window.iconeGDA(code, classe) : `<span class="gda-icone">●</span>`;
+  }
+
+  function carte(code, valeur, libelle, classe) {
+    return `<article class="accueil-statistique ${classe}">${icone(code, "accueil-statistique-icone")}<strong>${h(valeur)}</strong><span>${h(libelle)}</span></article>`;
   }
 
   function annonce(a) {
-    const type = TYPES[a.type] || TYPES.INFO;
+    const libelleType = TYPES[a.type] || TYPES.INFO;
     return `<article class="accueil-annonce accueil-annonce-${h((a.type || "INFO").toLowerCase())}">
-      <b class="accueil-annonce-icone" aria-hidden="true">${type[0]}</b>
-      <div><header><strong>${h(a.titre)}</strong><small>${type[1]}</small></header><p>${h(a.description)}</p><span>Par ${h(a.auteur)} · ${h(relatif(a.creeLe))}</span></div>
+      ${icone(a.icone || "info", "accueil-annonce-icone")}
+      <div><header><strong>${h(a.titre)}</strong><small>${libelleType}</small></header><p>${h(a.description)}</p><span>Par ${h(a.auteur)} · ${h(relatif(a.creeLe))}</span></div>
       ${a.peutSupprimer ? `<button class="accueil-annonce-supprimer" data-id="${h(a.id)}" type="button" title="Supprimer cette annonce" aria-label="Supprimer cette annonce">×</button>` : ""}
     </article>`;
   }
 
   function formulaire() {
+    const groupes = window.GDA_ICONES?.groupes || [];
+    const galerie = groupes.map(function (groupe) {
+      return `<section><h4>${h(groupe[0])}</h4><div>${groupe[1].map(function (item) {
+        return `<button type="button" class="gda-choix-icone" data-code="${h(item[0])}" title="${h(item[1])}">${icone(item[0])}<span>${h(item[1])}</span></button>`;
+      }).join("")}</div></section>`;
+    }).join("");
     return `<details class="accueil-annonce-formulaire"><summary>＋ Nouvelle annonce</summary>
       <form id="formAnnonceAccueil">
         <label>Type<select name="type"><option value="INFO">Information</option><option value="IMPORTANT">Important</option><option value="MISSION">Mission</option><option value="SUCCESS">Terminé / validé</option></select></label>
+        <label>Icône<input name="icone" type="hidden" value="info"><button id="ouvrirIconesAnnonce" class="gda-icone-selectionnee" type="button">${icone("info")}<span>Information</span></button></label>
         <label>Titre<input name="titre" maxlength="120" required placeholder="Titre de l’annonce"></label>
         <label class="accueil-annonce-description">Description<textarea name="description" maxlength="1200" required placeholder="Information à communiquer"></textarea></label>
         <label>Expiration facultative<input name="expireLe" type="datetime-local"></label>
         <button type="submit">Publier</button>
-      </form></details>`;
+      </form><div id="selecteurIconesAnnonce" class="gda-selecteur-icones" hidden><header><strong>Choisir une icône</strong><button id="fermerIconesAnnonce" type="button" aria-label="Fermer">×</button></header>${galerie}</div></details>`;
   }
 
   function rendre() {
     if (!donnees || !estAccueil()) return;
     const s = donnees.statistiques || {};
     const stats = donnees.officier ? [
-      carte("♟", s.effectifActif, "Effectif total", "effectif"),
-      carte("◈", `${s.pourcentageDisponibles}%`, "Membres disponibles", "disponibles"),
-      carte("▤", s.rapportsEnAttente, "Rapports en attente", "rapports"),
-      carte("▦", s.absencesEnAttente, "Absences en attente", "absences")
+      carte("personnel", s.effectifActif, "Effectif total", "effectif"),
+      carte("shield", `${s.pourcentageDisponibles}%`, "Membres disponibles", "disponibles"),
+      carte("report", s.rapportsEnAttente, "Rapports en attente", "rapports"),
+      carte("calendar", s.absencesEnAttente, "Absences en attente", "absences")
     ] : [
-      carte("♟", s.effectifActif, "Effectif GDA actif", "effectif"),
-      carte("◈", `${s.pourcentageDisponibles}%`, "Membres présents / disponibles", "disponibles"),
-      carte("▤", s.mesRapportsEnregistres, "Mes rapports validés ou archivés", "rapports")
+      carte("personnel", s.effectifActif, "Effectif GDA actif", "effectif"),
+      carte("shield", `${s.pourcentageDisponibles}%`, "Membres présents / disponibles", "disponibles"),
+      carte("report", s.mesRapportsEnregistres, "Mes rapports validés ou archivés", "rapports")
     ];
     const liste = Array.isArray(donnees.annonces) ? donnees.annonces : [];
     const visibles = afficherTout ? liste : liste.slice(0, 3);
@@ -94,7 +102,21 @@
       event.preventDefault();
       const f = new FormData(event.currentTarget);
       const expiration = String(f.get("expireLe") || "");
-      envoyer("creerAnnonceAccueil", { type: f.get("type"), titre: f.get("titre"), description: f.get("description"), expireLe: expiration ? new Date(expiration).toISOString() : "" });
+      envoyer("creerAnnonceAccueil", { type: f.get("type"), icone: f.get("icone"), titre: f.get("titre"), description: f.get("description"), expireLe: expiration ? new Date(expiration).toISOString() : "" });
+    });
+    const selecteur = document.getElementById("selecteurIconesAnnonce");
+    document.getElementById("ouvrirIconesAnnonce")?.addEventListener("click", function () { if (selecteur) selecteur.hidden = false; });
+    document.getElementById("fermerIconesAnnonce")?.addEventListener("click", function () { if (selecteur) selecteur.hidden = true; });
+    document.querySelectorAll(".gda-choix-icone").forEach(function (bouton) {
+      bouton.addEventListener("click", function () {
+        const code = bouton.dataset.code || "info";
+        const form = document.getElementById("formAnnonceAccueil");
+        if (form?.elements.icone) form.elements.icone.value = code;
+        const selection = document.getElementById("ouvrirIconesAnnonce");
+        const reference = window.GDA_ICONES?.parCode?.[code];
+        if (selection) selection.innerHTML = `${icone(code)}<span>${h(reference?.libelle || code)}</span>`;
+        if (selecteur) selecteur.hidden = true;
+      });
     });
   }
 

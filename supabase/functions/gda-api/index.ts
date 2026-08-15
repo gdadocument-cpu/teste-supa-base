@@ -565,7 +565,7 @@ const authenticated = async (req: Request) => {
       return {
         success: true,
         message,
-        officier,
+        officier: officer,
         officierSuperieur,
         statistiques: {
           effectifActif: totalEffectif,

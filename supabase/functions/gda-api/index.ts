@@ -70,6 +70,13 @@ const THEMES_SITE = [
     description: "Interface PC moderne, aérée et organisée en cartes.",
   },
 ]
+const DEFCON_ANNONCES_PAR_DEFAUT = [
+  { niveau: 0, titre: "DEFCON désactivé", resume: "Le niveau DEFCON est désactivé. Retour aux procédures habituelles.", details: "" },
+  { niveau: 1, titre: "DEFCON N-1 activé", resume: "Niveau de vigilance courant. Merci de suivre les procédures en vigueur.", details: "" },
+  { niveau: 2, titre: "DEFCON N-2 activé", resume: "Niveau de menace légère. Merci de suivre les procédures en vigueur.", details: "" },
+  { niveau: 3, titre: "DEFCON N-3 activé", resume: "Niveau de menace importante. Merci de suivre les procédures en vigueur.", details: "" },
+  { niveau: 4, titre: "DEFCON N-4 activé", resume: "Niveau de menace élevée. Merci de suivre les procédures en vigueur.", details: "" },
+]
 
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: corsHeaders })
@@ -518,19 +525,25 @@ const authenticated = async (req: Request) => {
       if (error) throw error
       return (data ?? [])
         .filter((row: any) => !row.expires_at || new Date(row.expires_at).getTime() > maintenant)
-        .map((row: any) => ({
+        .map((row: any) => {
+          const parties = texte(row.body).split(/\n\s*\n/)
+          const resume = parties.shift() || texte(row.body)
+          const details = parties.join("\n\n").trim()
+          const estDefconAutomatique = row.automated === true && row.defcon_level !== null
+          return ({
           id: row.id,
           titre: row.title,
-          description: row.body,
+          description: resume,
+          details,
           type: row.announcement_type,
           icone: row.icon_code || "info",
-          auteur: row.created_by_snapshot || "Officier GDA",
+          auteur: estDefconAutomatique ? "" : row.created_by_snapshot || "Officier GDA",
           automatique: row.automated === true,
           niveauDefcon: row.defcon_level,
           expireLe: row.expires_at || "",
           creeLe: row.created_at,
           peutSupprimer: officer && (officierSuperieur || row.created_by_profile_id === profile.id),
-        }))
+        })})
     }
 
     const tableauAccueilClient = async (message = "") => {
@@ -817,13 +830,15 @@ const authenticated = async (req: Request) => {
     }
 
     const parametresSiteDonnees = async (message = "") => {
-      const [{ data: configuration, error: configurationError }, { data: liens, error: liensError }] = await Promise.all([
+      const [{ data: configuration, error: configurationError }, { data: liens, error: liensError }, { data: modelesDefcon, error: modelesDefconError }] = await Promise.all([
         admin.from("site_configuration").select("max_gda,roster_publish_time,active_theme,updated_at").eq("singleton", true).single(),
         admin.from("navigation_links").select("external_id,category,label,icon,url,display_mode,sort_order,updated_at")
           .eq("active", true).order("category", { ascending: true }).order("sort_order", { ascending: true }).order("id", { ascending: true }),
+        admin.from("defcon_announcement_templates").select("level,title,summary,details,updated_at").order("level", { ascending: true }),
       ])
       if (configurationError) throw configurationError
       if (liensError) throw liensError
+      if (modelesDefconError) throw modelesDefconError
       return {
         success: true,
         message,
@@ -837,6 +852,16 @@ const authenticated = async (req: Request) => {
           modifieLe: configuration?.updated_at || "",
         },
         themes: THEMES_SITE,
+        defconAnnonces: DEFCON_ANNONCES_PAR_DEFAUT.map((modele) => {
+          const enregistre = (modelesDefcon ?? []).find((item: any) => nombre(item.level) === modele.niveau)
+          return {
+            niveau: modele.niveau,
+            titre: texte(enregistre?.title) || modele.titre,
+            resume: texte(enregistre?.summary) || modele.resume,
+            details: texte(enregistre?.details),
+            modifieLe: enregistre?.updated_at || "",
+          }
+        }),
         liens: (liens ?? []).map((lien: any) => ({
           id: lien.external_id,
           categorie: lien.category,
@@ -1934,6 +1959,27 @@ const authenticated = async (req: Request) => {
         await audit("Thème du site modifié", themeDisponible.nom)
         return json(await parametresSiteDonnees(`Thème « ${themeDisponible.nom} » activé.`))
       }
+      case "enregistrerAnnonceDefcon": {
+        if (!peutGererParametres) throw new Error("Modification réservée à la propriété et aux Gérant GDA.")
+        const niveau = Math.max(0, Math.min(4, Math.trunc(nombre(payload.niveau))))
+        const titre = texte(payload.titre)
+        const resume = texte(payload.resume)
+        const details = texte(payload.details)
+        if (!titre || titre.length > 120) throw new Error("Le titre doit contenir entre 1 et 120 caractères.")
+        if (!resume || resume.length > 500) throw new Error("Le résumé doit contenir entre 1 et 500 caractères.")
+        if (details.length > 5000) throw new Error("Le message détaillé ne peut pas dépasser 5 000 caractères.")
+        const { error } = await admin.from("defcon_announcement_templates").upsert({
+          level: niveau,
+          title: titre,
+          summary: resume,
+          details,
+          updated_by_profile_id: profile.id,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "level" })
+        if (error) throw error
+        await audit("Annonce DEFCON modifiée", `DEFCON ${niveau}`, titre)
+        return json(await parametresSiteDonnees(`Annonce du DEFCON ${niveau} enregistrée.`))
+      }
       case "enregistrerLienSite": {
         if (!peutGererParametres) throw new Error("Modification réservée à la propriété et aux Gérant GDA.")
         const categorieNormalisee = normalise(payload.categorie).replace(/[^A-Z]+/g, "_").replace(/^_|_$/g, "")
@@ -2560,10 +2606,14 @@ const authenticated = async (req: Request) => {
         if (!peutGererDefcon) throw new Error("Modification DEFCON réservée aux officiers.")
         const niveau = Math.max(0, Math.min(4, nombre(payload.niveau)))
         const modifieLe = new Date().toISOString()
-        const titreAnnonce = niveau ? `DEFCON N-${niveau} en cours` : "DEFCON désactivé"
-        const corpsAnnonce = niveau
-          ? `Le niveau DEFCON N-${niveau} est désormais actif. Changement effectué par ${actorName}.`
-          : `Le niveau DEFCON a été désactivé par ${actorName}.`
+        const modeleDefaut = DEFCON_ANNONCES_PAR_DEFAUT.find((item) => item.niveau === niveau) || DEFCON_ANNONCES_PAR_DEFAUT[0]
+        const { data: modeleEnregistre, error: modeleError } = await admin.from("defcon_announcement_templates")
+          .select("title,summary,details").eq("level", niveau).maybeSingle()
+        if (modeleError) throw modeleError
+        const titreAnnonce = texte(modeleEnregistre?.title) || modeleDefaut.titre
+        const resumeAnnonce = texte(modeleEnregistre?.summary) || modeleDefaut.resume
+        const detailsAnnonce = texte(modeleEnregistre?.details) || modeleDefaut.details
+        const corpsAnnonce = resumeAnnonce + (detailsAnnonce ? `\n\n${detailsAnnonce}` : "")
         const { data: annonceDefcon, error: annonceError } = await admin.from("home_announcements").insert({
           title: titreAnnonce,
           body: corpsAnnonce,

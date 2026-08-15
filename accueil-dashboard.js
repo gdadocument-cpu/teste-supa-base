@@ -53,9 +53,17 @@
 
   function annonce(a) {
     const libelleType = TYPES[a.type] || TYPES.INFO;
-    return `<article class="accueil-annonce accueil-annonce-${h((a.type || "INFO").toLowerCase())}">
+    const details = String(a.details || "").trim();
+    const depliable = details.length > 0;
+    const auteurEtDate = a.auteur
+      ? `Par ${h(a.auteur)} · ${h(relatif(a.creeLe))}`
+      : h(relatif(a.creeLe));
+    return `<article class="accueil-annonce accueil-annonce-${h((a.type || "INFO").toLowerCase())}${depliable ? " est-depliable" : ""}"
+      ${depliable ? 'data-annonce-depliable="true" tabindex="0" role="button" aria-expanded="false"' : ""}>
       ${icone(a.icone || "info", "accueil-annonce-icone")}
-      <div><header><strong>${h(a.titre)}</strong><small>${libelleType}</small></header><p>${h(a.description)}</p><span>Par ${h(a.auteur)} · ${h(relatif(a.creeLe))}</span></div>
+      <div><header><strong>${h(a.titre)}</strong><small>${libelleType}</small></header><p>${h(a.description)}</p>
+        ${depliable ? `<div class="accueil-annonce-details">${h(details)}</div><em class="accueil-annonce-indice">Afficher le message complet⌄</em>` : ""}
+        <span>${auteurEtDate}</span></div>
       ${a.peutSupprimer ? `<button class="accueil-annonce-supprimer" data-id="${h(a.id)}" type="button" title="Supprimer cette annonce" aria-label="Supprimer cette annonce">×</button>` : ""}
     </article>`;
   }
@@ -116,8 +124,26 @@
 
   function brancher() {
     document.getElementById("toutesAnnoncesAccueil")?.addEventListener("click", function () { afficherTout = !afficherTout; rendre(); });
+    document.querySelectorAll("[data-annonce-depliable]").forEach(function (element) {
+      function basculer() {
+        const ouvert = element.classList.toggle("est-depliee");
+        element.setAttribute("aria-expanded", String(ouvert));
+        const indice = element.querySelector(".accueil-annonce-indice");
+        if (indice) indice.textContent = ouvert ? "Masquer le message complet⌃" : "Afficher le message complet⌄";
+      }
+      element.addEventListener("click", function (evenement) {
+        if (evenement.target.closest(".accueil-annonce-supprimer")) return;
+        basculer();
+      });
+      element.addEventListener("keydown", function (evenement) {
+        if (evenement.key !== "Enter" && evenement.key !== " ") return;
+        evenement.preventDefault();
+        basculer();
+      });
+    });
     document.querySelectorAll(".accueil-annonce-supprimer").forEach(function (bouton) {
-      bouton.addEventListener("click", function () {
+      bouton.addEventListener("click", function (evenement) {
+        evenement.stopPropagation();
         if (confirm("Supprimer cette annonce ?")) envoyer("supprimerAnnonceAccueil", { annonceId: bouton.dataset.id });
       });
     });

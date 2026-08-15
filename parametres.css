@@ -52,7 +52,8 @@
 .parametres-bloc h4 { margin: 0 0 6px; font-size: 18px; }
 .parametres-bloc label { display: grid; gap: 7px; color: #afcadd; font-size: 12px; font-weight: 700; }
 .parametres-bloc input,
-.parametres-bloc select {
+.parametres-bloc select,
+.parametres-bloc textarea {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid #1c587d;
@@ -61,11 +62,21 @@
   color: #eefaff;
   background: #071f33;
 }
+.parametres-bloc textarea { min-height: 76px; resize: vertical; font: inherit; line-height: 1.5; }
 
 .parametres-retour { grid-column: 1 / -1; min-height: 18px; color: #77e6bc; }
 .parametres-retour.erreur,
 .parametres-erreur { color: #ff8d9a; }
 .parametres-themes-section { margin-bottom: 22px; }
+.parametres-defcon-section { margin-bottom: 22px; }
+.parametres-defcon-section > header { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #153e59; }
+.parametres-defcon-liste { display: grid; gap: 10px; }
+.parametres-defcon-carte { border: 1px solid #184a69; border-radius: 12px; background: rgba(7,38,60,.72); overflow: hidden; }
+.parametres-defcon-carte > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; cursor: pointer; color: #ecf8ff; font-weight: 800; }
+.parametres-defcon-carte > summary span { color: #8eb0c8; font-size: 12px; font-weight: 500; }
+.parametres-defcon-formulaire { display: grid; grid-template-columns: minmax(180px,.8fr) minmax(260px,1.2fr); gap: 14px; padding: 16px; border-top: 1px solid #153e59; }
+.parametres-defcon-formulaire label:last-of-type { grid-column: 1 / -1; }
+.parametres-defcon-formulaire button { justify-self: start; }
 .parametres-themes-section > header { padding-bottom: 16px; border-bottom: 1px solid #153e59; }
 .parametres-themes-liste {
   display: grid;
@@ -175,7 +186,10 @@
   .parametres-themes-section > header,
   .parametres-liens-section > header { align-items: flex-start; flex-direction: column; }
   .parametres-generaux,
-  .parametres-lien-formulaire { grid-template-columns: 1fr; }
+  .parametres-lien-formulaire,
+  .parametres-defcon-formulaire { grid-template-columns: 1fr; }
+  .parametres-defcon-formulaire label:last-of-type { grid-column: 1; }
+  .parametres-defcon-carte > summary { align-items: flex-start; flex-direction: column; gap: 5px; }
   .parametres-lien-actions { grid-column: 1; flex-wrap: wrap; }
   .parametres-theme-carte { grid-template-columns: 72px minmax(0, 1fr); }
   .parametres-theme-apercu { width: 72px; height: 52px; }

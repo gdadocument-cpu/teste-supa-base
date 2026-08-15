@@ -11,6 +11,9 @@ let parametresSiteThemes = [
   { id: "theme-test", nom: "Thème Test", description: "Interface PC moderne, aérée et organisée en cartes." }
 ];
 let parametresSiteLiens = [];
+let parametresSiteDefcon = [0, 1, 2, 3, 4].map(function(niveau) {
+  return { niveau: niveau, titre: niveau ? `DEFCON N-${niveau} activé` : "DEFCON désactivé", resume: "Information DEFCON.", details: "" };
+});
 let parametresSitePeutGerer = false;
 let parametresSiteCharges = false;
 let parametresSiteChargement = null;
@@ -50,6 +53,9 @@ function appliquerConfigurationSiteGDA(resultat) {
         return Number(a.ordre || 0) - Number(b.ordre || 0);
       })
     : [];
+  parametresSiteDefcon = Array.isArray(resultat && resultat.defconAnnonces) && resultat.defconAnnonces.length
+    ? resultat.defconAnnonces.slice().sort(function(a, b) { return Number(a.niveau) - Number(b.niveau); })
+    : parametresSiteDefcon;
   parametresSitePeutGerer = resultat && resultat.peutGerer === true;
   parametresSiteCharges = true;
   if (typeof window.mettreAJourMaximumEffectifGDA === "function") {
@@ -189,6 +195,7 @@ function afficherParametresSiteGDA() {
         <output class="parametres-retour" aria-live="polite"></output>
       </form>
       ${creerSelectionThemesParametresGDA()}
+      ${creerParametresAnnoncesDefconGDA()}
       <div class="parametres-categories">
         ${creerCategorieParametresLiensGDA("LIENS_UTILES")}
         ${creerCategorieParametresLiensGDA("INSTRUCTEUR")}
@@ -196,6 +203,28 @@ function afficherParametresSiteGDA() {
     </section>`;
   brancherParametresSiteGDA();
   if (typeof appliquerModeVisiteurGDA === "function") appliquerModeVisiteurGDA();
+}
+
+function creerParametresAnnoncesDefconGDA() {
+  const verrouille = !parametresSitePeutGerer;
+  return `<section class="parametres-bloc parametres-defcon-section">
+    <header><div><h4>🚨 Annonces automatiques DEFCON</h4><p>Personnalisez le résumé visible sur l’accueil et le message complet affiché au clic.</p></div></header>
+    <div class="parametres-defcon-liste">
+      ${parametresSiteDefcon.map(function(modele) {
+        const niveau = Math.max(0, Math.min(4, Number(modele.niveau) || 0));
+        return `<details class="parametres-defcon-carte" ${niveau === 4 ? "open" : ""}>
+          <summary>${niveau ? `DEFCON N-${niveau}` : "DEFCON désactivé"}<span>${echapperHTML(modele.titre || "")}</span></summary>
+          <form class="parametres-defcon-formulaire" data-niveau-defcon="${niveau}">
+            <label><span>Titre de l’annonce</span><input name="titre" maxlength="120" value="${echapperHTML(modele.titre || "")}" required ${verrouille ? "disabled" : ""}></label>
+            <label><span>Résumé toujours visible</span><textarea name="resume" maxlength="500" required ${verrouille ? "disabled" : ""}>${echapperHTML(modele.resume || "")}</textarea></label>
+            <label><span>Message complet dépliable</span><textarea name="details" maxlength="5000" rows="9" placeholder="Laissez vide si aucun détail n’est nécessaire." ${verrouille ? "disabled" : ""}>${echapperHTML(modele.details || "")}</textarea></label>
+            ${verrouille ? "" : '<button type="submit">Enregistrer cette annonce</button>'}
+            <output class="parametres-retour" aria-live="polite"></output>
+          </form>
+        </details>`;
+      }).join("")}
+    </div>
+  </section>`;
 }
 
 function utilisateurPeutConsulterParametresSiteGDA() {
@@ -252,6 +281,9 @@ function brancherParametresSiteGDA() {
   document.querySelectorAll("[data-activer-theme]").forEach(function(bouton) {
     bouton.addEventListener("click", activerThemeParametresGDA);
   });
+  document.querySelectorAll(".parametres-defcon-formulaire").forEach(function(formulaire) {
+    formulaire.addEventListener("submit", enregistrerAnnonceDefconGDA);
+  });
   document.querySelectorAll("[data-ajouter-lien]").forEach(function (bouton) {
     bouton.addEventListener("click", function () {
       parametresAjoutCategorie = bouton.dataset.ajouterLien;
@@ -272,6 +304,26 @@ function brancherParametresSiteGDA() {
       afficherParametresSiteGDA();
     });
   });
+}
+
+async function enregistrerAnnonceDefconGDA(evenement) {
+  evenement.preventDefault();
+  const formulaire = evenement.currentTarget;
+  const bouton = formulaire.querySelector("button[type=submit]");
+  const retour = formulaire.querySelector(".parametres-retour");
+  if (bouton) bouton.disabled = true;
+  retour.textContent = "Enregistrement…";
+  try {
+    const donnees = Object.fromEntries(new FormData(formulaire).entries());
+    donnees.niveau = formulaire.dataset.niveauDefcon || "0";
+    const resultat = await requeteMutationParametresGDA("enregistrerAnnonceDefcon", donnees);
+    afficherParametresSiteGDA();
+    afficherNotificationGDA(resultat.message, "succes");
+  } catch (erreur) {
+    retour.textContent = erreur.message || "Enregistrement impossible.";
+    retour.classList.add("erreur");
+    if (bouton) bouton.disabled = false;
+  }
 }
 
 async function activerThemeParametresGDA(evenement) {

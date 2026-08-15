@@ -91,6 +91,16 @@
     document.dispatchEvent(new CustomEvent("gda:workspace-change"));
   }
 
+  function rendreErreur(message) {
+    if (!estAccueil()) return;
+    document.getElementById("workspace").innerHTML = `<section id="welcomePanel" class="accueil-dashboard-erreur">
+      <span aria-hidden="true">!</span><h3>Tableau d’accueil indisponible</h3>
+      <p>${h(message || "Impossible de charger les informations de l’accueil.")}</p>
+      <button id="reessayerTableauAccueil" type="button">↻ Réessayer</button>
+    </section>`;
+    document.getElementById("reessayerTableauAccueil")?.addEventListener("click", function () { actualiser(true); });
+  }
+
   function brancher() {
     document.getElementById("toutesAnnoncesAccueil")?.addEventListener("click", function () { afficherTout = !afficherTout; rendre(); });
     document.querySelectorAll(".accueil-annonce-supprimer").forEach(function (bouton) {
@@ -143,7 +153,10 @@
         const resultat = await reponse.json();
         if (!resultat.success) throw new Error(resultat.message);
         donnees = resultat; rendre();
-      } catch (e) { console.warn("Tableau d’accueil indisponible :", e); }
+      } catch (e) {
+        console.warn("Tableau d’accueil indisponible :", e);
+        rendreErreur(e.message);
+      }
       finally { chargement = null; }
     })();
     return chargement;
@@ -151,4 +164,12 @@
 
   window.afficherTableauAccueilGDA = function () { if (estAccueil()) { if (donnees) rendre(); actualiser(false); } };
   window.actualiserTableauAccueilGDA = actualiser;
+  function tenterChargementInitial() {
+    if (sessionStorage.getItem("identifiantUtilisateur") && estAccueil()) {
+      window.afficherTableauAccueilGDA();
+    }
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", tenterChargementInitial, { once: true });
+  else tenterChargementInitial();
+  window.setTimeout(tenterChargementInitial, 2500);
 })();

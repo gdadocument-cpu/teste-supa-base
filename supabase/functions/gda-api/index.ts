@@ -529,8 +529,12 @@ const authenticated = async (req: Request) => {
         message,
         semaine,
         groupes: {
-          officiersSuperieurs: (members ?? []).filter(estSuperieur).sort(parGrade).map(ligne),
-          officiers: (members ?? []).filter(estOfficier).sort(parGrade).map(ligne),
+          officiersSuperieurs: (members ?? [])
+            .filter((member: any) => estSuperieur(member) && !estGerantSpecialisation(member))
+            .sort(parGrade).map(ligne),
+          officiers: (members ?? [])
+            .filter((member: any) => estOfficier(member) && !estGerantSpecialisation(member))
+            .sort(parGrade).map(ligne),
           gerantsSpecialisation: (members ?? []).filter(estGerantSpecialisation).sort(parGrade).map(ligne),
         },
       }

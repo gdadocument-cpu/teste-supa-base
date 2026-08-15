@@ -515,8 +515,9 @@ const authenticated = async (req: Request) => {
       const estOfficier = (member: any) => ["CAPITAINE", "LIEUTENANT", "SOUSLIEUTENANT", "ASPIRANT"]
         .includes(normalise(member.grade).replace(/[^A-Z]/g, ""))
       const estGerantSpecialisation = (member: any) => {
-        const specialisations = normalise((member.specializations ?? []).join("; "))
-        return specialisations.includes("RESPONSABLE INST") || specialisations.includes("RESPONSABLE MDC")
+        return (member.specializations ?? []).some((specialisation: string) =>
+          ["RESPONSABLE INST", "RESPONSABLE MDC"].includes(normalise(specialisation))
+        )
       }
       const parGrade = (a: any, b: any) => {
         const difference = rangGrade(a.grade) - rangGrade(b.grade)
@@ -873,11 +874,13 @@ const authenticated = async (req: Request) => {
         const member = (members ?? []).find((item: any) => item.id === memberId)
         if (!member) throw new Error("Officier introuvable.")
         const grade = normalise(member.grade).replace(/[^A-Z]/g, "")
-        const specialisations = normalise((member.specializations ?? []).join("; "))
+        const responsableSpecialisation = (member.specializations ?? []).some((specialisation: string) =>
+          ["RESPONSABLE INST", "RESPONSABLE MDC"].includes(normalise(specialisation))
+        )
         const eligible = [
           "LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT", "CAPITAINE",
           "LIEUTENANT", "SOUSLIEUTENANT", "ASPIRANT",
-        ].includes(grade) || specialisations.includes("RESPONSABLE INST") || specialisations.includes("RESPONSABLE MDC")
+        ].includes(grade) || responsableSpecialisation
         if (!eligible) throw new Error("Cette personne ne fait pas partie de la liste des tâches officiers.")
 
         const today = aujourdHui()

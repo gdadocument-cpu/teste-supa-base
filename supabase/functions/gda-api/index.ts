@@ -535,7 +535,11 @@ const authenticated = async (req: Request) => {
           officiers: (members ?? [])
             .filter((member: any) => estOfficier(member) && !estGerantSpecialisation(member))
             .sort(parGrade).map(ligne),
-          gerantsSpecialisation: (members ?? []).filter(estGerantSpecialisation).sort(parGrade).map(ligne),
+          gerantsSpecialisation: (members ?? [])
+            .filter((member: any) =>
+              estGerantSpecialisation(member) && (estSuperieur(member) || estOfficier(member))
+            )
+            .sort(parGrade).map(ligne),
         },
       }
     }

@@ -34,8 +34,21 @@
     return typeof window.iconeGDA === "function" ? window.iconeGDA(code, classe) : `<span class="gda-icone">●</span>`;
   }
 
-  function carte(code, valeur, libelle, classe) {
-    return `<article class="accueil-statistique ${classe}">${icone(code, "accueil-statistique-icone")}<strong>${h(valeur)}</strong><span>${h(libelle)}</span></article>`;
+  function iconeDisponibilites(pourcentage) {
+    const niveau = Math.max(0, Math.min(100, Number(pourcentage) || 0));
+    return `<span class="accueil-statistique-icone accueil-bouclier-jauge"
+      style="--niveau-disponibilite:${niveau}%;--intensite-disponibilite:${niveau / 100}"
+      title="Bouclier rempli à ${niveau}%" aria-hidden="true">
+      ${icone("shield", "accueil-bouclier-source accueil-statistique-icone")}
+      <span class="accueil-bouclier-interieur"><i></i></span>
+    </span>`;
+  }
+
+  function carte(code, valeur, libelle, classe, niveau) {
+    const illustration = code === "shield"
+      ? iconeDisponibilites(niveau)
+      : icone(code, "accueil-statistique-icone");
+    return `<article class="accueil-statistique ${classe}">${illustration}<strong>${h(valeur)}</strong><span>${h(libelle)}</span></article>`;
   }
 
   function annonce(a) {
@@ -70,12 +83,12 @@
     const s = donnees.statistiques || {};
     const stats = donnees.officier ? [
       carte("personnel", s.effectifActif, "Effectif total", "effectif"),
-      carte("shield", `${s.pourcentageDisponibles}%`, "Membres disponibles", "disponibles"),
+      carte("shield", `${s.pourcentageDisponibles}%`, "Membres disponibles", "disponibles", s.pourcentageDisponibles),
       carte("report", s.rapportsEnAttente, "Rapports en attente", "rapports"),
       carte("calendar", s.absencesEnAttente, "Absences en attente", "absences")
     ] : [
       carte("personnel", s.effectifActif, "Effectif GDA actif", "effectif"),
-      carte("shield", `${s.pourcentageDisponibles}%`, "Membres présents / disponibles", "disponibles"),
+      carte("shield", `${s.pourcentageDisponibles}%`, "Membres présents / disponibles", "disponibles", s.pourcentageDisponibles),
       carte("report", s.mesRapportsEnregistres, "Mes rapports validés ou archivés", "rapports")
     ];
     const liste = Array.isArray(donnees.annonces) ? donnees.annonces : [];

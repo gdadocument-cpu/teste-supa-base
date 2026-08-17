@@ -2066,15 +2066,36 @@ const authenticated = async (req: Request) => {
       }
       case "recupererAdministration": {
         requireReadPermission("administration_permissions")
-        const [{ data: allProfiles }, { data: allGrants }, { data: allPermissions }] = await Promise.all([
+        const [
+          { data: allProfiles, error: profilesError },
+          { data: allGrants, error: grantsError },
+          { data: allPermissions, error: permissionsError },
+          { data: whitelistRows, error: whitelistError },
+        ] = await Promise.all([
           admin.from("profiles").select("id,member_id,display_name,discord_id,access_level,active"),
           admin.from("profile_permissions").select("profile_id,permission_code"),
           admin.from("permissions").select("code,label").order("code"),
+          admin.from("whitelist").select("login_identifier,discord_id").eq("active", true),
         ])
+        if (profilesError) throw profilesError
+        if (grantsError) throw grantsError
+        if (permissionsError) throw permissionsError
+        if (whitelistError) throw whitelistError
+
+        const idsEffectifOfficier = new Set((members ?? []).map((item: any) => item.id))
+        const nomsEffectifOfficier = new Set((members ?? []).map((item: any) => normalise(item.matricule)))
+        const discordListeBlanche = new Set((whitelistRows ?? []).map((item: any) => texte(item.discord_id)).filter(Boolean))
+        const nomsListeBlanche = new Set((whitelistRows ?? []).map((item: any) => normalise(item.login_identifier)).filter(Boolean))
+        const profilsAffichables = (allProfiles ?? []).filter((item: any) =>
+          (item.member_id && idsEffectifOfficier.has(item.member_id)) ||
+          nomsEffectifOfficier.has(normalise(item.display_name)) ||
+          discordListeBlanche.has(texte(item.discord_id)) ||
+          nomsListeBlanche.has(normalise(item.display_name))
+        )
         return json({
           success: true, auteurProprietaire: owner, auteurCoproprietaire: coOwner, visiteur: visitor, proprietaireNom: (allProfiles ?? []).find((item: any) => item.access_level === "owner")?.display_name || "Milo",
           permissions: (allPermissions ?? []).filter((item: any) => item.code !== "role_coproprietaire").map((item: any) => ({ cle: item.code, libelle: item.label })),
-          utilisateurs: (allProfiles ?? []).map((item: any) => ({
+          utilisateurs: profilsAffichables.map((item: any) => ({
             id: item.id, nom: item.display_name, grade: delayedById.get(item.member_id)?.grade ?? memberById.get(item.member_id)?.grade ?? "Visiteur",
             discordId: item.discord_id, niveauAcces: item.access_level, actif: item.active,
             proprietaire: item.access_level === "owner" || normalise(item.display_name) === "MILO", coproprietaire: item.access_level !== "owner" && (allGrants ?? []).some((grant: any) => grant.profile_id === item.id && grant.permission_code === "role_coproprietaire"),

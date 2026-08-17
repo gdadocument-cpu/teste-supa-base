@@ -228,7 +228,7 @@ const authenticated = async (req: Request) => {
       .maybeSingle()
     if (profileError || !profile) return json({ success: false, message: "Profil GDA non autorisé." }, 403)
 
-    const [{ data: grants }, { data: members }, { data: delayed }, { data: defcon }, { data: suivisProbatoires }, { data: absencesSuivis }, { data: derniereVersionEffectif }, { data: configurationSite }] = await Promise.all([
+    const [{ data: grants }, { data: members }, { data: delayed }, { data: defcon }, { data: suivisProbatoires }, { data: absencesSuivis }, { data: derniereVersionEffectif }, { data: configurationSite }, { data: whitelistAccess }] = await Promise.all([
       admin.from("profile_permissions").select("permission_code").eq("profile_id", profile.id),
       admin.from("members").select("*").eq("active", true),
       admin.from("current_gda_roster").select("*"),
@@ -237,7 +237,21 @@ const authenticated = async (req: Request) => {
       admin.from("absences").select("member_id,matricule_snapshot,starts_on,ends_on"),
       admin.from("gda_roster_versions").select("published_at").order("published_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle(),
       admin.from("site_configuration").select("max_gda,roster_publish_time,active_theme,sessions_reset_at,updated_at").eq("singleton", true).maybeSingle(),
+      admin.from("whitelist").select("id").eq("discord_id", profile.discord_id).eq("active", true).limit(1).maybeSingle(),
     ])
+
+    const membreEffectifAutorise = (members ?? []).some((member: any) =>
+      (profile.member_id && member.id === profile.member_id) ||
+      texte(member.discord_id) === texte(profile.discord_id) ||
+      normalise(member.matricule) === normalise(profile.display_name)
+    )
+    if (!membreEffectifAutorise && !whitelistAccess) {
+      await admin.from("profiles").update({ active: false }).eq("id", profile.id)
+      return json({
+        success: false,
+        message: "Accès retiré : vous ne figurez ni dans l’effectif officier ni dans la liste blanche.",
+      }, 403)
+    }
 
     const sessionsReinitialiseesLe = new Date(configurationSite?.sessions_reset_at ?? 0).getTime()
     const derniereConnexionUtilisateur = new Date(authData.user.last_sign_in_at ?? 0).getTime()

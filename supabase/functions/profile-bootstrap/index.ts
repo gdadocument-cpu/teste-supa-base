@@ -59,24 +59,42 @@ const authenticated = async (req: Request) => {
     .maybeSingle()
   if (profileError) return json({ success: false, error: "Impossible de charger le profil." }, 500)
 
-  let profile = existing
-  if (!profile) {
-    const { data: allowed, error: whitelistError } = await admin
-      .from("whitelist")
+  let memberQuery = admin
+    .from("members")
+    .select("id,matricule,grade,discord_id")
+    .eq("active", true)
+  memberQuery = existing?.member_id
+    ? memberQuery.eq("id", existing.member_id)
+    : memberQuery.eq("discord_id", discordId)
+  const [{ data: allowed, error: whitelistError }, { data: activeMember, error: memberError }] = await Promise.all([
+    admin.from("whitelist")
       .select("login_identifier,discord_id")
       .eq("discord_id", discordId)
       .eq("active", true)
-      .maybeSingle()
-    if (whitelistError) return json({ success: false, error: "Impossible de vérifier la liste blanche." }, 500)
-    if (!allowed) return json({ success: false, error: "Compte absent de la liste blanche." }, 403)
+      .maybeSingle(),
+    memberQuery.maybeSingle(),
+  ])
+  if (whitelistError) return json({ success: false, error: "Impossible de vérifier la liste blanche." }, 500)
+  if (memberError) return json({ success: false, error: "Impossible de vérifier l’effectif officier." }, 500)
+  if (!allowed && !activeMember) {
+    if (existing?.id) await admin.from("profiles").update({ active: false }).eq("id", existing.id)
+    return json({
+      success: false,
+      error: "Accès refusé : vous ne figurez ni dans l’effectif officier ni dans la liste blanche.",
+    }, 403)
+  }
 
+  let profile = existing
+  if (!profile) {
     const { data: created, error: createError } = await admin
       .from("profiles")
       .insert({
         auth_user_id: authData.user.id,
-        display_name: allowed.login_identifier,
+        member_id: activeMember?.id ?? null,
+        display_name: activeMember?.matricule ?? allowed?.login_identifier,
         discord_id: discordId,
-        access_level: "visitor",
+        access_level: activeMember ? "member" : "visitor",
+        active: true,
         last_login_at: new Date().toISOString(),
       })
       .select("id,auth_user_id,member_id,display_name,discord_id,access_level,active")
@@ -84,13 +102,18 @@ const authenticated = async (req: Request) => {
     if (createError) return json({ success: false, error: "Impossible de créer le profil." }, 500)
     profile = created
   } else {
-    if (!profile.active) return json({ success: false, error: "Ce compte est désactivé." }, 403)
     if (profile.auth_user_id && profile.auth_user_id !== authData.user.id) {
       return json({ success: false, error: "Ce profil est déjà lié à un autre compte Discord." }, 409)
     }
     const { data: updated, error: updateError } = await admin
       .from("profiles")
-      .update({ auth_user_id: authData.user.id, last_login_at: new Date().toISOString() })
+      .update({
+        auth_user_id: authData.user.id,
+        member_id: activeMember?.id ?? profile.member_id,
+        display_name: activeMember?.matricule ?? allowed?.login_identifier ?? profile.display_name,
+        active: true,
+        last_login_at: new Date().toISOString(),
+      })
       .eq("id", profile.id)
       .select("id,auth_user_id,member_id,display_name,discord_id,access_level,active")
       .single()

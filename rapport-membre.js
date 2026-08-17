@@ -217,6 +217,7 @@ function creerFormulaireRapportPersonnelGDA() {
             ${rapport ? "Enregistrer les modifications" : "Envoyer le rapport"}
           </button>
         </div>
+        <small id="rapportPersonnelBrouillonStatut" class="rapport-brouillon-statut" hidden></small>
         <p id="rapportPersonnelMessage" role="status"></p>
       </form>
     </div>
@@ -232,7 +233,17 @@ function brancherRapportsPersonnelsGDA() {
   }
 
   const formulaire = document.getElementById("rapportPersonnelFormulaire");
-  if (formulaire) formulaire.addEventListener("submit", envoyerRapportPersonnelGDA);
+  if (formulaire) {
+    formulaire._gdaBrouillon = typeof installerBrouillonLocalGDA === "function"
+      ? installerBrouillonLocalGDA(formulaire, {
+          id: rapportPersonnelEdition
+            ? "rapport-personnel-edition-" + String(rapportPersonnelEdition.id || rapportPersonnelEdition.ligne)
+            : "rapport-personnel-nouveau",
+          statutId: "rapportPersonnelBrouillonStatut"
+        })
+      : null;
+    formulaire.addEventListener("submit", envoyerRapportPersonnelGDA);
+  }
 
   const annuler = document.getElementById("rapportPersonnelAnnuler");
   if (annuler) {
@@ -268,6 +279,7 @@ function brancherRapportsPersonnelsGDA() {
 
 async function envoyerRapportPersonnelGDA(event) {
   event.preventDefault();
+  const brouillon = event.currentTarget._gdaBrouillon;
   const bouton = document.getElementById("rapportPersonnelEnvoyer");
   const message = document.getElementById("rapportPersonnelMessage");
   const edition = rapportPersonnelEdition;
@@ -297,6 +309,7 @@ async function envoyerRapportPersonnelGDA(event) {
     const resultat = await reponse.json();
     if (!resultat.success) throw new Error(resultat.message || "Enregistrement impossible.");
 
+    if (brouillon) brouillon.supprimer();
     rapportPersonnelEdition = null;
     appliquerResultatRapportsPersonnelsGDA(resultat);
   } catch (erreur) {

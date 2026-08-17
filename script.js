@@ -53,6 +53,92 @@ let minuteurNotificationsAbsence = null;
 let notificationsAbsenceGDA = [];
 let minuteurPolitiqueSessionGDA = null;
 let deconnexionForceeEnCoursGDA = false;
+
+const PREFIXE_BROUILLON_FORMULAIRE_GDA = "gdaBrouillonFormulaireV1:";
+const DUREE_BROUILLON_FORMULAIRE_GDA = 30 * 24 * 60 * 60 * 1000;
+
+function installerBrouillonLocalGDA(formulaire, options) {
+  if (!formulaire) return null;
+  const configuration = options || {};
+  const identifiant = String(
+    sessionStorage.getItem("identifiantUtilisateur") ||
+    sessionStorage.getItem("gdaMatriculeConnexion") ||
+    "utilisateur"
+  ).trim().toLocaleLowerCase("fr-FR");
+  const cle = PREFIXE_BROUILLON_FORMULAIRE_GDA + identifiant + ":" + String(configuration.id || formulaire.id || "formulaire");
+  const statut = configuration.statutId
+    ? document.getElementById(configuration.statutId)
+    : null;
+  const champs = Array.from(formulaire.querySelectorAll("input, textarea, select")).filter(function(champ) {
+    const type = String(champ.type || "").toLowerCase();
+    return !champ.disabled && !champ.readOnly && !["button", "submit", "reset", "file", "hidden"].includes(type);
+  });
+
+  function nomChamp(champ) {
+    return champ.name || champ.id || "";
+  }
+
+  function afficherStatut(message) {
+    if (!statut) return;
+    statut.textContent = message || "";
+    statut.hidden = !message;
+  }
+
+  function sauvegarder() {
+    const valeurs = {};
+    champs.forEach(function(champ) {
+      const nom = nomChamp(champ);
+      if (!nom) return;
+      valeurs[nom] = champ.type === "checkbox" || champ.type === "radio"
+        ? champ.checked
+        : champ.value;
+    });
+    try {
+      localStorage.setItem(cle, JSON.stringify({ date: Date.now(), valeurs: valeurs }));
+      afficherStatut("Brouillon sauvegardé sur cet appareil à " + new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) + ".");
+    } catch (erreur) {
+      afficherStatut("La sauvegarde locale du brouillon est indisponible.");
+    }
+  }
+
+  function restaurer() {
+    try {
+      const brouillon = JSON.parse(localStorage.getItem(cle) || "null");
+      if (!brouillon || !brouillon.valeurs) return false;
+      if (Date.now() - Number(brouillon.date || 0) > DUREE_BROUILLON_FORMULAIRE_GDA) {
+        localStorage.removeItem(cle);
+        return false;
+      }
+      champs.forEach(function(champ) {
+        const nom = nomChamp(champ);
+        if (!nom || !Object.prototype.hasOwnProperty.call(brouillon.valeurs, nom)) return;
+        if (champ.type === "checkbox" || champ.type === "radio") {
+          champ.checked = brouillon.valeurs[nom] === true;
+        } else {
+          champ.value = String(brouillon.valeurs[nom] ?? "");
+        }
+        champ.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      afficherStatut("Brouillon restauré depuis cet appareil.");
+      return true;
+    } catch (erreur) {
+      return false;
+    }
+  }
+
+  function supprimer() {
+    try { localStorage.removeItem(cle); } catch (erreur) { /* Stockage indisponible. */ }
+    afficherStatut("");
+  }
+
+  restaurer();
+  champs.forEach(function(champ) {
+    champ.addEventListener("input", sauvegarder);
+    champ.addEventListener("change", sauvegarder);
+  });
+  formulaire.addEventListener("submit", sauvegarder);
+  return { sauvegarder: sauvegarder, supprimer: supprimer, restaurer: restaurer };
+}
 let menuOfficiersSuperieursOuvert = false;
 let menuOfficierOuvert = false;
 let menuEspaceGdaOuvert = false;

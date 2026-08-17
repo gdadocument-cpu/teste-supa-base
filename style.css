@@ -557,6 +557,18 @@ h1 {
   transform: scale(1);
 }
 
+.rapport-brouillon-statut {
+  display: block;
+  margin-top: 10px;
+  color: #7dd3fc;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.rapport-brouillon-statut[hidden] {
+  display: none;
+}
+
 #logoutButton {
   align-items: center;
   background: linear-gradient(145deg, #d52d3e, #81121f);

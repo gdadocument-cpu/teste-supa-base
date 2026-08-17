@@ -371,6 +371,7 @@ function creerFormulaireRapport() {
             Enregistrer le rapport
           </button>
         </div>
+        <small id="rapportOfficierBrouillonStatut" class="rapport-brouillon-statut" hidden></small>
       </form>
     </section>
   `;
@@ -555,6 +556,12 @@ function brancherEvenementsRapports() {
     );
 
   if (formulaire) {
+    formulaire._gdaBrouillon = typeof installerBrouillonLocalGDA === "function"
+      ? installerBrouillonLocalGDA(formulaire, {
+          id: "rapport-officier-nouveau",
+          statutId: "rapportOfficierBrouillonStatut"
+        })
+      : null;
     formulaire.addEventListener(
       "submit",
       envoyerNouveauRapport
@@ -964,6 +971,7 @@ async function envoyerNouveauRapport(
   evenement
 ) {
   evenement.preventDefault();
+  const brouillon = evenement.currentTarget._gdaBrouillon;
 
   const identifiant =
     sessionStorage.getItem(
@@ -1038,6 +1046,7 @@ async function envoyerNouveauRapport(
       );
     }
 
+    if (brouillon) brouillon.supprimer();
     synchroniserEffectifDepuisRapports(resultat);
     formulaireRapportOuvert = false;
     rapportsRegistre = Array.isArray(resultat.rapports)

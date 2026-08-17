@@ -2383,7 +2383,9 @@ function appliquerVisibiliteModulesGDA() {
   if (sidebar) sidebar.hidden = false;
   if (desktop) desktop.classList.remove("mode-membre");
 
-  if (!officier && workspace) {
+  // Les actualisations en arrière-plan ne doivent jamais remplacer le module
+  // dans lequel l’utilisateur est en train de travailler.
+  if (!officier && workspace && !moduleGdaActif) {
     workspace.innerHTML = `
       <section id="welcomePanel" class="welcome-membre">
         <div class="welcome-membre-icone" aria-hidden="true">✓</div>
@@ -3231,12 +3233,18 @@ async function actualiserPresenceEnLigne() {
     );
 
     if (Array.isArray(resultat.permissions)) {
-      const anciennesPermissions = sessionStorage.getItem("permissionsUtilisateur") || "[]";
-      const nouvellesPermissions = JSON.stringify(resultat.permissions);
+      const anciennesPermissions = obtenirPermissionsUtilisateur()
+        .map(String)
+        .sort()
+        .join("\n");
+      const permissionsActualisees = Array.from(new Set(
+        resultat.permissions.map(String)
+      )).sort();
+      const nouvellesPermissions = JSON.stringify(permissionsActualisees);
       sessionStorage.setItem("permissionsUtilisateur", nouvellesPermissions);
       sessionStorage.setItem("proprietaireUtilisateur", resultat.proprietaire === true ? "true" : "false");
       sessionStorage.setItem("coproprietaireUtilisateur", resultat.coproprietaire === true ? "true" : "false");
-      if (anciennesPermissions !== nouvellesPermissions) {
+      if (anciennesPermissions !== permissionsActualisees.join("\n")) {
         menuAdministrationOuvert = false;
         appliquerVisibiliteModulesGDA();
       }

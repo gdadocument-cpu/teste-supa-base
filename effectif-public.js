@@ -121,10 +121,9 @@ function synchroniserGradeAfficheAvecEffectifPublic() {
   });
   if (!membre || !String(membre.grade || "").trim()) return;
 
-  sessionStorage.setItem(
-    "gradeEffectifPublicUtilisateur",
-    String(membre.grade).trim()
-  );
+  const nouveauGrade = String(membre.grade).trim();
+  if (sessionStorage.getItem("gradeEffectifPublicUtilisateur") === nouveauGrade) return;
+  sessionStorage.setItem("gradeEffectifPublicUtilisateur", nouveauGrade);
   if (typeof afficherUtilisateur === "function") afficherUtilisateur();
 }
 

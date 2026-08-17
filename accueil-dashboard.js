@@ -12,6 +12,13 @@
   }
 
   function estAccueil() {
+    // Une réponse asynchrone de l'accueil peut arriver après que l'utilisateur
+    // a choisi un module. Le DOM peut encore contenir l'ancien écran pendant
+    // le chargement : le module actif reste donc la source de vérité.
+    if (
+      typeof moduleGdaEstActif === "function" &&
+      !moduleGdaEstActif("")
+    ) return false;
     if (document.querySelector("#workspace > #accueilDashboardGDA")) return true;
     const panneau = document.querySelector("#workspace > #welcomePanel");
     if (!panneau) return false;

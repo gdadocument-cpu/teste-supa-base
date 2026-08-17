@@ -236,8 +236,22 @@ const authenticated = async (req: Request) => {
       admin.from("training_followups").select("*").eq("status", "EN_ATTENTE"),
       admin.from("absences").select("member_id,matricule_snapshot,starts_on,ends_on"),
       admin.from("gda_roster_versions").select("published_at").order("published_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle(),
-      admin.from("site_configuration").select("max_gda,roster_publish_time,active_theme,updated_at").eq("singleton", true).maybeSingle(),
+      admin.from("site_configuration").select("max_gda,roster_publish_time,active_theme,sessions_reset_at,updated_at").eq("singleton", true).maybeSingle(),
     ])
+
+    const sessionsReinitialiseesLe = new Date(configurationSite?.sessions_reset_at ?? 0).getTime()
+    const derniereConnexionUtilisateur = new Date(authData.user.last_sign_in_at ?? 0).getTime()
+    if (
+      Number.isFinite(sessionsReinitialiseesLe) &&
+      sessionsReinitialiseesLe > 0 &&
+      (!Number.isFinite(derniereConnexionUtilisateur) || derniereConnexionUtilisateur <= sessionsReinitialiseesLe)
+    ) {
+      return json({
+        success: false,
+        sessionReset: true,
+        message: "Une reconnexion est requise pour charger la dernière version du site.",
+      }, 401)
+    }
 
     const permissions = new Set((grants ?? []).map((grant: any) => grant.permission_code))
     const owner = normalise(profile.display_name) === "MILO" || profile.access_level === "owner"
@@ -831,7 +845,7 @@ const authenticated = async (req: Request) => {
 
     const parametresSiteDonnees = async (message = "") => {
       const [{ data: configuration, error: configurationError }, { data: liens, error: liensError }, { data: modelesDefcon, error: modelesDefconError }] = await Promise.all([
-        admin.from("site_configuration").select("max_gda,roster_publish_time,active_theme,updated_at").eq("singleton", true).single(),
+        admin.from("site_configuration").select("max_gda,roster_publish_time,active_theme,sessions_reset_at,updated_at").eq("singleton", true).single(),
         admin.from("navigation_links").select("external_id,category,label,icon,url,display_mode,sort_order,updated_at")
           .eq("active", true).order("category", { ascending: true }).order("sort_order", { ascending: true }).order("id", { ascending: true }),
         admin.from("defcon_announcement_templates").select("level,title,summary,details,updated_at").order("level", { ascending: true }),
@@ -843,6 +857,7 @@ const authenticated = async (req: Request) => {
         success: true,
         message,
         peutGerer: peutGererParametres,
+        peutDeconnecterTous: property,
         configuration: {
           maximumGda: Math.max(1, Math.min(200, nombre(configuration?.max_gda) || 35)),
           heureActualisation: texte(configuration?.roster_publish_time).slice(0, 5) || "20:00",
@@ -1958,6 +1973,26 @@ const authenticated = async (req: Request) => {
         if (error) throw error
         await audit("Thème du site modifié", themeDisponible.nom)
         return json(await parametresSiteDonnees(`Thème « ${themeDisponible.nom} » activé.`))
+      }
+      case "deconnecterTousUtilisateurs": {
+        if (!property) {
+          throw new Error("Déconnexion générale réservée au propriétaire et au co-propriétaire.")
+        }
+        const reinitialiseLe = new Date().toISOString()
+        const { error } = await admin.from("site_configuration").update({
+          sessions_reset_at: reinitialiseLe,
+          updated_by_profile_id: profile.id,
+          updated_at: reinitialiseLe,
+        }).eq("singleton", true)
+        if (error) throw error
+        await audit(
+          "Déconnexion générale déclenchée",
+          "Toutes les sessions",
+          `Reconnexion obligatoire à partir du ${reinitialiseLe}`,
+        )
+        return json(await parametresSiteDonnees(
+          "Toutes les sessions ont été réinitialisées. Reconnexion obligatoire.",
+        ))
       }
       case "enregistrerAnnonceDefcon": {
         if (!peutGererParametres) throw new Error("Modification réservée à la propriété et aux Gérant GDA.")

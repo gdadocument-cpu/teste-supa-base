@@ -52,6 +52,7 @@ let utilisateursEnLigne = [];
 let minuteurNotificationsAbsence = null;
 let notificationsAbsenceGDA = [];
 let minuteurPolitiqueSessionGDA = null;
+let deconnexionForceeEnCoursGDA = false;
 let menuOfficiersSuperieursOuvert = false;
 let menuOfficierOuvert = false;
 let menuEspaceGdaOuvert = false;
@@ -856,6 +857,7 @@ function fetchApiAvecDelaiGDA(ressource, options) {
   }, delaiMaximum);
 
   return fetchNatifGDA(ressource, optionsFinales)
+    .then(traiterReinitialisationSessionGDA)
     .catch(function(erreur) {
       if (controleur.signal.aborted && !(signalExterne && signalExterne.aborted)) {
         throw new Error("Le serveur GDA met trop de temps à répondre. Réessayez dans quelques secondes.");
@@ -1159,6 +1161,28 @@ function obtenirMoisSessionGDA(date) {
   const annee = parties.find(function(partie) { return partie.type === "year"; });
   const mois = parties.find(function(partie) { return partie.type === "month"; });
   return (annee ? annee.value : "") + "-" + (mois ? mois.value : "");
+}
+
+async function traiterReinitialisationSessionGDA(reponse) {
+  if (reponse.status !== 401 || deconnexionForceeEnCoursGDA) return reponse;
+  let resultat = null;
+  try {
+    resultat = await reponse.clone().json();
+  } catch (erreur) {
+    return reponse;
+  }
+  if (resultat?.sessionReset !== true) return reponse;
+
+  deconnexionForceeEnCoursGDA = true;
+  try {
+    viderCacheLecturesGDA();
+    await deconnecterUtilisateurGDA(true);
+  } catch (erreur) {
+    effacerPersistanceConnexionGDA();
+    sessionStorage.clear();
+    window.location.replace(new URL("/", window.location.origin).href);
+  }
+  return reponse;
 }
 
 function effacerPersistanceConnexionGDA() {

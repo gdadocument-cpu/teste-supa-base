@@ -23,6 +23,28 @@ const authenticated = async (req: Request) => {
   const { data: authData, error: authError } = await userClient.auth.getUser()
   if (authError || !authData.user) return json({ success: false, error: "Session invalide." }, 401)
 
+  const { data: configuration, error: configurationError } = await admin
+    .from("site_configuration")
+    .select("sessions_reset_at")
+    .eq("singleton", true)
+    .maybeSingle()
+  if (configurationError) {
+    return json({ success: false, error: "Impossible de vérifier la session." }, 500)
+  }
+  const sessionsReinitialiseesLe = new Date(configuration?.sessions_reset_at ?? 0).getTime()
+  const derniereConnexionUtilisateur = new Date(authData.user.last_sign_in_at ?? 0).getTime()
+  if (
+    Number.isFinite(sessionsReinitialiseesLe) &&
+    sessionsReinitialiseesLe > 0 &&
+    (!Number.isFinite(derniereConnexionUtilisateur) || derniereConnexionUtilisateur <= sessionsReinitialiseesLe)
+  ) {
+    return json({
+      success: false,
+      sessionReset: true,
+      error: "Une reconnexion est requise pour charger la dernière version du site.",
+    }, 401)
+  }
+
   const discordIdentity = authData.user.identities?.find((identity) => identity.provider === "discord")
   const identityData = discordIdentity?.identity_data as Record<string, unknown> | undefined
   const discordId = String(discordIdentity?.provider_id ?? identityData?.sub ?? "").trim()

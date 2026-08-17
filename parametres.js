@@ -15,6 +15,7 @@ let parametresSiteDefcon = [0, 1, 2, 3, 4].map(function(niveau) {
   return { niveau: niveau, titre: niveau ? `DEFCON N-${niveau} activé` : "DEFCON désactivé", resume: "Information DEFCON.", details: "" };
 });
 let parametresSitePeutGerer = false;
+let parametresSitePeutDeconnecterTous = false;
 let parametresSiteCharges = false;
 let parametresSiteChargement = null;
 let parametresAjoutCategorie = "";
@@ -57,6 +58,7 @@ function appliquerConfigurationSiteGDA(resultat) {
     ? resultat.defconAnnonces.slice().sort(function(a, b) { return Number(a.niveau) - Number(b.niveau); })
     : parametresSiteDefcon;
   parametresSitePeutGerer = resultat && resultat.peutGerer === true;
+  parametresSitePeutDeconnecterTous = resultat && resultat.peutDeconnecterTous === true;
   parametresSiteCharges = true;
   if (typeof window.mettreAJourMaximumEffectifGDA === "function") {
     window.mettreAJourMaximumEffectifGDA(parametresSiteConfiguration.maximumGda);
@@ -194,6 +196,7 @@ function afficherParametresSiteGDA() {
         <button type="submit">Enregistrer les paramètres</button>
         <output class="parametres-retour" aria-live="polite"></output>
       </form>
+      ${creerSecuriteSessionsParametresGDA()}
       ${creerSelectionThemesParametresGDA()}
       ${creerParametresAnnoncesDefconGDA()}
       <div class="parametres-categories">
@@ -203,6 +206,18 @@ function afficherParametresSiteGDA() {
     </section>`;
   brancherParametresSiteGDA();
   if (typeof appliquerModeVisiteurGDA === "function") appliquerModeVisiteurGDA();
+}
+
+function creerSecuriteSessionsParametresGDA() {
+  if (!parametresSitePeutDeconnecterTous) return "";
+  return `<section class="parametres-bloc parametres-securite-sessions">
+    <div>
+      <h4>🔐 Sessions des utilisateurs</h4>
+      <p>Force tous les utilisateurs, vous compris, à se reconnecter afin de charger la dernière version du site.</p>
+    </div>
+    <button id="parametresDeconnecterTous" class="danger" type="button">⏻ Déconnecter tout le monde</button>
+    <output class="parametres-retour" aria-live="polite"></output>
+  </section>`;
 }
 
 function creerParametresAnnoncesDefconGDA() {
@@ -278,6 +293,7 @@ function creerFormulaireLienParametresGDA(lien) {
 function brancherParametresSiteGDA() {
   document.getElementById("parametresActualiser")?.addEventListener("click", ouvrirParametresSiteGDA);
   document.getElementById("parametresGenerauxFormulaire")?.addEventListener("submit", enregistrerParametresGenerauxGDA);
+  document.getElementById("parametresDeconnecterTous")?.addEventListener("click", deconnecterTousUtilisateursGDA);
   document.querySelectorAll("[data-activer-theme]").forEach(function(bouton) {
     bouton.addEventListener("click", activerThemeParametresGDA);
   });
@@ -304,6 +320,32 @@ function brancherParametresSiteGDA() {
       afficherParametresSiteGDA();
     });
   });
+}
+
+async function deconnecterTousUtilisateursGDA(evenement) {
+  const bouton = evenement.currentTarget;
+  const section = bouton.closest(".parametres-securite-sessions");
+  const retour = section?.querySelector(".parametres-retour");
+  const confirmation = window.confirm(
+    "Déconnecter immédiatement tous les utilisateurs du site, y compris votre session ?"
+  );
+  if (!confirmation) return;
+  bouton.disabled = true;
+  if (retour) retour.textContent = "Réinitialisation de toutes les sessions…";
+  try {
+    await requeteMutationParametresGDA("deconnecterTousUtilisateurs", {});
+    if (typeof deconnecterUtilisateurGDA === "function") {
+      await deconnecterUtilisateurGDA(true);
+    } else {
+      window.location.replace(new URL("/", window.location.origin).href);
+    }
+  } catch (erreur) {
+    if (retour) {
+      retour.textContent = erreur.message || "Déconnexion générale impossible.";
+      retour.classList.add("erreur");
+    }
+    bouton.disabled = false;
+  }
 }
 
 async function enregistrerAnnonceDefconGDA(evenement) {

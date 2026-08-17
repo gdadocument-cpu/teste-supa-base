@@ -2665,6 +2665,12 @@ const authenticated = async (req: Request) => {
           await admin.from("home_announcements").delete().eq("id", annonceDefcon.id)
           throw error
         }
+        const { error: nettoyageAnnoncesError } = await admin.from("home_announcements")
+          .delete()
+          .eq("automated", true)
+          .not("defcon_level", "is", null)
+          .neq("id", annonceDefcon.id)
+        if (nettoyageAnnoncesError) throw nettoyageAnnoncesError
         await audit("DEFCON modifié", texte(payload.niveau))
         return json({ success: true, defcon: { niveau, modifiePar: actorName, modifieLe }, message: niveau ? `DEFCON ${niveau} activé.` : "DEFCON désactivé." })
       }

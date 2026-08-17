@@ -5,6 +5,17 @@ let rapportPersonnelEdition = null;
 let rapportsPersonnelsChargement = false;
 let rapportsPersonnelsCharges = false;
 
+function formulaireRapportPersonnelContientSaisieGDA() {
+  if (rapportPersonnelEdition) return true;
+  return [
+    "rapportPersonnelTexte",
+    "rapportPersonnelCommentaire",
+    "rapportPersonnelConclusion"
+  ].some(function(id) {
+    return Boolean(document.getElementById(id)?.value.trim());
+  });
+}
+
 function ouvrirRapportsPersonnelsGDA() {
   definirModuleGdaActif("rapports-personnels");
   rapportPersonnelEdition = null;
@@ -63,7 +74,10 @@ function appliquerResultatRapportsPersonnelsGDA(resultat) {
     sessionStorage.getItem("gradeEffectifPublicUtilisateur") ||
     "Grade non renseigné";
   rapportsPersonnelsCharges = true;
-  if (moduleGdaEstActif("rapports-personnels")) {
+  if (
+    moduleGdaEstActif("rapports-personnels") &&
+    !formulaireRapportPersonnelContientSaisieGDA()
+  ) {
     afficherRapportsPersonnelsGDA();
   }
 

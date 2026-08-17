@@ -18,6 +18,13 @@ let rapportsPeutSupprimer = false;
 let rapportsCharges = false;
 let rapportsChargement = false;
 
+function formulaireRapportOfficierEstOuvertGDA() {
+  return formulaireRapportOuvert ||
+    formulaireRapportDiscordOuvert ||
+    Boolean(document.getElementById("rapportsFormulaire")) ||
+    Boolean(document.getElementById("rapportsFormulaireDiscord"));
+}
+
 rapportsButton.addEventListener(
   "click",
   function () {
@@ -100,7 +107,9 @@ async function chargerRapports(silencieux) {
       resultat.peutSupprimer === true;
     rapportsCharges = true;
 
-    afficherRapports();
+    // Les lectures automatiques actualisent les données en mémoire sans
+    // reconstruire le formulaire qu'une personne est en train de remplir.
+    if (!formulaireRapportOfficierEstOuvertGDA()) afficherRapports();
   } catch (erreur) {
     console.error(erreur);
     afficherErreurRapports(
@@ -1466,6 +1475,7 @@ function normaliserStatutRapportClient(statut) {
 
 window.setInterval(function () {
   if (document.hidden || !moduleGdaEstActif("rapports-officier")) return;
+  if (formulaireRapportOfficierEstOuvertGDA()) return;
   if (typeof gdaForcerActualisation === "function") {
     gdaForcerActualisation("recupererRapports");
   }

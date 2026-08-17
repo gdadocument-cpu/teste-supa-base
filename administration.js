@@ -225,7 +225,7 @@ function afficherListeAdministration() {
     return;
   }
 
-  liste.innerHTML = utilisateurs.map(creerCarteAdministration).join("");
+  liste.innerHTML = creerGroupesGradesAdministration(utilisateurs);
 
   liste.querySelectorAll("[data-enregistrer-permissions]")
     .forEach(function (bouton) {
@@ -251,6 +251,57 @@ function afficherListeAdministration() {
     .forEach(function (bouton) {
       bouton.addEventListener("click", transfererProprieteAdministration);
     });
+}
+
+const administrationCategoriesGrades = [
+  {
+    cle: "officiers-superieurs",
+    titre: "Officiers supérieurs",
+    grades: ["LIEUTENANT-COLONEL", "COMMANDANT", "VICE-COMMANDANT"]
+  },
+  {
+    cle: "officiers",
+    titre: "Officiers",
+    grades: ["CAPITAINE", "LIEUTENANT", "SOUS-LIEUTENANT", "ASPIRANT"]
+  },
+  {
+    cle: "sous-officiers",
+    titre: "Sous-officiers",
+    grades: ["MAJOR", "ADJUDANT-CHEF", "ADJUDANT", "SERGENT-CHEF", "SERGENT"]
+  },
+  {
+    cle: "hommes-du-rang",
+    titre: "Hommes du rang",
+    grades: ["CAPORAL-CHEF", "CAPORAL"]
+  }
+];
+
+function creerGroupesGradesAdministration(utilisateurs) {
+  return administrationCategoriesGrades.map(function (categorie) {
+    const membres = utilisateurs
+      .filter(function (utilisateur) {
+        return categorie.grades.includes(normaliserGradeAdministration(utilisateur.grade));
+      })
+      .sort(comparerGradesAdministration);
+    if (!membres.length) return "";
+    return `
+      <section class="administration-groupe-grades administration-groupe-grades-${categorie.cle}">
+        <header class="administration-groupe-grades-entete">
+          <h4>${echapperHTMLAdministration(categorie.titre)}</h4>
+          <span>${membres.length}</span>
+        </header>
+        <div class="administration-groupe-grades-liste">
+          ${membres.map(creerCarteAdministration).join("")}
+        </div>
+      </section>
+    `;
+  }).join("");
+}
+
+function normaliserGradeAdministration(grade) {
+  return normaliserAdministration(grade)
+    .replace(/_/g, "-")
+    .replace(/\s+/g, "-");
 }
 
 const administrationGroupesPermissions = [
@@ -481,13 +532,16 @@ function obtenirRangGradeAdministration(grade) {
     "CAPITAINE",
     "LIEUTENANT",
     "SOUS-LIEUTENANT",
-    "ASPIRANT"
+    "ASPIRANT",
+    "MAJOR",
+    "ADJUDANT-CHEF",
+    "ADJUDANT",
+    "SERGENT-CHEF",
+    "SERGENT",
+    "CAPORAL-CHEF",
+    "CAPORAL"
   ];
-  const rang = ordre.indexOf(
-    normaliserAdministration(grade)
-      .replace(/_/g, "-")
-      .replace(/\s+/g, "-")
-  );
+  const rang = ordre.indexOf(normaliserGradeAdministration(grade));
   return rang < 0 ? ordre.length : rang;
 }
 

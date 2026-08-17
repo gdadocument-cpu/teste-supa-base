@@ -106,7 +106,57 @@
 
 .administration-liste {
   display: grid;
-  gap: 14px;
+  gap: 20px;
+}
+
+.administration-groupe-grades {
+  --couleur-groupe: #54bceb;
+  background: rgba(4, 20, 36, .52);
+  border: 1px solid color-mix(in srgb, var(--couleur-groupe) 28%, transparent);
+  border-radius: 17px;
+  overflow: hidden;
+}
+
+.administration-groupe-grades-officiers-superieurs { --couleur-groupe: #a78bfa; }
+.administration-groupe-grades-officiers { --couleur-groupe: #fb7185; }
+.administration-groupe-grades-sous-officiers { --couleur-groupe: #facc15; }
+.administration-groupe-grades-hommes-du-rang { --couleur-groupe: #38bdf8; }
+
+.administration-groupe-grades-entete {
+  align-items: center;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--couleur-groupe) 22%, transparent), transparent 75%);
+  border-bottom: 1px solid color-mix(in srgb, var(--couleur-groupe) 25%, transparent);
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 16px;
+}
+
+.administration-groupe-grades-entete h4 {
+  color: var(--couleur-groupe);
+  font-size: 15px;
+  letter-spacing: .045em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.administration-groupe-grades-entete span {
+  align-items: center;
+  background: color-mix(in srgb, var(--couleur-groupe) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--couleur-groupe) 38%, transparent);
+  border-radius: 999px;
+  color: var(--couleur-groupe);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  justify-content: center;
+  min-width: 28px;
+  padding: 4px 8px;
+}
+
+.administration-groupe-grades-liste {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
 }
 
 .administration-carte {
@@ -367,4 +417,6 @@
   .administration-permissions-grille { grid-template-columns: 1fr; }
   .administration-resume-droits { display: none; }
   .administration-actions-propriete { flex-direction: column; }
+  .administration-groupe-grades-entete { padding: 10px 12px; }
+  .administration-groupe-grades-liste { gap: 8px; padding: 8px; }
 }

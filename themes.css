@@ -128,7 +128,7 @@ html[data-gda-theme="theme-noel"] #boot h1 {
     inset: 0;
     border-radius: inherit;
     background:
-      url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
+      url("images/themes/noel/cadre-givre.webp") center 20% / 104% 106% no-repeat,
       radial-gradient(circle at 14% 24%, rgba(235,248,255,.75) 0 1px, transparent 2px),
       radial-gradient(circle at 86% 67%, rgba(235,248,255,.62) 0 1px, transparent 2px);
     pointer-events: none;
@@ -137,7 +137,7 @@ html[data-gda-theme="theme-noel"] #boot h1 {
   html[data-gda-theme="theme-noel"] #defconCommandePanneau {
     border: 0;
     background:
-      url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
+      url("images/themes/noel/cadre-givre.webp") center 20% / 104% 106% no-repeat,
       rgba(3, 18, 32, .9);
   }
 
@@ -193,7 +193,7 @@ html[data-gda-theme="theme-noel"] #boot h1 {
     border: 0;
     border-radius: 13px;
     background:
-      url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
+      url("images/themes/noel/cadre-givre.webp") center 20% / 104% 106% no-repeat,
       linear-gradient(90deg, rgba(10, 42, 69, .72), rgba(4, 25, 45, .42));
     color: #eff7fd;
     font-size: 16px;
@@ -209,7 +209,7 @@ html[data-gda-theme="theme-noel"] #boot h1 {
   html[data-gda-theme="theme-noel"] .menuButton:hover,
   html[data-gda-theme="theme-noel"] .menuButton:focus-visible {
     background:
-      url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
+      url("images/themes/noel/cadre-givre.webp") center 20% / 104% 106% no-repeat,
       linear-gradient(90deg, rgba(18, 65, 101, .82), rgba(5, 31, 55, .56));
     box-shadow: 0 0 22px rgba(78,166,218,.23);
     transform: translateX(4px);
@@ -217,30 +217,30 @@ html[data-gda-theme="theme-noel"] #boot h1 {
 
   html[data-gda-theme="theme-noel"] #officiersSuperieursButton {
     background:
-      url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
+      url("images/themes/noel/cadre-givre.webp") center 20% / 104% 106% no-repeat,
       linear-gradient(90deg, rgba(14, 25, 35, .8), rgba(8, 25, 40, .44));
   }
   html[data-gda-theme="theme-noel"] #officierGdaButton {
     background:
-      url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
+      url("images/themes/noel/cadre-givre.webp") center 20% / 104% 106% no-repeat,
       linear-gradient(90deg, rgba(111, 20, 35, .78), rgba(29, 25, 42, .42));
     box-shadow: 0 0 18px rgba(229,43,64,.18);
   }
   html[data-gda-theme="theme-noel"] #espaceGdaButton {
     background:
-      url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
+      url("images/themes/noel/cadre-givre.webp") center 20% / 104% 106% no-repeat,
       linear-gradient(90deg, rgba(14, 76, 121, .76), rgba(5, 32, 56, .42));
   }
   html[data-gda-theme="theme-noel"] #specialisationsButton,
   html[data-gda-theme="theme-noel"] #liensUtilesButton {
     background:
-      url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
+      url("images/themes/noel/cadre-givre.webp") center 20% / 104% 106% no-repeat,
       linear-gradient(90deg, rgba(89, 65, 12, .73), rgba(19, 31, 40, .4));
     color: #fff4d2;
   }
   html[data-gda-theme="theme-noel"] #administrationButton {
     background:
-      url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
+      url("images/themes/noel/cadre-givre.webp") center 20% / 104% 106% no-repeat,
       linear-gradient(90deg, rgba(68, 35, 103, .72), rgba(20, 27, 45, .42));
   }
 
@@ -253,9 +253,9 @@ html[data-gda-theme="theme-noel"] #boot h1 {
     background-image:
       url("images/themes/noel/cadre-givre.webp"),
       linear-gradient(90deg, rgba(26, 73, 106, .82), rgba(6, 30, 52, .53));
-    background-position: center;
-    background-size: 100% 100%;
-    background-repeat: no-repeat;
+    background-position: center 20%, center;
+    background-size: 104% 106%, auto;
+    background-repeat: no-repeat, no-repeat;
   }
 
   html[data-gda-theme="theme-noel"] #workspace {
@@ -323,7 +323,7 @@ html[data-gda-theme="theme-noel"] #boot h1 {
   ) {
     border: 0 !important;
     background:
-      url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
+      url("images/themes/noel/cadre-givre.webp") center 20% / 104% 106% no-repeat,
       linear-gradient(120deg, rgba(9,43,74,.6), rgba(2,18,34,.4)) !important;
     box-shadow: 0 12px 28px rgba(0,0,0,.18) !important;
   }

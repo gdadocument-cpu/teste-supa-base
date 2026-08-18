@@ -1998,6 +1998,23 @@ const authenticated = async (req: Request) => {
         }).eq("singleton", true)
         if (error) throw error
         await audit("Thème du site modifié", themeDisponible.nom)
+        const canalTheme = admin.channel("gda-theme-global")
+        try {
+          const statutDiffusion = await canalTheme.send({
+            type: "broadcast",
+            event: "theme-change",
+            payload: { theme, modifieLe: new Date().toISOString() },
+          })
+          if (statutDiffusion !== "ok") {
+            console.warn("Diffusion Realtime du thème non confirmée :", statutDiffusion)
+          }
+        } catch (erreurDiffusion) {
+          // L'enregistrement reste valide ; la relève périodique du client
+          // appliquera le thème si Realtime est momentanément indisponible.
+          console.warn("Diffusion Realtime du thème indisponible :", erreurDiffusion)
+        } finally {
+          await admin.removeChannel(canalTheme)
+        }
         return json(await parametresSiteDonnees(`Thème « ${themeDisponible.nom} » activé.`))
       }
       case "deconnecterTousUtilisateurs": {

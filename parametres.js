@@ -20,6 +20,8 @@ let parametresSitePeutDeconnecterTous = false;
 let parametresSiteCharges = false;
 let parametresSiteChargement = null;
 let parametresAjoutCategorie = "";
+let canalThemeGlobalGDA = null;
+let synchronisationThemeGlobaleGDA = null;
 
 function utilisateurPeutGererParametresSiteGDA() {
   if (typeof utilisateurEstVisiteurGDA === "function" && utilisateurEstVisiteurGDA()) return false;
@@ -207,6 +209,33 @@ function afficherParametresSiteGDA() {
     </section>`;
   brancherParametresSiteGDA();
   if (typeof appliquerModeVisiteurGDA === "function") appliquerModeVisiteurGDA();
+}
+
+function synchroniserThemeGlobalGDA() {
+  if (synchronisationThemeGlobaleGDA) return synchronisationThemeGlobaleGDA;
+  synchronisationThemeGlobaleGDA = chargerConfigurationSiteGDA(true).then(function() {
+    if (moduleGdaEstActif("administration-parametres")) afficherParametresSiteGDA();
+  }).catch(function(erreur) {
+    console.warn("Synchronisation immédiate du thème indisponible :", erreur);
+  }).finally(function() {
+    synchronisationThemeGlobaleGDA = null;
+  });
+  return synchronisationThemeGlobaleGDA;
+}
+
+function initialiserThemeGlobalTempsReelGDA() {
+  const client = window.gdaSupabase && window.gdaSupabase.client;
+  if (!client || canalThemeGlobalGDA) return;
+  canalThemeGlobalGDA = client
+    .channel("gda-theme-global")
+    .on("broadcast", { event: "theme-change" }, function() {
+      synchroniserThemeGlobalGDA();
+    })
+    .subscribe(function(statut) {
+      if (statut === "SUBSCRIBED" && sessionStorage.getItem("sessionTokenDiscord")) {
+        synchroniserThemeGlobalGDA();
+      }
+    });
 }
 
 function creerSecuriteSessionsParametresGDA() {
@@ -461,16 +490,14 @@ function normaliserParametresSite(valeur) {
 
 window.addEventListener("gda-donnees-modifiees", function(evenement) {
   if (evenement.detail?.action !== "enregistrerThemeSite") return;
-  chargerConfigurationSiteGDA(true).then(function() {
-    if (moduleGdaEstActif("administration-parametres")) afficherParametresSiteGDA();
-  }).catch(function(erreur) {
-    console.warn("Actualisation du thème indisponible :", erreur);
-  });
+  synchroniserThemeGlobalGDA();
 });
+
+initialiserThemeGlobalTempsReelGDA();
 
 window.setInterval(function() {
   if (document.hidden || !sessionStorage.getItem("sessionTokenDiscord")) return;
-  chargerConfigurationSiteGDA(true).catch(function(erreur) {
+  synchroniserThemeGlobalGDA().catch(function(erreur) {
     console.warn("Synchronisation du thème indisponible :", erreur);
   });
 }, 30000);

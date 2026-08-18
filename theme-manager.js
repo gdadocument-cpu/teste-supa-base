@@ -11,8 +11,13 @@
     },
     {
       id: "theme-test",
-      nom: "Thème Test",
+      nom: "Moderne",
       description: "Interface PC moderne, aérée et organisée en cartes."
+    },
+    {
+      id: "theme-noel",
+      nom: "Noël",
+      description: "Décor hivernal complet avec neige, givre et blason de Noël."
     }
   ];
 

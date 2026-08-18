@@ -8,7 +8,8 @@ let parametresSiteConfiguration = {
 };
 let parametresSiteThemes = [
   { id: "gda-classique", nom: "GDA Classique", description: "Interface officielle actuelle de l’intranet GDA." },
-  { id: "theme-test", nom: "Thème Test", description: "Interface PC moderne, aérée et organisée en cartes." }
+  { id: "theme-test", nom: "Moderne", description: "Interface PC moderne, aérée et organisée en cartes." },
+  { id: "theme-noel", nom: "Noël", description: "Décor hivernal complet avec neige, givre et blason de Noël." }
 ];
 let parametresSiteLiens = [];
 let parametresSiteDefcon = [0, 1, 2, 3, 4].map(function(niveau) {

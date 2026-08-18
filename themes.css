@@ -12,7 +12,337 @@ html[data-gda-theme="gda-classique"] {
 }
 
 /*
- * Thème Test
+ * Thème Noël
+ * -----------
+ * Le contenu et la navigation restent strictement identiques. Ce thème ne
+ * remplace que les surfaces visuelles, le fond et le blason. Les décorations
+ * lourdes sont réservées au bureau ; le mobile conserve sa mise en page.
+ */
+html[data-gda-theme="theme-noel"] {
+  color-scheme: dark;
+  --noel-fond: #020b16;
+  --noel-carte: rgba(5, 25, 45, .9);
+  --noel-carte-claire: rgba(10, 40, 69, .94);
+  --noel-trait: rgba(128, 183, 220, .46);
+  --noel-givre: rgba(229, 247, 255, .82);
+  --noel-texte: #f3f8fc;
+  --noel-texte-doux: #b7cadb;
+  --noel-bleu: #58c8ff;
+  --noel-rouge: #ef3347;
+  --noel-or: #e3b64f;
+}
+
+html[data-gda-theme="theme-noel"] body,
+html[data-gda-theme="theme-noel"] #boot {
+  background:
+    linear-gradient(rgba(1, 8, 17, .42), rgba(1, 8, 17, .38)),
+    url("images/themes/noel/fond-noel.webp") center / cover fixed no-repeat;
+}
+
+html[data-gda-theme="theme-noel"] #boot .logo-face,
+html[data-gda-theme="theme-noel"] #smallLogo {
+  content: url("images/themes/noel/logo-noel.webp");
+}
+
+html[data-gda-theme="theme-noel"] #boot h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  text-shadow: 0 2px 4px #000, 0 0 18px rgba(200, 231, 255, .3);
+}
+
+@media (min-width: 751px) {
+  html[data-gda-theme="theme-noel"] #desktop {
+    grid-template-columns: 294px minmax(0, 1fr);
+    grid-template-rows: 130px minmax(0, 1fr);
+    isolation: isolate;
+    overflow: hidden;
+    background:
+      linear-gradient(rgba(1, 8, 17, .18), rgba(1, 8, 17, .28)),
+      url("images/themes/noel/fond-noel.webp") center / cover fixed no-repeat;
+  }
+
+  html[data-gda-theme="theme-noel"] #desktop::before {
+    content: "";
+    position: fixed;
+    z-index: 9999;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(circle, rgba(255,255,255,.78) 0 1.1px, transparent 1.8px),
+      radial-gradient(circle, rgba(205,235,255,.56) 0 1.4px, transparent 2px),
+      radial-gradient(circle, rgba(255,255,255,.7) 0 1px, transparent 1.6px);
+    background-size: 173px 173px, 257px 257px, 331px 331px;
+    background-position: 18px -20px, 80px -70px, 150px -115px;
+    opacity: .32;
+    animation: neigeGDA 20s linear infinite;
+  }
+
+  @keyframes neigeGDA {
+    to { background-position: 58px 480px, 30px 380px, 210px 300px; }
+  }
+
+  html[data-gda-theme="theme-noel"] #topbar {
+    gap: 18px;
+    padding: 9px 28px 16px;
+    border-bottom: 1px solid rgba(205, 235, 249, .5);
+    background:
+      linear-gradient(180deg, rgba(2, 10, 21, .94), rgba(2, 15, 29, .86));
+    box-shadow: 0 12px 34px rgba(0,0,0,.38), inset 0 -4px 7px rgba(225,244,255,.13);
+    backdrop-filter: blur(14px) saturate(115%);
+  }
+
+  html[data-gda-theme="theme-noel"] #topbar::after {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    right: 0;
+    bottom: -9px;
+    left: 0;
+    height: 18px;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at 9px 1px, rgba(235,248,255,.94) 0 7px, transparent 8px) 0 0 / 35px 11px repeat-x,
+      linear-gradient(180deg, rgba(180,222,243,.55), transparent 68%);
+    filter: drop-shadow(0 2px 2px rgba(1,7,15,.75));
+  }
+
+  html[data-gda-theme="theme-noel"] #topbar > * { position: relative; z-index: 1; }
+
+  html[data-gda-theme="theme-noel"] #smallLogo {
+    width: 74px;
+    height: 74px;
+    animation: none;
+    filter: drop-shadow(0 0 10px rgba(182, 223, 255, .25));
+  }
+
+  html[data-gda-theme="theme-noel"] #topbar h2,
+  html[data-gda-theme="theme-noel"] #workspace :where(h1,h2,h3,h4) {
+    font-family: Georgia, "Times New Roman", serif;
+  }
+
+  html[data-gda-theme="theme-noel"] #topbar h2 {
+    color: #f3f5f6;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: .075em;
+    text-shadow: 0 2px 4px #000, 0 0 12px rgba(194,226,248,.18);
+  }
+
+  html[data-gda-theme="theme-noel"] #sidebar {
+    position: relative;
+    isolation: isolate;
+    gap: 14px;
+    padding: 44px 25px 68px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-right: 1px solid rgba(111, 164, 202, .43);
+    border-bottom-right-radius: 72px;
+    background: linear-gradient(180deg, rgba(2, 17, 32, .88), rgba(1, 11, 22, .91));
+    box-shadow: 14px 0 35px rgba(0,0,0,.3), inset -5px 0 18px rgba(59,128,172,.05);
+    backdrop-filter: blur(9px);
+  }
+
+  html[data-gda-theme="theme-noel"] #sidebar::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: auto 0 0;
+    height: 330px;
+    pointer-events: none;
+    background: linear-gradient(0deg, rgba(1,8,16,.18), transparent);
+  }
+
+  html[data-gda-theme="theme-noel"] .menuButton {
+    position: relative;
+    min-height: 63px;
+    padding: 15px 22px;
+    overflow: hidden;
+    border: 1px solid rgba(91, 146, 187, .46);
+    border-radius: 13px;
+    background: linear-gradient(90deg, rgba(10, 42, 69, .96), rgba(4, 25, 45, .78));
+    color: #eff7fd;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: .01em;
+    box-shadow: inset 0 3px 2px -1px rgba(229,247,255,.77), 0 7px 17px rgba(0,0,0,.2);
+  }
+
+  html[data-gda-theme="theme-noel"] .menuButton::after {
+    content: "";
+    position: absolute;
+    top: -2px;
+    right: 4px;
+    left: 4px;
+    height: 7px;
+    border-radius: 50%;
+    background: linear-gradient(180deg, rgba(248,253,255,.86), rgba(156,207,235,.2));
+    opacity: .72;
+    pointer-events: none;
+  }
+
+  html[data-gda-theme="theme-noel"] .menuButton:hover,
+  html[data-gda-theme="theme-noel"] .menuButton:focus-visible {
+    border-color: rgba(193, 231, 253, .84);
+    background: linear-gradient(90deg, rgba(18, 65, 101, .98), rgba(5, 31, 55, .9));
+    box-shadow: inset 0 3px 2px -1px #fff, 0 0 22px rgba(78,166,218,.23);
+    transform: translateX(4px);
+  }
+
+  html[data-gda-theme="theme-noel"] #officiersSuperieursButton {
+    background: linear-gradient(90deg, rgba(14, 25, 35, .98), rgba(8, 25, 40, .78));
+  }
+  html[data-gda-theme="theme-noel"] #officierGdaButton {
+    border-color: rgba(238, 67, 84, .72);
+    background: linear-gradient(90deg, rgba(111, 20, 35, .96), rgba(29, 25, 42, .75));
+    box-shadow: inset 0 3px 2px -1px rgba(245,251,255,.82), 0 0 18px rgba(229,43,64,.18);
+  }
+  html[data-gda-theme="theme-noel"] #espaceGdaButton {
+    background: linear-gradient(90deg, rgba(14, 76, 121, .96), rgba(5, 32, 56, .74));
+  }
+  html[data-gda-theme="theme-noel"] #specialisationsButton,
+  html[data-gda-theme="theme-noel"] #liensUtilesButton {
+    border-color: rgba(212, 180, 94, .62);
+    background: linear-gradient(90deg, rgba(89, 65, 12, .94), rgba(19, 31, 40, .74));
+    color: #fff4d2;
+  }
+  html[data-gda-theme="theme-noel"] #administrationButton {
+    border-color: rgba(169, 123, 220, .52);
+    background: linear-gradient(90deg, rgba(68, 35, 103, .94), rgba(20, 27, 45, .75));
+  }
+
+  html[data-gda-theme="theme-noel"] #workspace {
+    margin: 42px 26px 28px 44px;
+    padding: 28px;
+    border: 1px solid var(--noel-trait);
+    border-radius: 22px;
+    background: linear-gradient(135deg, rgba(7, 31, 54, .9), rgba(2, 15, 29, .81));
+    box-shadow: 0 20px 48px rgba(0,0,0,.34), inset 0 4px 3px -2px var(--noel-givre);
+    backdrop-filter: blur(9px) saturate(115%);
+  }
+
+  html[data-gda-theme="theme-noel"] #workspace::before {
+    content: "";
+    position: sticky;
+    z-index: 20;
+    top: -28px;
+    display: block;
+    width: 100%;
+    height: 8px;
+    margin-bottom: -8px;
+    border-radius: 50%;
+    background: linear-gradient(180deg, rgba(245,252,255,.87), rgba(152,203,230,.13));
+    pointer-events: none;
+  }
+
+  html[data-gda-theme="theme-noel"] #welcomePanel::after {
+    background-image: url("images/themes/noel/logo-noel.webp");
+    opacity: .22;
+    filter: saturate(.78) brightness(.72);
+  }
+
+  html[data-gda-theme="theme-noel"] #workspace :where(h1,h2,h3,h4,strong) { color: var(--noel-texte); }
+  html[data-gda-theme="theme-noel"] #workspace :where(p,small,.sous-titre,.description,.meta,.secondaire) { color: var(--noel-texte-doux); }
+
+  html[data-gda-theme="theme-noel"] #workspace :where(
+    .effectif-header, .effectif-public-entete, .taches-officiers-entete,
+    .ro-entete, .disponibilites-entete, .depart-entete, .rapports-entete,
+    .rapport-personnel-entete, .demande-absence-entete, .gestion-entete,
+    .administration-entete, .liste-blanche-entete, .logs-entete,
+    .instructeur-entete, .instructeur-archives-entete, .parametres-entete,
+    .accueil-presentation, .accueil-statut, .accueil-annonces
+  ) {
+    border-color: var(--noel-trait) !important;
+    border-radius: 18px !important;
+    background:
+      linear-gradient(180deg, rgba(242,251,255,.72) 0 3px, transparent 5px),
+      linear-gradient(120deg, rgba(10,43,74,.95), rgba(3,20,37,.86)) !important;
+    box-shadow: 0 12px 28px rgba(0,0,0,.22), inset 0 3px 4px -2px rgba(238,250,255,.72) !important;
+  }
+
+  html[data-gda-theme="theme-noel"] #workspace :where(
+    article, fieldset, .carte, .card, .panel, .panneau, .bloc,
+    .effectif-member, .effectif-section, .effectif-stats > *,
+    .effectif-public-carte, .taches-officiers-section, .taches-officiers-ligne,
+    .ro-formulaire, .ro-liste > *, .disponibilites-section, .absence-carte,
+    .depart-section, .depart-carte, .rapports-section, .rapports-statistique,
+    .rapport-carte, .rapport-personnel-carte, .demande-absence-carte,
+    .gestion-section, .gestion-fiche, .gestion-historique-item,
+    .administration-carte, .liste-blanche-carte, .logs-item,
+    .instructeur-section, .instructeur-suivi-carte, .instructeur-archive-carte,
+    .parametres-bloc, .parametres-theme-carte, .parametres-lien-formulaire,
+    .accueil-statistique, .accueil-annonce
+  ) {
+    border-color: rgba(98, 154, 193, .43) !important;
+    border-radius: 14px !important;
+    background:
+      linear-gradient(180deg, rgba(238,249,255,.69) 0 2px, transparent 4px),
+      linear-gradient(108deg, rgba(8,37,63,.94), rgba(2,20,37,.82)) !important;
+    box-shadow: 0 8px 20px rgba(0,0,0,.18), inset 0 2px 3px -1px rgba(228,247,255,.55) !important;
+  }
+
+  html[data-gda-theme="theme-noel"] #workspace :where(article,.carte,.card,.effectif-member,.depart-carte,.rapport-carte,.gestion-historique-item,.administration-carte,.liste-blanche-carte,.logs-item):hover {
+    border-color: rgba(190, 228, 250, .75) !important;
+    box-shadow: 0 12px 28px rgba(0,0,0,.25), inset 0 3px 3px -1px #fff !important;
+  }
+
+  html[data-gda-theme="theme-noel"] #workspace :where(input:not([type="checkbox"]):not([type="radio"]),select,textarea) {
+    border-color: rgba(98,154,193,.55) !important;
+    border-radius: 10px !important;
+    background: rgba(2,16,30,.88) !important;
+    color: var(--noel-texte) !important;
+  }
+
+  html[data-gda-theme="theme-noel"] #workspace :where(input:not([type="checkbox"]):not([type="radio"]),select,textarea):focus {
+    border-color: #8edaff !important;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(93,198,248,.13) !important;
+  }
+
+  html[data-gda-theme="theme-noel"] #workspace button:not(.danger):not([class*="supprimer"]):not([class*="refus"]) {
+    border-color: rgba(102,176,219,.6) !important;
+    border-radius: 10px !important;
+    background: linear-gradient(145deg, #176b9a, #0a3a61) !important;
+    color: #f1fbff !important;
+    box-shadow: inset 0 2px rgba(237,250,255,.28), 0 5px 15px rgba(0,0,0,.2) !important;
+  }
+
+  html[data-gda-theme="theme-noel"] #workspace :where(table,.tableau) {
+    overflow: hidden;
+    border: 1px solid rgba(98,154,193,.43) !important;
+    border-radius: 13px;
+    background: rgba(2,17,31,.8) !important;
+  }
+  html[data-gda-theme="theme-noel"] #workspace :where(thead,th) {
+    background: rgba(15,57,88,.94) !important;
+    color: #eaf7ff !important;
+  }
+  html[data-gda-theme="theme-noel"] #workspace :where(td,th) { border-color: rgba(111,163,198,.22) !important; }
+
+  html[data-gda-theme="theme-noel"] #logoutButton {
+    right: 26px;
+    bottom: 22px;
+    border: 2px solid rgba(224,244,255,.65);
+    background: linear-gradient(145deg,#dc2a3d,#77101d);
+    box-shadow: 0 0 0 5px rgba(204,232,247,.1), 0 0 20px rgba(231,45,66,.42), inset 0 2px rgba(255,255,255,.28);
+  }
+}
+
+@media (max-width: 750px) {
+  html[data-gda-theme="theme-noel"] #desktop {
+    background:
+      linear-gradient(rgba(1,8,17,.3),rgba(1,8,17,.4)),
+      url("images/themes/noel/fond-noel.webp") 52% center / cover fixed no-repeat;
+  }
+  html[data-gda-theme="theme-noel"] #topbar,
+  html[data-gda-theme="theme-noel"] #sidebar,
+  html[data-gda-theme="theme-noel"] #workspace {
+    background-color: rgba(2,15,28,.88);
+    backdrop-filter: blur(9px);
+  }
+  html[data-gda-theme="theme-noel"] #smallLogo { animation: none; }
+}
+
+/*
+ * Thème Moderne
  * -----------
  * Les surcharges sont volontairement limitées aux écrans PC. Le point de
  * rupture mobile officiel du projet est 750 px : l'interface téléphone garde

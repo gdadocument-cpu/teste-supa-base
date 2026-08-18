@@ -66,8 +66,8 @@ html[data-gda-theme="theme-noel"] #boot h1 {
     z-index: 9999;
     inset: 0;
     pointer-events: none;
-    background: url("images/themes/noel/neige-animee.gif") center / cover no-repeat;
-    opacity: .72;
+    background: url("images/themes/noel/neige-animee.gif") 0 0 / 960px 540px repeat;
+    opacity: .52;
   }
 
   html[data-gda-theme="theme-noel"] #topbar {
@@ -96,6 +96,31 @@ html[data-gda-theme="theme-noel"] #boot h1 {
   }
 
   html[data-gda-theme="theme-noel"] #topbar > * { position: relative; z-index: 1; }
+
+  html[data-gda-theme="theme-noel"] .defcon-entete {
+    border: 1px solid rgba(205, 235, 249, .66);
+    box-shadow: 0 0 18px rgba(121, 194, 235, .18), inset 0 0 8px rgba(228, 246, 255, .14);
+  }
+
+  html[data-gda-theme="theme-noel"] .defcon-entete::after {
+    content: "";
+    position: absolute;
+    z-index: 3;
+    inset: 0;
+    border-radius: inherit;
+    background:
+      url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
+      radial-gradient(circle at 14% 24%, rgba(235,248,255,.75) 0 1px, transparent 2px),
+      radial-gradient(circle at 86% 67%, rgba(235,248,255,.62) 0 1px, transparent 2px);
+    pointer-events: none;
+  }
+
+  html[data-gda-theme="theme-noel"] #defconCommandePanneau {
+    border-color: rgba(190, 224, 244, .58);
+    background:
+      url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
+      rgba(3, 18, 32, .9);
+  }
 
   html[data-gda-theme="theme-noel"] #smallLogo {
     width: 74px;
@@ -271,9 +296,9 @@ html[data-gda-theme="theme-noel"] #boot h1 {
     border-color: var(--noel-trait) !important;
     border-radius: 18px !important;
     background:
-      url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
-      linear-gradient(120deg, rgba(9,43,74,.62), rgba(2,18,34,.46)) !important;
-    box-shadow: 0 12px 28px rgba(0,0,0,.19) !important;
+      linear-gradient(180deg, rgba(239,250,255,.72) 0 2px, transparent 5px),
+      linear-gradient(120deg, rgba(9,43,74,.58), rgba(2,18,34,.4)) !important;
+    box-shadow: 0 12px 28px rgba(0,0,0,.19), inset 0 2px 3px -1px rgba(224,245,255,.4) !important;
   }
 
   html[data-gda-theme="theme-noel"] #workspace :where(
@@ -292,9 +317,22 @@ html[data-gda-theme="theme-noel"] #boot h1 {
     border-color: rgba(98, 154, 193, .43) !important;
     border-radius: 14px !important;
     background:
+      linear-gradient(180deg, rgba(231,247,255,.5) 0 2px, transparent 4px),
+      linear-gradient(108deg, rgba(7,36,62,.56), rgba(2,18,34,.37)) !important;
+    box-shadow: 0 8px 20px rgba(0,0,0,.14), inset 0 2px 2px -1px rgba(221,243,255,.34) !important;
+  }
+
+  /* Le cadre illustré conserve ses proportions uniquement sur les grands
+     panneaux de l'accueil. Les petites cartes utilisent le givre CSS. */
+  html[data-gda-theme="theme-noel"] #workspace :where(
+    .accueil-presentation,
+    .accueil-statut,
+    .accueil-annonces
+  ) {
+    background:
       url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
-      linear-gradient(108deg, rgba(7,36,62,.61), rgba(2,18,34,.43)) !important;
-    box-shadow: 0 8px 20px rgba(0,0,0,.14) !important;
+      linear-gradient(120deg, rgba(9,43,74,.6), rgba(2,18,34,.4)) !important;
+    box-shadow: 0 12px 28px rgba(0,0,0,.18) !important;
   }
 
   html[data-gda-theme="theme-noel"] #workspace :where(article,.carte,.card,.effectif-member,.depart-carte,.rapport-carte,.gestion-historique-item,.administration-carte,.liste-blanche-carte,.logs-item):hover {
@@ -322,10 +360,10 @@ html[data-gda-theme="theme-noel"] #boot h1 {
     content: "";
     position: absolute;
     z-index: 6;
-    top: -4px;
-    right: 5%;
-    left: 5%;
-    height: 12px;
+    top: -3px;
+    right: 8px;
+    left: 8px;
+    height: 10px;
     border-radius: 56% 44% 48% 52% / 76% 72% 28% 24%;
     background:
       radial-gradient(ellipse at 18% 65%, #fff 0 22%, transparent 24%),
@@ -347,6 +385,14 @@ html[data-gda-theme="theme-noel"] #boot h1 {
     top: -2px;
     right: 4px;
     left: 4px;
+  }
+
+  html[data-gda-theme="theme-noel"] #notificationsAbsenceNombre,
+  html[data-gda-theme="theme-noel"] #presenceEnLigneNombre {
+    z-index: 12;
+    top: -8px;
+    right: -9px;
+    box-shadow: 0 0 0 2px #041321, 0 0 11px rgba(255,45,72,.68);
   }
 
   html[data-gda-theme="theme-noel"] #workspace :where(input:not([type="checkbox"]):not([type="radio"]),select,textarea) {

@@ -98,8 +98,8 @@ html[data-gda-theme="theme-noel"] #boot h1 {
   html[data-gda-theme="theme-noel"] #topbar > * { position: relative; z-index: 1; }
 
   html[data-gda-theme="theme-noel"] .defcon-entete {
-    border: 1px solid rgba(205, 235, 249, .66);
-    box-shadow: 0 0 18px rgba(121, 194, 235, .18), inset 0 0 8px rgba(228, 246, 255, .14);
+    border: 0;
+    box-shadow: 0 0 18px rgba(121, 194, 235, .18);
   }
 
   html[data-gda-theme="theme-noel"] .defcon-entete::after {
@@ -116,7 +116,7 @@ html[data-gda-theme="theme-noel"] #boot h1 {
   }
 
   html[data-gda-theme="theme-noel"] #defconCommandePanneau {
-    border-color: rgba(190, 224, 244, .58);
+    border: 0;
     background:
       url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
       rgba(3, 18, 32, .9);
@@ -171,7 +171,7 @@ html[data-gda-theme="theme-noel"] #boot h1 {
     min-height: 63px;
     padding: 15px 22px;
     overflow: hidden;
-    border: 1px solid rgba(91, 146, 187, .46);
+    border: 0;
     border-radius: 13px;
     background:
       url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
@@ -180,29 +180,19 @@ html[data-gda-theme="theme-noel"] #boot h1 {
     font-size: 16px;
     font-weight: 700;
     letter-spacing: .01em;
-    box-shadow: inset 0 3px 2px -1px rgba(229,247,255,.77), 0 7px 17px rgba(0,0,0,.2);
+    box-shadow: 0 7px 17px rgba(0,0,0,.2);
   }
 
   html[data-gda-theme="theme-noel"] .menuButton::after {
-    content: "";
-    position: absolute;
-    top: -2px;
-    right: 4px;
-    left: 4px;
-    height: 7px;
-    border-radius: 50%;
-    background: linear-gradient(180deg, rgba(248,253,255,.86), rgba(156,207,235,.2));
-    opacity: .72;
-    pointer-events: none;
+    content: none;
   }
 
   html[data-gda-theme="theme-noel"] .menuButton:hover,
   html[data-gda-theme="theme-noel"] .menuButton:focus-visible {
-    border-color: rgba(193, 231, 253, .84);
     background:
       url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
       linear-gradient(90deg, rgba(18, 65, 101, .82), rgba(5, 31, 55, .56));
-    box-shadow: inset 0 3px 2px -1px #fff, 0 0 22px rgba(78,166,218,.23);
+    box-shadow: 0 0 22px rgba(78,166,218,.23);
     transform: translateX(4px);
   }
 
@@ -212,11 +202,10 @@ html[data-gda-theme="theme-noel"] #boot h1 {
       linear-gradient(90deg, rgba(14, 25, 35, .8), rgba(8, 25, 40, .44));
   }
   html[data-gda-theme="theme-noel"] #officierGdaButton {
-    border-color: rgba(238, 67, 84, .72);
     background:
       url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
       linear-gradient(90deg, rgba(111, 20, 35, .78), rgba(29, 25, 42, .42));
-    box-shadow: inset 0 3px 2px -1px rgba(245,251,255,.82), 0 0 18px rgba(229,43,64,.18);
+    box-shadow: 0 0 18px rgba(229,43,64,.18);
   }
   html[data-gda-theme="theme-noel"] #espaceGdaButton {
     background:
@@ -225,14 +214,12 @@ html[data-gda-theme="theme-noel"] #boot h1 {
   }
   html[data-gda-theme="theme-noel"] #specialisationsButton,
   html[data-gda-theme="theme-noel"] #liensUtilesButton {
-    border-color: rgba(212, 180, 94, .62);
     background:
       url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
       linear-gradient(90deg, rgba(89, 65, 12, .73), rgba(19, 31, 40, .4));
     color: #fff4d2;
   }
   html[data-gda-theme="theme-noel"] #administrationButton {
-    border-color: rgba(169, 123, 220, .52);
     background:
       url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
       linear-gradient(90deg, rgba(68, 35, 103, .72), rgba(20, 27, 45, .42));
@@ -255,25 +242,15 @@ html[data-gda-theme="theme-noel"] #boot h1 {
   html[data-gda-theme="theme-noel"] #workspace {
     margin: 42px 26px 28px 44px;
     padding: 28px;
-    border: 1px solid var(--noel-trait);
+    border: 0;
     border-radius: 22px;
     background: linear-gradient(135deg, rgba(7, 31, 54, .27), rgba(2, 15, 29, .18));
-    box-shadow: 0 20px 48px rgba(0,0,0,.22), inset 0 2px 3px -2px rgba(225,245,255,.45);
+    box-shadow: 0 20px 48px rgba(0,0,0,.22);
     backdrop-filter: blur(2px) saturate(108%);
   }
 
   html[data-gda-theme="theme-noel"] #workspace::before {
-    content: "";
-    position: sticky;
-    z-index: 20;
-    top: -28px;
-    display: block;
-    width: 100%;
-    height: 8px;
-    margin-bottom: -8px;
-    border-radius: 50%;
-    background: linear-gradient(180deg, rgba(245,252,255,.87), rgba(152,203,230,.13));
-    pointer-events: none;
+    content: none;
   }
 
   html[data-gda-theme="theme-noel"] #welcomePanel::after {
@@ -293,12 +270,10 @@ html[data-gda-theme="theme-noel"] #boot h1 {
     .instructeur-entete, .instructeur-archives-entete, .parametres-entete,
     .accueil-presentation, .accueil-statut, .accueil-annonces
   ) {
-    border-color: var(--noel-trait) !important;
+    border: 0 !important;
     border-radius: 18px !important;
-    background:
-      linear-gradient(180deg, rgba(239,250,255,.72) 0 2px, transparent 5px),
-      linear-gradient(120deg, rgba(9,43,74,.58), rgba(2,18,34,.4)) !important;
-    box-shadow: 0 12px 28px rgba(0,0,0,.19), inset 0 2px 3px -1px rgba(224,245,255,.4) !important;
+    background: linear-gradient(120deg, rgba(9,43,74,.58), rgba(2,18,34,.4)) !important;
+    box-shadow: inset 0 0 0 1px rgba(128,183,220,.46), 0 12px 28px rgba(0,0,0,.19) !important;
   }
 
   html[data-gda-theme="theme-noel"] #workspace :where(
@@ -314,12 +289,10 @@ html[data-gda-theme="theme-noel"] #boot h1 {
     .parametres-bloc, .parametres-theme-carte, .parametres-lien-formulaire,
     .accueil-statistique, .accueil-annonce
   ) {
-    border-color: rgba(98, 154, 193, .43) !important;
+    border: 0 !important;
     border-radius: 14px !important;
-    background:
-      linear-gradient(180deg, rgba(231,247,255,.5) 0 2px, transparent 4px),
-      linear-gradient(108deg, rgba(7,36,62,.56), rgba(2,18,34,.37)) !important;
-    box-shadow: 0 8px 20px rgba(0,0,0,.14), inset 0 2px 2px -1px rgba(221,243,255,.34) !important;
+    background: linear-gradient(108deg, rgba(7,36,62,.56), rgba(2,18,34,.37)) !important;
+    box-shadow: inset 0 0 0 1px rgba(98,154,193,.43), 0 8px 20px rgba(0,0,0,.14) !important;
   }
 
   /* Le cadre illustré conserve ses proportions uniquement sur les grands
@@ -329,15 +302,24 @@ html[data-gda-theme="theme-noel"] #boot h1 {
     .accueil-statut,
     .accueil-annonces
   ) {
+    border: 0 !important;
     background:
       url("images/themes/noel/cadre-givre.webp") center / 100% 100% no-repeat,
       linear-gradient(120deg, rgba(9,43,74,.6), rgba(2,18,34,.4)) !important;
     box-shadow: 0 12px 28px rgba(0,0,0,.18) !important;
   }
 
+  /* Les lignes d'annonce restent lisibles sans ajouter un second cadre à
+     l'intérieur du grand panneau givré. */
+  html[data-gda-theme="theme-noel"] #workspace .accueil-annonce {
+    border: 0 !important;
+    background: rgba(2, 20, 37, .64) !important;
+    box-shadow: inset 0 0 0 1px rgba(98,154,193,.28) !important;
+  }
+
   html[data-gda-theme="theme-noel"] #workspace :where(article,.carte,.card,.effectif-member,.depart-carte,.rapport-carte,.gestion-historique-item,.administration-carte,.liste-blanche-carte,.logs-item):hover {
-    border-color: rgba(190, 228, 250, .75) !important;
-    box-shadow: 0 12px 28px rgba(0,0,0,.25), inset 0 3px 3px -1px #fff !important;
+    border: 0 !important;
+    box-shadow: inset 0 0 0 1px rgba(190,228,250,.68), 0 12px 28px rgba(0,0,0,.25) !important;
   }
 
   /* Amas de neige sur les icônes et commandes principales. */

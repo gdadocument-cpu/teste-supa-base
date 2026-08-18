@@ -86,6 +86,24 @@ const DEFCON_ANNONCES_PAR_DEFAUT = [
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: corsHeaders })
 
+const diffuserChangementAnnonces = async (admin: any, origine: string) => {
+  const canal = admin.channel("gda-annonces-global")
+  try {
+    const statut = await canal.send({
+      type: "broadcast",
+      event: "announcements-change",
+      payload: { origine, modifieLe: new Date().toISOString() },
+    })
+    if (statut !== "ok") console.warn("Diffusion Realtime des annonces non confirmée :", statut)
+  } catch (erreur) {
+    // La mutation reste enregistrée. Le tableau sera rechargé à sa prochaine
+    // ouverture si Realtime est momentanément indisponible.
+    console.warn("Diffusion Realtime des annonces indisponible :", erreur)
+  } finally {
+    await admin.removeChannel(canal)
+  }
+}
+
 const texte = (value: unknown) => String(value ?? "").trim()
 const nombre = (value: unknown) => Number(value || 0) || 0
 const bool = (value: unknown) => value === true || ["1", "true", "oui"].includes(texte(value).toLowerCase())
@@ -1128,6 +1146,7 @@ const authenticated = async (req: Request) => {
         })
         if (error) throw error
         await audit("Annonce d’accueil ajoutée", titre, type)
+        await diffuserChangementAnnonces(admin, "creation")
         return json(await tableauAccueilClient("Annonce publiée."))
       }
       case "supprimerAnnonceAccueil": {
@@ -1145,6 +1164,7 @@ const authenticated = async (req: Request) => {
         const { error } = await admin.from("home_announcements").delete().eq("id", annonce.id)
         if (error) throw error
         await audit("Annonce d’accueil supprimée", annonce.title)
+        await diffuserChangementAnnonces(admin, "suppression")
         return json(await tableauAccueilClient("Annonce supprimée."))
       }
       case "recupererTachesOfficiers":
@@ -2730,6 +2750,7 @@ const authenticated = async (req: Request) => {
           .neq("id", annonceDefcon.id)
         if (nettoyageAnnoncesError) throw nettoyageAnnoncesError
         await audit("DEFCON modifié", texte(payload.niveau))
+        await diffuserChangementAnnonces(admin, "defcon")
         return json({ success: true, defcon: { niveau, modifiePar: actorName, modifieLe }, message: niveau ? `DEFCON ${niveau} activé.` : "DEFCON désactivé." })
       }
       default:

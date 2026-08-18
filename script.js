@@ -2769,6 +2769,10 @@ function ouvrirEspaceMedecinGDA() {
   if (!utilisateurPossedeSpecialisationGDA("Médecin")) return;
   const workspace = document.getElementById("workspace");
   if (!workspace) return;
+  // Le module doit rester la source de vérité pendant les rafraîchissements
+  // périodiques (présence, permissions, paramètres et thème). Sans cet état,
+  // un membre non-officier était parfois considéré comme revenu à l'accueil.
+  definirModuleGdaActif("specialisation-medecin");
   workspace.innerHTML = `
     <section class="integration-specialisation">
       <header class="integration-specialisation-entete">

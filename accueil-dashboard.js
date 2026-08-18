@@ -4,6 +4,9 @@
   let donnees = null;
   let chargement = null;
   let afficherTout = false;
+  let annoncesAActualiser = false;
+  let canalAnnoncesGlobalGDA = null;
+  let minuteurSynchronisationAnnoncesGDA = null;
   const TYPES = { IMPORTANT: "Important", INFO: "Information", MISSION: "Mission", SUCCESS: "Terminé" };
 
   function h(v) {
@@ -198,7 +201,9 @@
         const reponse = await fetch(url, { cache: force ? "no-store" : "default" });
         const resultat = await reponse.json();
         if (!resultat.success) throw new Error(resultat.message);
-        donnees = resultat; rendre();
+        donnees = resultat;
+        annoncesAActualiser = false;
+        rendre();
       } catch (e) {
         console.warn("Tableau d’accueil indisponible :", e);
         rendreErreur(e.message);
@@ -208,7 +213,29 @@
     return chargement;
   }
 
-  window.afficherTableauAccueilGDA = function () { if (estAccueil()) { if (donnees) rendre(); actualiser(false); } };
+  function synchroniserAnnoncesGlobalesGDA() {
+    annoncesAActualiser = true;
+    window.clearTimeout(minuteurSynchronisationAnnoncesGDA);
+    minuteurSynchronisationAnnoncesGDA = window.setTimeout(function () {
+      if (!estAccueil()) return;
+      actualiser(true);
+    }, 120);
+  }
+
+  function initialiserAnnoncesGlobalesTempsReelGDA() {
+    const client = window.gdaSupabase && window.gdaSupabase.client;
+    if (!client || canalAnnoncesGlobalGDA) return;
+    canalAnnoncesGlobalGDA = client
+      .channel("gda-annonces-global", { config: { private: false } })
+      .on("broadcast", { event: "announcements-change" }, synchroniserAnnoncesGlobalesGDA)
+      .subscribe();
+  }
+
+  window.afficherTableauAccueilGDA = function () {
+    if (!estAccueil()) return;
+    if (donnees && !annoncesAActualiser) rendre();
+    actualiser(annoncesAActualiser);
+  };
   window.actualiserTableauAccueilGDA = actualiser;
   function tenterChargementInitial() {
     if (sessionStorage.getItem("identifiantUtilisateur") && estAccueil()) {
@@ -217,5 +244,6 @@
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", tenterChargementInitial, { once: true });
   else tenterChargementInitial();
+  initialiserAnnoncesGlobalesTempsReelGDA();
   window.setTimeout(tenterChargementInitial, 2500);
 })();

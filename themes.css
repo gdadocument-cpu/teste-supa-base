@@ -61,13 +61,32 @@ html[data-gda-theme="theme-noel"] #boot h1 {
   }
 
   html[data-gda-theme="theme-noel"] #desktop::before {
-    content: "";
+    content: none;
     position: fixed;
     z-index: 9999;
     inset: 0;
     pointer-events: none;
-    background: url("images/themes/noel/neige-animee.gif") 0 0 / 960px 540px repeat;
-    opacity: .52;
+  }
+
+  /* Neige volontairement rare et réservée au tableau d'accueil. Les cinq
+     flocons du motif parcourent exactement deux hauteurs avant de reboucler,
+     ce qui évite tout saut visible. */
+  html[data-gda-theme="theme-noel"]:has(#accueilDashboardGDA) #desktop::before {
+    content: "";
+    background:
+      radial-gradient(circle at 11% 14%, rgba(245,252,255,.82) 0 1.4px, transparent 2px) 0 0 / 520px 540px repeat,
+      radial-gradient(circle at 37% 68%, rgba(220,242,255,.68) 0 1px, transparent 1.7px) 0 0 / 520px 540px repeat,
+      radial-gradient(circle at 58% 31%, rgba(247,253,255,.72) 0 1.8px, transparent 2.5px) 0 0 / 520px 540px repeat,
+      radial-gradient(circle at 76% 82%, rgba(210,237,252,.6) 0 1.2px, transparent 1.9px) 0 0 / 520px 540px repeat,
+      radial-gradient(circle at 91% 49%, rgba(248,253,255,.75) 0 1.5px, transparent 2.2px) 0 0 / 520px 540px repeat;
+    opacity: .42;
+    animation: neigeNoelAccueil 72s linear infinite;
+    will-change: background-position;
+  }
+
+  @keyframes neigeNoelAccueil {
+    from { background-position: 0 0, 0 0, 0 0, 0 0, 0 0; }
+    to { background-position: 520px 1080px, 520px 1080px, 520px 1080px, 520px 1080px, 520px 1080px; }
   }
 
   html[data-gda-theme="theme-noel"] #topbar {

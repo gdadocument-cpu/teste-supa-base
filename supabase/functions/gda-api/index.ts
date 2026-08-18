@@ -1349,18 +1349,25 @@ const authenticated = async (req: Request) => {
       }
       case "ajouterRapportDiscord": {
         requireOfficer()
-        const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(payload.nom))
-        const roster = member ? delayedById.get(member.id) : delayedByName.get(normalise(payload.nom))
+        const nomRapportDiscord = texte(payload.nom || payload.personne)
+        const lienRapportDiscord = texte(payload.lien || payload.lienDiscord || payload.url)
+        if (!nomRapportDiscord) throw new Error("Sélectionnez le GDA concerné.")
+        if (!/^https:\/\/(?:www\.)?(?:discord\.com|discordapp\.com)\/channels\/(?:\d+|@me)\/\d+\/\d+(?:[/?#].*)?$/i.test(lienRapportDiscord)) {
+          throw new Error("Le lien Discord du rapport est invalide.")
+        }
+        const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(nomRapportDiscord))
+        if (!member) throw new Error("Le GDA sélectionné n’est plus présent dans l’effectif officier.")
+        const roster = delayedById.get(member.id) ?? delayedByName.get(normalise(nomRapportDiscord))
         const { error } = await admin.from("reports").insert({
-          external_id: idExterne(), member_id: member?.id ?? null,
-          matricule_snapshot: roster?.matricule ?? member?.matricule ?? texte(payload.nom),
-          grade_snapshot: roster?.grade ?? member?.grade ?? "Non renseigné",
+          external_id: idExterne(), member_id: member.id,
+          matricule_snapshot: roster?.matricule ?? member.matricule,
+          grade_snapshot: roster?.grade ?? member.grade ?? "Non renseigné",
           report_on: aujourdHui(), body: "Rapport Discord", submitted_at: new Date().toISOString(),
-          status: "LU", source: "DISCORD", discord_url: texte(payload.lien || payload.url),
+          status: "LU", source: "DISCORD", discord_url: lienRapportDiscord,
           processed_by_profile_id: profile.id, processed_by_snapshot: profile.display_name, processed_at: new Date().toISOString(),
         })
         if (error) throw error
-        await audit("Rapport Discord ajouté", roster?.matricule ?? member?.matricule ?? texte(payload.nom))
+        await audit("Rapport Discord ajouté", roster?.matricule ?? member.matricule)
         return json({ success: true, message: "Rapport Discord ajouté dans « Lus et validés ».", rapports: await rapportsClient() })
       }
       case "modifierMonRapport": {

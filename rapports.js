@@ -1099,8 +1099,8 @@ async function envoyerRapportDiscord(evenement) {
     const url = RAPPORTS_API_URL +
       "?action=ajouterRapportDiscord" +
       "&identifiant=" + encodeURIComponent(identifiant) +
-      "&personne=" + encodeURIComponent(personne) +
-      "&lienDiscord=" + encodeURIComponent(lienDiscord);
+      "&nom=" + encodeURIComponent(personne) +
+      "&lien=" + encodeURIComponent(lienDiscord);
     const reponse = await fetch(url);
     const resultat = await reponse.json();
 

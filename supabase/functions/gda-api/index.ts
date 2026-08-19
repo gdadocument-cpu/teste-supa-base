@@ -951,6 +951,7 @@ const authenticated = async (req: Request) => {
       steamId: row.steam_id || "",
       discordId: row.discord_id || "",
       note: row.score,
+      recrutementMasse: row.mass_recruitment === true,
       resultat: row.result || "",
       remarque: row.remark || "",
       commentaire: row.comment || "",
@@ -2395,12 +2396,15 @@ const authenticated = async (req: Request) => {
         const steamId = texte(payload.steamId)
         const discordId = texte(payload.discordId).replace(/\D/g, "")
         const score = isTest ? Number(texte(payload.note).replace(",", ".")) : null
+        const recrutementMasse = isTest && bool(payload.recrutementMasse)
+        const noteMaximum = recrutementMasse ? 10 : 20
+        const noteMinimum = recrutementMasse ? 7 : 14
         if (!matricule) throw new Error("Le matricule définitif est obligatoire.")
         if (isTest && !personneFormee) throw new Error("La personne formée est obligatoire.")
         if (!steamId) throw new Error("Le Steam ID est obligatoire.")
         if (!/^\d{15,22}$/.test(discordId)) throw new Error("Le Discord ID doit contenir entre 15 et 22 chiffres.")
-        if (isTest && (!Number.isFinite(score) || score < 0 || score > 20)) throw new Error("La note doit être comprise entre 0 et 20.")
-        const accepted = !isTest || Number(score) >= 14
+        if (isTest && (!Number.isFinite(score) || score < 0 || score > noteMaximum)) throw new Error(`La note doit être comprise entre 0 et ${noteMaximum}.`)
+        const accepted = !isTest || Number(score) >= noteMinimum
         const reportExternalId = idExterne()
         let folderExternalId = reportExternalId
         let suiviExistant: any = null
@@ -2442,7 +2446,7 @@ const authenticated = async (req: Request) => {
           report_type: isTest ? "TEST" : "FORMATION", event_on: isoDate(isTest ? payload.dateTest : payload.dateFormation) ?? aujourdHui(),
           trainee_name: isTest ? personneFormee : (member?.matricule ?? matricule), final_matricule: matricule,
           steam_id: steamId, discord_id: discordId,
-          score, result: accepted ? "ACCEPTE" : "REFUSE", folder_external_id: folderExternalId,
+          score, mass_recruitment: recrutementMasse, result: accepted ? "ACCEPTE" : "REFUSE", folder_external_id: folderExternalId,
           remark: texte(payload.remarque) || null, comment: texte(payload.commentaire) || null,
         }
         const { data: created, error } = await admin.from("instructor_reports").insert(row).select("*").single()
@@ -2484,10 +2488,17 @@ const authenticated = async (req: Request) => {
         const { data: row, error } = await query.maybeSingle()
         if (error || !row) throw new Error("Rapport Instructeur introuvable.")
         const score = payload.note === undefined ? row.score : nombre(payload.note)
+        const recrutementMasse = row.report_type === "TEST" && bool(payload.recrutementMasse)
+        const noteMaximum = recrutementMasse ? 10 : 20
+        const noteMinimum = recrutementMasse ? 7 : 14
+        if (row.report_type === "TEST" && (!Number.isFinite(score) || score < 0 || score > noteMaximum)) {
+          throw new Error(`La note doit être comprise entre 0 et ${noteMaximum}.`)
+        }
         const { data: updated, error: updateError } = await admin.from("instructor_reports").update({
           event_on: isoDate(payload.date) ?? row.event_on, trainee_name: texte(payload.personneFormee) || row.trainee_name,
           final_matricule: texte(payload.matricule) || null, steam_id: texte(payload.steamId) || null,
-          discord_id: texte(payload.discordId) || null, score, result: row.report_type === "TEST" ? (score >= 14 ? "ACCEPTE" : "REFUSE") : row.result,
+          discord_id: texte(payload.discordId) || null, score, mass_recruitment: recrutementMasse,
+          result: row.report_type === "TEST" ? (score >= noteMinimum ? "ACCEPTE" : "REFUSE") : row.result,
           remark: texte(payload.remarque) || null, comment: texte(payload.commentaire) || null,
         }).eq("id", row.id).select("*").single()
         if (updateError) throw updateError

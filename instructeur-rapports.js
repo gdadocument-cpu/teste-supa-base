@@ -146,8 +146,14 @@ function ouvrirRedactionRapportInstructeur(type) {
             <span>Discord ID *</span>
             <input id="rapportTestDiscord" name="discordId" type="text" inputmode="numeric" placeholder="Discord ID" required>
           </label>
+          <label class="large rapport-test-recrutement-masse">
+            <input type="hidden" name="recrutementMasse" value="0">
+            <input id="rapportTestRecrutementMasse" name="recrutementMasse" type="checkbox" value="1">
+            <span>Recrutement de masse</span>
+            <small>Active le barème sur 10 avec une note minimale de 7.</small>
+          </label>
           <label>
-            <span>Note sur 20 *</span>
+            <span id="rapportTestNoteLibelle">Note sur 20 *</span>
             <input id="rapportTestNote" name="note" type="number" min="0" max="20" step="0.5" placeholder="14" required>
           </label>
           <div class="rapport-test-decision" id="rapportTestDecision">
@@ -378,13 +384,30 @@ function installerFormulaireRapportTestInstructeur() {
   const matricule = document.getElementById("rapportTestMatricule");
   const verifier = document.getElementById("rapportTestVerifierMatricule");
   const note = document.getElementById("rapportTestNote");
+  const recrutementMasse = document.getElementById("rapportTestRecrutementMasse");
   if (matricule) matricule.addEventListener("input", function () {
     matriculeTestInstructeurVerifie = "";
     afficherStatutMatriculeTestInstructeur("", "");
   });
   if (verifier) verifier.addEventListener("click", verifierMatriculeTestInstructeur);
   if (note) note.addEventListener("input", actualiserDecisionRapportTestInstructeur);
+  if (recrutementMasse) recrutementMasse.addEventListener("change", actualiserBaremeRapportTestInstructeur);
   if (formulaire) formulaire.addEventListener("submit", enregistrerFormulaireRapportTestInstructeur);
+}
+
+function actualiserBaremeRapportTestInstructeur() {
+  const recrutementMasse = document.getElementById("rapportTestRecrutementMasse")?.checked === true;
+  const note = document.getElementById("rapportTestNote");
+  const libelle = document.getElementById("rapportTestNoteLibelle");
+  const maximum = recrutementMasse ? 10 : 20;
+  const seuil = recrutementMasse ? 7 : 14;
+  if (note) {
+    note.max = String(maximum);
+    note.placeholder = String(seuil);
+    if (note.value !== "" && Number(note.value) > maximum) note.value = "";
+  }
+  if (libelle) libelle.textContent = `Note sur ${maximum} *`;
+  actualiserDecisionRapportTestInstructeur();
 }
 
 async function verifierMatriculeTestInstructeur() {
@@ -437,23 +460,26 @@ function actualiserDecisionRapportTestInstructeur() {
   const champNote = document.getElementById("rapportTestNote");
   const valeurNote = champNote ? champNote.value.trim() : "";
   const note = valeurNote === "" ? NaN : Number(valeurNote);
+  const recrutementMasse = document.getElementById("rapportTestRecrutementMasse")?.checked === true;
+  const maximum = recrutementMasse ? 10 : 20;
+  const seuil = recrutementMasse ? 7 : 14;
   const decision = document.getElementById("rapportTestDecision");
   if (!decision) return;
-  if (!Number.isFinite(note) || note < 0 || note > 20) {
+  if (!Number.isFinite(note) || note < 0 || note > maximum) {
     decision.className = "rapport-test-decision";
     decision.innerHTML = `
       <span>Décision automatique</span>
       <strong>En attente de la note</strong>
-      <small>14/20 minimum pour être accepté</small>
+      <small>${seuil}/${maximum} minimum pour être accepté</small>
     `;
     return;
   }
-  const accepte = note >= 14;
+  const accepte = note >= seuil;
   decision.className = "rapport-test-decision " + (accepte ? "accepte" : "refuse");
   decision.innerHTML = `
     <span>Décision automatique</span>
     <strong>${accepte ? "✓ Accepté" : "✕ Refusé"}</strong>
-    <small>${note.toLocaleString("fr-FR")}/20 — seuil requis : 14/20</small>
+    <small>${note.toLocaleString("fr-FR")}/${maximum} — seuil requis : ${seuil}/${maximum}</small>
   `;
 }
 
@@ -621,6 +647,7 @@ function creerFiltreHistoriqueInstructeur(type, icone, libelle, total) {
 
 function creerCarteHistoriqueRapportInstructeur(rapport) {
   const accepte = rapport.resultat === "ACCEPTE";
+  const noteMaximum = rapport.recrutementMasse ? 10 : 20;
   return `
     <article class="rapport-instructeur-historique-carte ${accepte ? "accepte" : "refuse"}">
       <div class="rapport-instructeur-historique-entete">
@@ -629,7 +656,7 @@ function creerCarteHistoriqueRapportInstructeur(rapport) {
           <span>${echapperRapportInstructeur(rapport.matricule || "Matricule non renseigné")}</span>
         </div>
         <time>${echapperRapportInstructeur(rapport.date || "Date non renseignée")}</time>
-        <b>${accepte ? "✓ Accepté" : "✕ Refusé"}${rapport.type === "TEST" ? " — " + Number(rapport.note || 0) + "/20" : ""}</b>
+        <b>${accepte ? "✓ Accepté" : "✕ Refusé"}${rapport.type === "TEST" ? " — " + Number(rapport.note || 0) + "/" + noteMaximum : ""}</b>
       </div>
       <div class="rapport-instructeur-historique-infos">
         <span><small>Instructeur</small>${echapperRapportInstructeur(rapport.auteur || "Non renseigné")}</span>
@@ -669,7 +696,7 @@ function afficherModificationRapportInstructeur(rapport) {
           <label><span>Matricule *</span><input name="matricule" type="text" value="${echapperRapportInstructeur(rapport.matricule)}" required></label>
           <label><span>Steam ID</span><input name="steamId" type="text" value="${echapperRapportInstructeur(rapport.steamId)}"></label>
           <label><span>Discord ID</span><input name="discordId" type="text" inputmode="numeric" value="${echapperRapportInstructeur(rapport.discordId)}"></label>
-          ${estTest ? `<label><span>Note sur 20 *</span><input name="note" type="number" min="0" max="20" step="0.5" value="${Number(rapport.note || 0)}" required></label>` : ""}
+          ${estTest ? `<label class="large rapport-test-recrutement-masse"><input type="hidden" name="recrutementMasse" value="0"><input id="modificationRapportTestRecrutementMasse" name="recrutementMasse" type="checkbox" value="1" ${rapport.recrutementMasse ? "checked" : ""}><span>Recrutement de masse</span><small>Barème sur 10, accepté à partir de 7.</small></label><label><span id="modificationRapportTestNoteLibelle">Note sur ${rapport.recrutementMasse ? 10 : 20} *</span><input id="modificationRapportTestNote" name="note" type="number" min="0" max="${rapport.recrutementMasse ? 10 : 20}" step="0.5" value="${Number(rapport.note || 0)}" required></label>` : ""}
           <label class="large"><span>Remarque</span><textarea name="remarque" rows="4">${echapperRapportInstructeur(rapport.remarque || "")}</textarea></label>
           <label class="large"><span>Commentaire</span><textarea name="commentaire" rows="5">${echapperRapportInstructeur(rapport.commentaire || "")}</textarea></label>
         </div>
@@ -682,6 +709,20 @@ function afficherModificationRapportInstructeur(rapport) {
     ?.addEventListener("click", function () { ouvrirHistoriqueRapportsInstructeur(); });
   document.getElementById("formulaireModificationRapportInstructeur")
     ?.addEventListener("submit", enregistrerModificationRapportInstructeur);
+  document.getElementById("modificationRapportTestRecrutementMasse")
+    ?.addEventListener("change", actualiserBaremeModificationRapportTestInstructeur);
+}
+
+function actualiserBaremeModificationRapportTestInstructeur() {
+  const recrutementMasse = document.getElementById("modificationRapportTestRecrutementMasse")?.checked === true;
+  const maximum = recrutementMasse ? 10 : 20;
+  const note = document.getElementById("modificationRapportTestNote");
+  const libelle = document.getElementById("modificationRapportTestNoteLibelle");
+  if (note) {
+    note.max = String(maximum);
+    if (note.value !== "" && Number(note.value) > maximum) note.value = "";
+  }
+  if (libelle) libelle.textContent = `Note sur ${maximum} *`;
 }
 
 async function enregistrerModificationRapportInstructeur(evenement) {

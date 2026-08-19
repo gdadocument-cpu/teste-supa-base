@@ -172,6 +172,37 @@
   grid-column: 1 / -1;
 }
 
+.rapport-test-instructeur-grille .rapport-test-recrutement-masse {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 11px;
+  padding: 13px 15px;
+  background: rgba(13, 42, 62, .82);
+  border: 1px solid rgba(111, 164, 197, .28);
+  border-radius: 11px;
+  cursor: pointer;
+}
+
+.rapport-test-instructeur-grille .rapport-test-recrutement-masse input[type="hidden"] {
+  display: none;
+}
+
+.rapport-test-instructeur-grille .rapport-test-recrutement-masse input[type="checkbox"] {
+  width: 19px;
+  height: 19px;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  accent-color: #42b9ef;
+  cursor: pointer;
+}
+
+.rapport-test-instructeur-grille .rapport-test-recrutement-masse small {
+  grid-column: 2;
+  color: #94adbe;
+}
+
 .rapport-test-instructeur-grille label > span,
 .rapport-test-decision > span {
   color: #9bb4c6;

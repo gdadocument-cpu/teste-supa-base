@@ -311,7 +311,12 @@ const authenticated = async (req: Request) => {
     const specialisationsAuteur = normalise((ownMember?.specializations ?? []).join("; "))
     const roleGestionInstructeur = specialisationsAuteur.includes("RESPONSABLE INST") ||
       specialisationsAuteur.includes("INSTRUCTEUR EN CHEF")
-    const instructor = !visitor && (property || staff || (ownMember?.specializations ?? []).some((item: string) => normalise(item).includes("INSTRUCTEUR")))
+    const instructor = !visitor && (
+      property ||
+      staff ||
+      roleGestionInstructeur ||
+      (ownMember?.specializations ?? []).some((item: string) => normalise(item).includes("INSTRUCTEUR"))
+    )
     const peutAdministrerSuivis = !visitor && (property || staff || roleGestionInstructeur)
     const requireInstructor = () => { if (!instructor) throw new Error("Accès réservé aux instructeurs.") }
     const requireTrainingManager = () => {

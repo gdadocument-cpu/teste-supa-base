@@ -677,15 +677,15 @@ function afficherChoixGestion() {
     zone.classList.remove("gestion-cache");
     zone.innerHTML = `
       <label class="gestion-champ">
-        <span id="gestionMedailleLibelle">Médaille à attribuer</span>
-        <select id="gestionChoix" required></select>
-      </label>
-      <label class="gestion-champ">
         <span>Opération sur la médaille</span>
         <select id="gestionOperationMedaille" required>
           <option value="Ajout" selected>Ajout</option>
           <option value="Retrait">Retrait</option>
         </select>
+      </label>
+      <label class="gestion-champ">
+        <span id="gestionMedailleLibelle">Médaille à attribuer</span>
+        <select id="gestionChoix" required></select>
       </label>
     `;
     document.getElementById("gestionOperationMedaille").addEventListener(

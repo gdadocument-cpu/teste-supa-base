@@ -636,14 +636,72 @@ function afficherChoixGestion() {
       Array.isArray(membre.medailles)
         ? membre.medailles
         : [];
-    valeurs = gestionMedailles.filter(
-      medaille => !possedees.some(
-        actuelle =>
-          cleMedailleGestion(actuelle) ===
-          cleMedailleGestion(medaille)
-      )
+    const medaillesPourOperation = function (operation) {
+      if (operation === "Retrait") {
+        return gestionMedailles.filter(
+          medaille => possedees.some(
+            actuelle =>
+              cleMedailleGestion(actuelle) ===
+              cleMedailleGestion(medaille)
+          )
+        );
+      }
+      return gestionMedailles.filter(
+        medaille => !possedees.some(
+          actuelle =>
+            cleMedailleGestion(actuelle) ===
+            cleMedailleGestion(medaille)
+        )
+      );
+    };
+    const afficherMedaillesPourOperation = function (operation) {
+      const select = document.getElementById("gestionChoix");
+      const libelleMedaille = document.getElementById("gestionMedailleLibelle");
+      if (!select || !libelleMedaille) return;
+      const medailles = medaillesPourOperation(operation);
+      libelleMedaille.textContent = operation === "Retrait"
+        ? "Médaille à retirer"
+        : "Médaille à attribuer";
+      select.innerHTML = `
+        <option value="">Sélectionner une médaille</option>
+        ${medailles.map(medaille => `
+          <option value="${echapperHTMLGestion(medaille)}">
+            ${echapperHTMLGestion(medaille)}
+          </option>
+        `).join("")}
+      `;
+      select.disabled = !medailles.length;
+      valider.disabled = true;
+    };
+
+    zone.classList.remove("gestion-cache");
+    zone.innerHTML = `
+      <label class="gestion-champ">
+        <span id="gestionMedailleLibelle">Médaille à attribuer</span>
+        <select id="gestionChoix" required></select>
+      </label>
+      <label class="gestion-champ">
+        <span>Opération sur la médaille</span>
+        <select id="gestionOperationMedaille" required>
+          <option value="Ajout" selected>Ajout</option>
+          <option value="Retrait">Retrait</option>
+        </select>
+      </label>
+    `;
+    document.getElementById("gestionOperationMedaille").addEventListener(
+      "change",
+      function (event) {
+        afficherMedaillesPourOperation(event.target.value);
+      }
     );
-    libelle = "Médaille à attribuer";
+    document.getElementById("gestionChoix").addEventListener(
+      "change",
+      function (event) {
+        valider.disabled = !event.target.value;
+      }
+    );
+    afficherMedaillesPourOperation("Ajout");
+    return;
   } else if (type === "Spécialisation") {
     const actuelles = Array.isArray(membre.specialisations)
       ? membre.specialisations
@@ -848,6 +906,12 @@ async function envoyerActionGestion(
   let choix = choixElement
     ? choixElement.value
     : "";
+  const operationMedailleElement = document.getElementById(
+    "gestionOperationMedaille"
+  );
+  const operationMedaille = operationMedailleElement
+    ? operationMedailleElement.value
+    : "Ajout";
   if (type === "Spécialisation") {
     choix = Array.from(
       document.querySelectorAll(
@@ -924,6 +988,8 @@ async function envoyerActionGestion(
       encodeURIComponent(type) +
       "&choix=" +
       encodeURIComponent(choix) +
+      "&operationMedaille=" +
+      encodeURIComponent(operationMedaille) +
       "&dateDepart=" +
       encodeURIComponent(dateDepart) +
       "&dateRetour=" +

@@ -1775,7 +1775,10 @@ const authenticated = async (req: Request) => {
           choixJournal = demandees.length ? demandees.join(", ") : "Aucune spécialisation"
         }
         else if (normalizedType === "MEDAILLE") {
-          const retrait = normalise(choixDemande).startsWith("RETIR")
+          const operationMedaille = payload.operationMedaille
+            ? valeurReferentiel(payload.operationMedaille, ["Ajout", "Retrait"], "Opération de médaille invalide.")
+            : (normalise(choixDemande).startsWith("RETIR") ? "Retrait" : "Ajout")
+          const retrait = normalise(operationMedaille) === "RETRAIT"
           const medailleDemandee = choixDemande.replace(/^(?:Retir|Donn)[^:]*:\s*/i, "")
           const medaille = valeurReferentiel(medailleDemandee, MEDAILLES, "Médaille invalide.")
           const medals = new Set<string>(member.medals ?? [])
@@ -1787,7 +1790,7 @@ const authenticated = async (req: Request) => {
           } else {
             if (existante) throw new Error("Cette personne possède déjà cette médaille.")
             medals.add(medaille)
-            choixJournal = medaille
+            choixJournal = `Ajout : ${medaille}`
           }
           patch.medals = [...medals].filter(Boolean)
         }

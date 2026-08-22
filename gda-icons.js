@@ -83,8 +83,8 @@
   window.iconeGDA = function (code, classe) {
     const icone = parCode[code] || parCode.info;
     const position = atlas[icone.code] || atlas.info;
-    const fondX = Math.round(40 - position[0]);
-    const fondY = Math.round(40 - position[1]);
-    return `<span class="gda-icone gda-icone-image ${echapper(classe || "")}" data-icone="${echapper(icone.code)}" title="${echapper(icone.libelle)}" aria-hidden="true"><span class="gda-icone-atlas" style="background-position:${fondX}px ${fondY}px"></span></span>`;
+    const fondX = ((position[0] - 40) / (1536 - 80) * 100).toFixed(4);
+    const fondY = ((position[1] - 40) / (1024 - 80) * 100).toFixed(4);
+    return `<span class="gda-icone gda-icone-image ${echapper(classe || "")}" data-icone="${echapper(icone.code)}" title="${echapper(icone.libelle)}" aria-hidden="true" style="background-position:${fondX}% ${fondY}%"></span>`;
   };
 })();

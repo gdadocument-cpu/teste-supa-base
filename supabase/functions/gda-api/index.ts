@@ -465,7 +465,7 @@ const authenticated = async (req: Request) => {
       if (updateError) throw updateError
     }
 
-    const membreClient = (member: any, publicOnly = false) => {
+    const membreClient = (member: any, publicOnly = false, compteurRapportsLu?: number) => {
       const roster = delayedById.get(member.id) ?? delayedByName.get(normalise(member.matricule))
       const gradeGda = roster?.grade ?? member.grade
       const base = publicOnly ? (roster ?? member) : member
@@ -480,7 +480,7 @@ const authenticated = async (req: Request) => {
         datePromotionRetro: dateFr(base.promotion_changed_on),
         presence: base.presence || "Présent",
         specialisation: (base.specializations ?? []).join("; "),
-        nombreRapports: nombre(base.reports_count),
+        nombreRapports: compteurRapportsLu === undefined ? nombre(base.reports_count) : compteurRapportsLu,
         sanction: base.sanction || "Clean",
         medaille: (base.medals ?? []).join("; "),
         medailles: base.medals ?? [],
@@ -500,6 +500,34 @@ const authenticated = async (req: Request) => {
         steam_id: roster.steam_id, discord_id: roster.discord_id,
       }, true)
     })
+
+    const membresEffectifAvecCompteursRapports = async () => {
+      const { data: rapportsLus, error } = await admin.from("reports")
+        .select("member_id,matricule_snapshot")
+        .eq("status", "LU")
+      if (error) throw error
+
+      const compteParMembre = new Map<number, number>()
+      const compteSansMembreParNom = new Map<string, number>()
+      for (const rapport of rapportsLus ?? []) {
+        if (rapport.member_id) {
+          compteParMembre.set(
+            rapport.member_id,
+            (compteParMembre.get(rapport.member_id) ?? 0) + 1,
+          )
+        } else {
+          const nom = normalise(rapport.matricule_snapshot)
+          if (nom) compteSansMembreParNom.set(nom, (compteSansMembreParNom.get(nom) ?? 0) + 1)
+        }
+      }
+
+      return (members ?? []).map((member: any) => membreClient(
+        member,
+        false,
+        (compteParMembre.get(member.id) ?? 0) +
+          (compteSansMembreParNom.get(normalise(member.matricule)) ?? 0),
+      ))
+    }
 
     const profilsParId = async (ids: Array<number | null | undefined>) => {
       const uniques = [...new Set(ids.filter(Boolean))] as number[]
@@ -1217,7 +1245,7 @@ const authenticated = async (req: Request) => {
       case "recupererEffectif":
         return json({
           success: true,
-          membres: membresClient,
+          membres: await membresEffectifAvecCompteursRapports(),
           maximumGda,
           peutModifier: has("effectif_modifier"),
           peutAjouter: !visitor && (property || staff || ["LIEUTENANT-COLONEL", "COMMANDANT", "VICE-COMMANDANT"].includes(normalise(ownMember?.grade))),
@@ -1702,7 +1730,7 @@ const authenticated = async (req: Request) => {
       }
       case "recupererRapports":
         requireOfficerRead()
-        return json({ success: true, membres: membresPublic.map((m: any) => ({ nom: m.nom, grade: m.grade, gradeEffectifOfficier: m.gradeEffectifOfficier })), rapports: await rapportsClient(), peutValider: officer, peutArchiver: has("rapports_gerer"), peutSupprimer: has("rapports_supprimer") })
+        return json({ success: true, membres: membresClient.map((m: any) => ({ nom: m.nom, grade: m.grade, gradeEffectifOfficier: m.gradeEffectifOfficier, enPeriodeProbatoire: m.enPeriodeProbatoire })), rapports: await rapportsClient(), peutValider: officer, peutArchiver: has("rapports_gerer"), peutSupprimer: has("rapports_supprimer") })
       case "recupererMesRapports":
         return json({ success: true, message: "", nom: actorName, grade: actorGrade, rapports: await rapportsClient(true) })
       case "ajouterMonRapport":

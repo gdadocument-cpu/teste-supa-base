@@ -16,16 +16,6 @@
       .some(function(bouton) { return !bouton.hidden; });
   }
 
-  function formaterSemaineGDA(valeur) {
-    const date = new Date(String(valeur || "") + "T12:00:00");
-    if (Number.isNaN(date.getTime())) return "Cette semaine";
-    return "Semaine du " + new Intl.DateTimeFormat("fr-FR", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric"
-    }).format(date);
-  }
-
   function retirerRappelGDA() {
     document.getElementById("rappelTacheOfficierGDA")?.remove();
   }
@@ -44,9 +34,9 @@
     carte.innerHTML = `
       <span class="rappel-tache-officier-icone" aria-hidden="true">📌</span>
       <div class="rappel-tache-officier-contenu">
-        <span>Votre tâche de la semaine</span>
+        <span>Votre tâche officier</span>
         <strong>${echapperHTML(tacheActuelle.libelle || tacheActuelle.code || "Tâche attribuée")}</strong>
-        <small>${echapperHTML(formaterSemaineGDA(tacheActuelle.semaine))}</small>
+        <small>Active jusqu’à sa prochaine modification</small>
       </div>
       ${tacheActuelle.priseEnCompte
         ? '<span class="rappel-tache-officier-confirmee">✓ Prise en compte</span>'

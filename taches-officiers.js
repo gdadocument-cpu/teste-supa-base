@@ -2,29 +2,11 @@
   "use strict";
 
   const API_TACHES_OFFICIERS = API_URL;
-  const OPTIONS_TACHES_OFFICIERS = [
-    ["NA", "N/A"],
-    ["GESTION_RAPPORT", "Gestion Rapport"],
-    ["RECO_MISSION_GDA_OBSERVATION_HDR", "Reco Mission / Reco GDA / Observation HDR"],
-    ["GESTION_DEMANDE_ENTRAINEMENT", "Gestion demande d’entraînement"],
-    ["OBSERVATION_EZ", "Observation EZ"],
-    ["GESTION_ABSENCES", "Gestion des absences"],
-    ["GESTION_DOCUMENTS_GDA", "Gestion bon fonctionnement des documents GDA"]
-  ];
   const GROUPES_TACHES_OFFICIERS = [
     ["officiersSuperieurs", "Officiers supérieurs", "Commandement supérieur"],
     ["officiers", "Officiers", "Corps des officiers"],
     ["gerantsSpecialisation", "Gérants de spécialisation", "Responsables INST et MDC"]
   ];
-  const LIBELLES_MESSAGE_DISCORD = {
-    NA: "N/A",
-    GESTION_RAPPORT: "Gestion des rapports",
-    RECO_MISSION_GDA_OBSERVATION_HDR: "Reco Mission / Reco GDA / Observation HDR",
-    GESTION_DEMANDE_ENTRAINEMENT: "Gestion des demandes d’entraînement",
-    OBSERVATION_EZ: "Observation EZ",
-    GESTION_ABSENCES: "Gestion des absences",
-    GESTION_DOCUMENTS_GDA: "Gestion du bon fonctionnement des documents GDA"
-  };
   const GRADES_MESSAGE_DISCORD = [
     "LIEUTENANT-COLONEL", "COMMANDANT", "VICE-COMMANDANT", "CAPITAINE",
     "LIEUTENANT", "SOUS-LIEUTENANT", "ASPIRANT"
@@ -70,26 +52,25 @@
     return "taches-officiers-grade-officier";
   }
 
-  function formaterSemaineTachesOfficiers(semaine) {
-    const date = new Date(String(semaine || "") + "T12:00:00Z");
-    if (Number.isNaN(date.getTime())) return "Semaine en cours";
-    const fin = new Date(date.getTime());
-    fin.setUTCDate(fin.getUTCDate() + 6);
-    const format = new Intl.DateTimeFormat("fr-FR", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-      timeZone: "UTC"
-    });
-    return "Du " + format.format(date) + " au " + format.format(fin);
+  function listeOptionsTachesOfficiers() {
+    const options = Array.isArray(donneesTachesOfficiers?.options)
+      ? donneesTachesOfficiers.options
+      : [];
+    return [{ code: "NA", libelle: "N/A" }].concat(options);
   }
 
   function optionsTachesOfficiers(selection) {
-    return OPTIONS_TACHES_OFFICIERS.map(function(option) {
-      return '<option value="' + option[0] + '"' +
-        (option[0] === selection ? " selected" : "") + ">" +
-        echapperTachesOfficiers(option[1]) + "</option>";
+    return listeOptionsTachesOfficiers().map(function(option) {
+      return '<option value="' + echapperTachesOfficiers(option.code) + '"' +
+        (option.code === selection ? " selected" : "") + ">" +
+        echapperTachesOfficiers(option.libelle) + "</option>";
     }).join("");
+  }
+
+  function libelleTacheOfficier(code) {
+    return listeOptionsTachesOfficiers().find(function(option) {
+      return option.code === code;
+    })?.libelle || "N/A";
   }
 
   function membresMessageDiscord(superieurs) {
@@ -119,7 +100,7 @@
     const mention = /^\d{15,22}$/.test(discordId) ? `<@${discordId}>` : `@${membre.nom || "Inconnu"}`;
     const tache = membre.absent === true
       ? "Absent"
-      : LIBELLES_MESSAGE_DISCORD[membre.tache || "NA"] || "N/A";
+      : libelleTacheOfficier(membre.tache || "NA");
     return `${mention} : ${tache}`;
   }
 
@@ -248,6 +229,40 @@
       </section>`;
   }
 
+  function panneauEditionTachesOfficiers() {
+    if (!donneesTachesOfficiers?.peutModifierListe) return "";
+    const options = Array.isArray(donneesTachesOfficiers.options) ? donneesTachesOfficiers.options : [];
+    return `
+      <section id="editionListeTachesOfficiers" class="taches-officiers-edition" hidden>
+        <header>
+          <div>
+            <span class="taches-officiers-kicker">Liste personnalisée</span>
+            <h4>Modifier la liste des tâches</h4>
+            <p>Ajoutez un nouveau choix ou supprimez une tâche qui n’est plus utilisée.</p>
+          </div>
+          <button id="fermerEditionTachesOfficiers" class="taches-officiers-fermer" type="button" aria-label="Fermer">×</button>
+        </header>
+        <form id="ajouterOptionTacheOfficier" class="taches-officiers-ajout">
+          <label for="nouveauLibelleTacheOfficier">Nom de la nouvelle tâche</label>
+          <div>
+            <input id="nouveauLibelleTacheOfficier" name="libelle" maxlength="100" required
+                   placeholder="Ex. Gestion des entraînements">
+            <button type="submit">＋ Ajouter</button>
+          </div>
+        </form>
+        <div class="taches-officiers-options-edition">
+          ${options.length ? options.map(function(option) {
+            return `<article>
+              <span>${echapperTachesOfficiers(option.libelle)}</span>
+              <button type="button" class="supprimer-option-tache-officier"
+                      data-code="${echapperTachesOfficiers(option.code)}"
+                      data-libelle="${echapperTachesOfficiers(option.libelle)}">Supprimer</button>
+            </article>`;
+          }).join("") : '<p class="taches-officiers-vide">Aucune tâche personnalisée.</p>'}
+        </div>
+      </section>`;
+  }
+
   function afficherTachesOfficiers() {
     const espace = document.getElementById("workspace");
     if (!espace || !donneesTachesOfficiers) return;
@@ -255,19 +270,23 @@
       <section id="tachesOfficiersModule" class="taches-officiers-module">
         <header class="taches-officiers-entete">
           <div>
-            <span class="taches-officiers-kicker">Organisation hebdomadaire</span>
+            <span class="taches-officiers-kicker">Organisation manuelle</span>
             <h3>♟️ Tâches officiers</h3>
-            <p>Attribuez les responsabilités de la semaine aux officiers disponibles.</p>
+            <p>Les affectations restent actives jusqu’à ce qu’un responsable les modifie.</p>
           </div>
           <div class="taches-officiers-semaine">
-            <span>Semaine actuelle</span>
-            <strong>${echapperTachesOfficiers(formaterSemaineTachesOfficiers(donneesTachesOfficiers.semaine))}</strong>
+            <span>Mise à jour</span>
+            <strong>Uniquement manuelle</strong>
             <div class="taches-officiers-actions">
+              ${donneesTachesOfficiers.peutModifierListe
+                ? '<button id="modifierListeTachesOfficiers" class="taches-officiers-modifier-liste" type="button">✎ Modifier la liste</button>'
+                : ""}
               <button id="copierMessageDiscordTachesOfficiers" class="taches-officiers-message-discord" type="button">💬 Message Discord</button>
               <button id="actualiserTachesOfficiers" type="button">↻ Actualiser</button>
             </div>
           </div>
         </header>
+        ${panneauEditionTachesOfficiers()}
         <div class="taches-officiers-groupes">
           ${GROUPES_TACHES_OFFICIERS.map(function(groupe) {
             return groupeTachesOfficiers(groupe[0], groupe[1], groupe[2]);
@@ -280,6 +299,18 @@
       chargerTachesOfficiers(true);
     });
     document.getElementById("copierMessageDiscordTachesOfficiers")?.addEventListener("click", copierMessageDiscord);
+    document.getElementById("modifierListeTachesOfficiers")?.addEventListener("click", function() {
+      const panneau = document.getElementById("editionListeTachesOfficiers");
+      if (panneau) panneau.hidden = false;
+    });
+    document.getElementById("fermerEditionTachesOfficiers")?.addEventListener("click", function() {
+      const panneau = document.getElementById("editionListeTachesOfficiers");
+      if (panneau) panneau.hidden = true;
+    });
+    document.getElementById("ajouterOptionTacheOfficier")?.addEventListener("submit", ajouterOptionTacheOfficier);
+    espace.querySelectorAll(".supprimer-option-tache-officier").forEach(function(bouton) {
+      bouton.addEventListener("click", supprimerOptionTacheOfficier);
+    });
     espace.querySelectorAll(".taches-officiers-select").forEach(function(selecteur) {
       selecteur.addEventListener("change", enregistrerTacheOfficier);
     });
@@ -319,6 +350,62 @@
       }
     } finally {
       chargementTachesOfficiers = false;
+    }
+  }
+
+  async function envoyerModificationListeTachesOfficiers(action, valeurs) {
+    const donnees = new URLSearchParams(Object.assign({ action: action }, valeurs || {}));
+    const reponse = await fetch(API_TACHES_OFFICIERS + "?action=" + encodeURIComponent(action), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: donnees.toString(),
+      cache: "no-store"
+    });
+    const resultat = await reponse.json();
+    if (!reponse.ok || !resultat.success) {
+      throw new Error(resultat.message || "Impossible de modifier la liste des tâches.");
+    }
+    donneesTachesOfficiers = resultat;
+    afficherTachesOfficiers();
+    const panneau = document.getElementById("editionListeTachesOfficiers");
+    if (panneau) panneau.hidden = false;
+    if (typeof afficherNotificationGDA === "function") {
+      afficherNotificationGDA(resultat.message || "Liste des tâches mise à jour.", "succes");
+    }
+  }
+
+  async function ajouterOptionTacheOfficier(evenement) {
+    evenement.preventDefault();
+    const formulaire = evenement.currentTarget;
+    const bouton = formulaire.querySelector('button[type="submit"]');
+    const champ = formulaire.querySelector('[name="libelle"]');
+    if (bouton) bouton.disabled = true;
+    try {
+      await envoyerModificationListeTachesOfficiers("ajouterOptionTacheOfficier", {
+        libelle: champ?.value || ""
+      });
+    } catch (erreur) {
+      if (bouton) bouton.disabled = false;
+      if (typeof afficherNotificationGDA === "function") {
+        afficherNotificationGDA(erreur.message || "Ajout impossible.", "erreur");
+      }
+    }
+  }
+
+  async function supprimerOptionTacheOfficier(evenement) {
+    const bouton = evenement.currentTarget;
+    const libelle = bouton.dataset.libelle || "cette tâche";
+    if (!window.confirm('Supprimer « ' + libelle + ' » de la liste ?')) return;
+    bouton.disabled = true;
+    try {
+      await envoyerModificationListeTachesOfficiers("supprimerOptionTacheOfficier", {
+        tache: bouton.dataset.code || ""
+      });
+    } catch (erreur) {
+      bouton.disabled = false;
+      if (typeof afficherNotificationGDA === "function") {
+        afficherNotificationGDA(erreur.message || "Suppression impossible.", "erreur");
+      }
     }
   }
 

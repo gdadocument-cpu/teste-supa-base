@@ -29,15 +29,6 @@ const MEDAILLES = [
   "🏅 | Insigne Médecin", "🏅 | Insigne GSPR", "🏅 | Insigne Instructeur",
   "⚜️ | Ancien Gérant",
 ]
-const TACHES_OFFICIERS = [
-  "NA",
-  "GESTION_RAPPORT",
-  "RECO_MISSION_GDA_OBSERVATION_HDR",
-  "GESTION_DEMANDE_ENTRAINEMENT",
-  "OBSERVATION_EZ",
-  "GESTION_ABSENCES",
-  "GESTION_DOCUMENTS_GDA",
-]
 const ICONES_ANNONCES = new Set([
   "personnel", "shield", "report", "calendar", "performance", "objective", "operations", "clock",
   "alert", "info", "success", "waiting", "maintenance", "security", "update", "announcement",
@@ -50,14 +41,6 @@ const ICONES_ANNONCES = new Set([
   "partners", "wellbeing",
   "active-personnel", "edit", "network", "scan", "laboratory", "field-operations", "fuel", "delay",
 ])
-const LIBELLES_TACHES_OFFICIERS: Record<string, string> = {
-  GESTION_RAPPORT: "Gestion des rapports",
-  RECO_MISSION_GDA_OBSERVATION_HDR: "Reco Mission / Reco GDA / Observation HDR",
-  GESTION_DEMANDE_ENTRAINEMENT: "Gestion des demandes d’entraînement",
-  OBSERVATION_EZ: "Observation EZ",
-  GESTION_ABSENCES: "Gestion des absences",
-  GESTION_DOCUMENTS_GDA: "Gestion du bon fonctionnement des documents GDA",
-}
 const THEMES_SITE = [
   {
     id: "gda-classique",
@@ -750,14 +733,27 @@ const authenticated = async (req: Request) => {
       }
     }
 
+    const optionsTachesOfficiersClient = async () => {
+      const { data, error } = await admin
+        .from("officer_task_options")
+        .select("task_code,label,sort_order")
+        .eq("active", true)
+        .order("sort_order", { ascending: true })
+        .order("label", { ascending: true })
+      if (error) throw error
+      return (data ?? []).map((option: any) => ({
+        code: option.task_code,
+        libelle: option.label,
+      }))
+    }
+
     const tachesOfficiersClient = async (message = "") => {
       if (!visitor) requireSeniorOfficer()
-      const semaine = debutSemaineParis()
       const today = aujourdHui()
-      const { data: taches, error } = await admin
-        .from("officer_weekly_tasks")
-        .select("member_id,task_code,updated_at")
-        .eq("week_start", semaine)
+      const [{ data: taches, error }, options] = await Promise.all([
+        admin.from("officer_weekly_tasks").select("member_id,task_code,updated_at"),
+        optionsTachesOfficiersClient(),
+      ])
       if (error) throw error
 
       const tacheParMembre = new Map((taches ?? []).map((item: any) => [item.member_id, item]))
@@ -796,7 +792,8 @@ const authenticated = async (req: Request) => {
       return {
         success: true,
         message,
-        semaine,
+        options,
+        peutModifierListe: !visitor && officierSuperieur,
         groupes: {
           officiersSuperieurs: (members ?? [])
             .filter((member: any) => estSuperieur(member) && !estGerantSpecialisation(member))
@@ -857,10 +854,8 @@ const authenticated = async (req: Request) => {
 
     const maTacheOfficierClient = async (message = "") => {
       if (!profile.member_id) return { success: true, message, tache: null }
-      const semaine = debutSemaineParis()
       const { data: tache, error } = await admin.from("officer_weekly_tasks")
         .select("id,week_start,task_code,member_name_snapshot,member_grade_snapshot,updated_at")
-        .eq("week_start", semaine)
         .eq("member_id", profile.member_id)
         .maybeSingle()
       if (error) throw error
@@ -883,14 +878,15 @@ const authenticated = async (req: Request) => {
         .limit(1)
         .maybeSingle()
       if (notificationError) throw notificationError
+      const options = await optionsTachesOfficiersClient()
+      const libelle = options.find((option: any) => option.code === tache.task_code)?.libelle || tache.task_code
       return {
         success: true,
         message,
         tache: {
           id: tache.id,
           code: tache.task_code,
-          libelle: LIBELLES_TACHES_OFFICIERS[tache.task_code] || tache.task_code,
-          semaine: tache.week_start,
+          libelle,
           modifieLe: tache.updated_at,
           priseEnCompte: !notification || !!notification.read_at || !!notification.deleted_at,
         },
@@ -1555,7 +1551,9 @@ const authenticated = async (req: Request) => {
         requireSeniorOfficer()
         const memberId = nombre(payload.memberId)
         const tache = normalise(payload.tache).replace(/[^A-Z0-9_]/g, "_") || "NA"
-        if (!TACHES_OFFICIERS.includes(tache)) throw new Error("Tâche officier invalide.")
+        const options = await optionsTachesOfficiersClient()
+        const optionTache = options.find((option: any) => option.code === tache)
+        if (tache !== "NA" && !optionTache) throw new Error("Tâche officier invalide.")
         const member = (members ?? []).find((item: any) => item.id === memberId)
         if (!member) throw new Error("Officier introuvable.")
         const grade = normalise(member.grade).replace(/[^A-Z]/g, "")
@@ -1571,28 +1569,26 @@ const authenticated = async (req: Request) => {
         )
         if (absent) throw new Error("Impossible d’attribuer une tâche à une personne absente.")
 
-        const semaine = debutSemaineParis()
         const { data: ancienneTache, error: ancienneTacheError } = await admin.from("officer_weekly_tasks")
           .select("id,task_code")
-          .eq("week_start", semaine)
           .eq("member_id", member.id)
           .maybeSingle()
         if (ancienneTacheError) throw ancienneTacheError
         let tacheEnregistree: any = null
         if (tache === "NA") {
           const { error } = await admin.from("officer_weekly_tasks")
-            .delete().eq("week_start", semaine).eq("member_id", member.id)
+            .delete().eq("member_id", member.id)
           if (error) throw error
         } else {
           const { data, error } = await admin.from("officer_weekly_tasks").upsert({
-            week_start: semaine,
+            week_start: aujourdHui(),
             member_id: member.id,
             task_code: tache,
             member_name_snapshot: member.matricule,
             member_grade_snapshot: member.grade,
             assigned_by_profile_id: profile.id,
             updated_at: new Date().toISOString(),
-          }, { onConflict: "week_start,member_id" }).select("id,task_code").single()
+          }, { onConflict: "member_id" }).select("id,task_code").single()
           if (error) throw error
           tacheEnregistree = data
         }
@@ -1613,19 +1609,19 @@ const authenticated = async (req: Request) => {
               .is("deleted_at", null)
             if (anciennesNotificationsError) throw anciennesNotificationsError
 
-            const libelle = LIBELLES_TACHES_OFFICIERS[tache] || tache
+            const libelle = optionTache?.libelle || tache
             const notifications = profilsIds.map((profileId: number) => tache === "NA"
               ? {
                   profile_id: profileId,
                   notification_type: "TACHE_OFFICIER_RETIREE",
-                  title: "Tâche hebdomadaire retirée",
-                  message: "Vous n’avez plus de tâche attribuée pour cette semaine.",
+                  title: "Tâche retirée",
+                  message: "Vous n’avez plus de tâche officier attribuée.",
                 }
               : {
                   profile_id: profileId,
                   notification_type: "TACHE_OFFICIER",
-                  title: ancienneTache ? "Tâche hebdomadaire modifiée" : "Nouvelle tâche hebdomadaire",
-                  message: `Votre tâche de la semaine : ${libelle}.`,
+                  title: ancienneTache ? "Tâche officier modifiée" : "Nouvelle tâche officier",
+                  message: `Votre tâche officier : ${libelle}. Elle reste active jusqu’à sa prochaine modification.`,
                   related_table: "officer_weekly_tasks",
                   related_id: tacheEnregistree.id,
                 })
@@ -1634,18 +1630,67 @@ const authenticated = async (req: Request) => {
           }
         }
         await audit("Tâche officier modifiée", member.matricule, tache)
-        return json(await tachesOfficiersClient("Tâche enregistrée pour la semaine."))
+        return json(await tachesOfficiersClient("Tâche enregistrée. Elle restera active jusqu’à sa modification."))
+      }
+      case "ajouterOptionTacheOfficier": {
+        requireSeniorOfficer()
+        const libelle = texte(payload.libelle).replace(/\s+/g, " ").trim()
+        if (libelle.length < 2 || libelle.length > 100) {
+          throw new Error("Le nom de la tâche doit contenir entre 2 et 100 caractères.")
+        }
+        const code = normalise(libelle).replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "")
+        if (!code || code === "NA") throw new Error("Ce nom de tâche n’est pas utilisable.")
+        const { data: derniereOption, error: ordreError } = await admin
+          .from("officer_task_options")
+          .select("sort_order")
+          .order("sort_order", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (ordreError) throw ordreError
+        const { error } = await admin.from("officer_task_options").insert({
+          task_code: code,
+          label: libelle,
+          sort_order: nombre(derniereOption?.sort_order) + 10,
+          created_by_profile_id: profile.id,
+        })
+        if (error?.code === "23505") throw new Error("Cette tâche existe déjà.")
+        if (error) throw error
+        await audit("Choix de tâche officier ajouté", libelle, code)
+        return json(await tachesOfficiersClient("Nouvelle tâche ajoutée à la liste."))
+      }
+      case "supprimerOptionTacheOfficier": {
+        requireSeniorOfficer()
+        const code = normalise(payload.tache).replace(/[^A-Z0-9_]/g, "_")
+        if (!code || code === "NA") throw new Error("Cette tâche ne peut pas être supprimée.")
+        const { data: affectation, error: affectationError } = await admin
+          .from("officer_weekly_tasks")
+          .select("id")
+          .eq("task_code", code)
+          .limit(1)
+          .maybeSingle()
+        if (affectationError) throw affectationError
+        if (affectation) {
+          throw new Error("Cette tâche est encore attribuée. Passez d’abord les personnes concernées sur N/A.")
+        }
+        const { data: option, error: suppressionError } = await admin
+          .from("officer_task_options")
+          .delete()
+          .eq("task_code", code)
+          .select("label")
+          .maybeSingle()
+        if (suppressionError) throw suppressionError
+        if (!option) throw new Error("Tâche introuvable.")
+        await audit("Choix de tâche officier supprimé", option.label, code)
+        return json(await tachesOfficiersClient("Tâche supprimée de la liste."))
       }
       case "prendreConnaissanceTacheOfficier": {
-        const semaine = debutSemaineParis()
         if (!profile.member_id) throw new Error("Aucune tâche liée à ce profil.")
         const { data: tache, error: tacheError } = await admin.from("officer_weekly_tasks")
           .select("id")
-          .eq("week_start", semaine)
           .eq("member_id", profile.member_id)
           .maybeSingle()
         if (tacheError) throw tacheError
-        if (!tache) throw new Error("Aucune tâche active cette semaine.")
+        if (!tache) throw new Error("Aucune tâche officier active.")
         const { error } = await admin.from("notifications")
           .update({ read_at: new Date().toISOString() })
           .eq("profile_id", profile.id)

@@ -85,6 +85,6 @@
     const position = atlas[icone.code] || atlas.info;
     const fondX = ((position[0] - 40) / (1536 - 80) * 100).toFixed(4);
     const fondY = ((position[1] - 40) / (1024 - 80) * 100).toFixed(4);
-    return `<span class="gda-icone gda-icone-image ${echapper(classe || "")}" data-icone="${echapper(icone.code)}" title="${echapper(icone.libelle)}" aria-hidden="true" style="background-position:${fondX}% ${fondY}%"></span>`;
+    return `<span class="gda-icone gda-icone-image ${echapper(classe || "")}" data-icone="${echapper(icone.code)}" title="${echapper(icone.libelle)}" aria-hidden="true" style="--gda-icone-x:${fondX}%;--gda-icone-y:${fondY}%"></span>`;
   };
 })();

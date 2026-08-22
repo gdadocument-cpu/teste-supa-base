@@ -1374,6 +1374,10 @@ function synchroniserEffectifDepuisRapports(resultat) {
     typeof synchroniserCacheEffectifGDA === "function"
   ) {
     synchroniserCacheEffectifGDA(resultat.effectif);
+    return;
+  }
+  if (typeof invaliderCacheEffectifGDA === "function") {
+    invaliderCacheEffectifGDA();
   }
 }
 

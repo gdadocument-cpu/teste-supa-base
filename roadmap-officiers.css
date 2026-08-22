@@ -122,10 +122,6 @@
 
 .roadmap-carte-poignee:active { cursor: grabbing; }
 .roadmap-carte-poignee strong { overflow: hidden; color: #fff; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
-.roadmap-carte-icone .gda-icone-atlas,
-.roadmap-option-icone .gda-icone-atlas,
-.roadmap-vide-icone .gda-icone-atlas,
-.roadmap-apercu-icone .gda-icone-atlas { transform: translate(-50%, -50%) scale(.7); }
 .roadmap-carte-icone { width: 42px; height: 42px; }
 .roadmap-carte-editer {
   width: 32px;
@@ -217,12 +213,7 @@
 .roadmap-dialogue textarea:focus { border-color: #5fc8ff; box-shadow: 0 0 15px rgba(54, 169, 230, .22); }
 .roadmap-dialogue-large { grid-column: 1 / -1; }
 .roadmap-dialogue fieldset { min-width: 0; margin: 0; padding: 13px; border: 1px solid rgba(75, 151, 205, .28); border-radius: 13px; }
-.roadmap-icones { max-height: 280px; overflow: auto; }
-.roadmap-icone-apercu { display: flex; align-items: center; gap: 13px; margin-bottom: 12px; padding: 11px 13px; border: 1px solid rgba(86, 187, 241, .48); border-radius: 12px; background: linear-gradient(90deg, rgba(15, 78, 115, .74), rgba(5, 27, 47, .72)); box-shadow: inset 0 1px rgba(255,255,255,.04); }
-.roadmap-apercu-icone { flex: 0 0 58px; width: 58px; height: 58px; border: 1px solid rgba(111, 204, 250, .4); border-radius: 13px; box-shadow: 0 0 19px rgba(63, 181, 239, .2); }
-.roadmap-icone-apercu div { display: grid; gap: 3px; }
-.roadmap-icone-apercu small { color: #7fb9d8; font-size: 10px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; }
-.roadmap-icone-apercu strong { color: #fff; font-size: 15px; }
+.roadmap-dialogue fieldset > .gda-icone-selectionnee { width: min(360px, 100%); margin-top: 8px; }
 .roadmap-media-edition { display: grid; gap: 11px; }
 .roadmap-depot-media { display: grid; place-items: center; gap: 5px; min-height: 105px; padding: 14px; border: 1px dashed rgba(93, 194, 246, .6); border-radius: 13px; outline: none; color: #dff5ff; background: rgba(7, 42, 67, .58); text-align: center; cursor: pointer; transition: .18s ease; }
 .roadmap-depot-media span { color: #86acc3; font-size: 11px; }
@@ -234,13 +225,6 @@
 .roadmap-media-dialogue { max-width: 520px; }
 .roadmap-media-dialogue img,.roadmap-media-dialogue video { max-height: 270px; }
 .roadmap-retirer-media { justify-self: start; padding: 7px 11px; border: 1px solid rgba(242, 87, 99, .46); border-radius: 9px; color: #ffacb3; background: rgba(86, 13, 22, .55); cursor: pointer; }
-.roadmap-icones-groupe + .roadmap-icones-groupe { margin-top: 13px; }
-.roadmap-icones-groupe h5 { margin: 0 0 7px; color: #76b9df; font-size: 11px; letter-spacing: .8px; text-transform: uppercase; }
-.roadmap-icones-groupe > div { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; }
-.roadmap-icone-option { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; min-height: 83px; padding: 8px 4px; border: 1px solid rgba(73, 146, 198, .24); border-radius: 10px; color: #9cb8ca; background: rgba(4, 24, 42, .72); cursor: pointer; }
-.roadmap-icone-option span:last-child { width: 100%; overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.roadmap-icone-option.est-selectionnee { border-color: #5fcaff; color: #fff; background: rgba(20, 91, 133, .78); box-shadow: 0 0 13px rgba(59, 183, 239, .24); }
-.roadmap-option-icone { flex: 0 0 48px; width: 48px; height: 48px; border: 1px solid rgba(91, 171, 220, .2); border-radius: 11px; }
 .roadmap-dialogue form > footer { display: flex; align-items: center; gap: 9px; padding-top: 4px; }
 .roadmap-dialogue form > footer span { flex: 1; }
 .roadmap-dialogue form > footer button { min-height: 41px; padding: 8px 15px; border: 1px solid rgba(82, 163, 216, .38); border-radius: 10px; color: #dceefa; background: rgba(10, 50, 77, .72); font-weight: 800; cursor: pointer; }
@@ -262,7 +246,6 @@
   .roadmap-dialogue form { grid-template-columns: 1fr; padding: 14px; }
   .roadmap-dialogue form > header,
   .roadmap-dialogue-large { grid-column: 1; }
-  .roadmap-icones-groupe > div { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .roadmap-dialogue form > footer { flex-wrap: wrap; }
   .roadmap-dialogue form > footer span { display: none; }
   .roadmap-dialogue form > footer button { flex: 1 1 auto; }

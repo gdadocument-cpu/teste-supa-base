@@ -123,15 +123,15 @@
     const groupes = Array.isArray(window.GDA_ICONES?.groupes) ? window.GDA_ICONES.groupes : [];
     return groupes.map(function(groupe) {
       return `
-        <section class="roadmap-icones-groupe">
-          <h5>${echapperRoadmap(groupe[0])}</h5>
+        <section>
+          <h4>${echapperRoadmap(groupe[0])}</h4>
           <div>
             ${groupe[1].map(function(icone) {
               const code = icone[0];
-              return `<button class="roadmap-icone-option${code === selection ? " est-selectionnee" : ""}"
-                              type="button" data-icone="${echapperRoadmap(code)}"
+              return `<button class="gda-choix-icone${code === selection ? " est-selectionnee" : ""}"
+                              type="button" data-roadmap-icone="${echapperRoadmap(code)}"
                               title="${echapperRoadmap(icone[1])}">
-                        ${iconeRoadmap(code, "roadmap-option-icone")}
+                        ${iconeRoadmap(code)}
                         <span>${echapperRoadmap(icone[1])}</span>
                       </button>`;
             }).join("")}
@@ -166,8 +166,11 @@
           <fieldset class="roadmap-dialogue-large">
             <legend>Icône</legend>
             <input id="roadmapIcone" type="hidden" value="objective">
-            <div id="roadmapIconeApercu" class="roadmap-icone-apercu"></div>
-            <div id="roadmapIcones" class="roadmap-icones">${optionsIconesRoadmap("objective")}</div>
+            <button id="roadmapOuvrirIcones" class="gda-icone-selectionnee" type="button">${iconeRoadmap("objective")}<span>Objectif</span></button>
+            <div id="roadmapSelecteurIcones" class="gda-selecteur-icones" hidden>
+              <header><strong>Choisir une icône</strong><button id="roadmapFermerIcones" type="button" aria-label="Fermer">×</button></header>
+              ${optionsIconesRoadmap("objective")}
+            </div>
           </fieldset>
           <fieldset class="roadmap-dialogue-large roadmap-media-edition">
             <legend>Photo, GIF ou vidéo</legend>
@@ -274,13 +277,13 @@
   function selectionnerIconeRoadmap(code) {
     const champ = document.getElementById("roadmapIcone");
     if (champ) champ.value = code;
-    document.querySelectorAll("#roadmapIcones [data-icone]").forEach(function(bouton) {
-      bouton.classList.toggle("est-selectionnee", bouton.dataset.icone === code);
+    document.querySelectorAll("#roadmapSelecteurIcones [data-roadmap-icone]").forEach(function(bouton) {
+      bouton.classList.toggle("est-selectionnee", bouton.dataset.roadmapIcone === code);
     });
-    const apercu = document.getElementById("roadmapIconeApercu");
+    const apercu = document.getElementById("roadmapOuvrirIcones");
     const definition = window.GDA_ICONES?.parCode?.[code];
     if (apercu) {
-      apercu.innerHTML = `${iconeRoadmap(code, "roadmap-apercu-icone")}<div><small>Icône sélectionnée</small><strong>${echapperRoadmap(definition?.libelle || code)}</strong></div>`;
+      apercu.innerHTML = `${iconeRoadmap(code)}<span>${echapperRoadmap(definition?.libelle || code)}</span>`;
     }
   }
 
@@ -350,9 +353,19 @@
   function initialiserDialogueRoadmap() {
     document.getElementById("roadmapFermerDialogue")?.addEventListener("click", fermerDialogueRoadmap);
     document.getElementById("roadmapAnnuler")?.addEventListener("click", fermerDialogueRoadmap);
-    document.getElementById("roadmapIcones")?.addEventListener("click", function(evenement) {
-      const bouton = evenement.target.closest("[data-icone]");
-      if (bouton) selectionnerIconeRoadmap(bouton.dataset.icone);
+    const selecteurIcones = document.getElementById("roadmapSelecteurIcones");
+    document.getElementById("roadmapOuvrirIcones")?.addEventListener("click", function() {
+      if (selecteurIcones) selecteurIcones.hidden = false;
+    });
+    document.getElementById("roadmapFermerIcones")?.addEventListener("click", function() {
+      if (selecteurIcones) selecteurIcones.hidden = true;
+    });
+    selecteurIcones?.addEventListener("click", function(evenement) {
+      const bouton = evenement.target.closest("[data-roadmap-icone]");
+      if (bouton) {
+        selectionnerIconeRoadmap(bouton.dataset.roadmapIcone);
+        selecteurIcones.hidden = true;
+      }
     });
     const depotMedia = document.getElementById("roadmapDepotMedia");
     const fichierMedia = document.getElementById("roadmapFichierMedia");

@@ -587,6 +587,24 @@ const authenticated = async (req: Request) => {
       })
     }
 
+    const mediaRoadmapClient = async (carte: any) => {
+      const type = ["IMAGE", "GIF", "VIDEO"].includes(normalise(carte?.media_type))
+        ? normalise(carte.media_type)
+        : ""
+      if (!type) return null
+      if (texte(carte.media_path)) {
+        const { data, error } = await admin.storage.from("roadmap-media")
+          .createSignedUrl(texte(carte.media_path), 3600)
+        if (error) {
+          console.warn("Média Roadmap temporairement indisponible :", error.message)
+          return null
+        }
+        return { type, url: data.signedUrl, fichier: true }
+      }
+      const url = texte(carte.media_url)
+      return /^https?:\/\//i.test(url) ? { type, url, fichier: false } : null
+    }
+
     const annoncesAccueilClient = async () => {
       const maintenant = Date.now()
       const [annoncesResultat, roadmapResultat] = await Promise.all([
@@ -596,13 +614,16 @@ const authenticated = async (req: Request) => {
           .order("created_at", { ascending: false })
           .limit(100),
         admin.from("officer_roadmap_cards")
-          .select("id,announcement_id,officer_roadmap_votes(profile_id,vote_type)")
+          .select("id,announcement_id,media_url,media_path,media_type,officer_roadmap_votes(profile_id,vote_type)")
           .not("announcement_id", "is", null)
           .eq("archived", false),
       ])
       if (annoncesResultat.error) throw annoncesResultat.error
       if (roadmapResultat.error) throw roadmapResultat.error
       const roadmapParAnnonce = new Map((roadmapResultat.data ?? []).map((carte: any) => [Number(carte.announcement_id), carte]))
+      const mediasRoadmap = new Map(await Promise.all((roadmapResultat.data ?? []).map(async (carte: any) => [
+        Number(carte.id), await mediaRoadmapClient(carte),
+      ])))
       const data = annoncesResultat.data
       return (data ?? [])
         .filter((row: any) => !row.expires_at || new Date(row.expires_at).getTime() > maintenant)
@@ -635,6 +656,7 @@ const authenticated = async (req: Request) => {
             votesContre: votesRoadmap.filter((vote: any) => vote.vote_type === "DOWN").length,
             monVote: monVoteRoadmap,
             peutVoter: !visitor,
+            media: mediasRoadmap.get(Number(carteRoadmap.id)) || null,
           } : null,
         })})
     }
@@ -767,7 +789,7 @@ const authenticated = async (req: Request) => {
       if (!visitor) requireSeniorOfficer()
       const { data, error } = await admin
         .from("officer_roadmap_cards")
-        .select("id,title,body,icon_code,target_date,position_x,position_y,width,height,z_index,announcement_id,created_by_snapshot,created_at,updated_at,officer_roadmap_votes(profile_id,vote_type)")
+        .select("id,title,body,icon_code,target_date,position_x,position_y,width,height,z_index,announcement_id,media_url,media_path,media_type,created_by_snapshot,created_at,updated_at,officer_roadmap_votes(profile_id,vote_type)")
         .eq("archived", false)
         .order("z_index", { ascending: true })
         .order("id", { ascending: true })
@@ -776,7 +798,7 @@ const authenticated = async (req: Request) => {
         success: true,
         message,
         peutModifier: officierSuperieur,
-        cartes: (data ?? []).map((carte: any) => {
+        cartes: await Promise.all((data ?? []).map(async (carte: any) => {
           const votes = Array.isArray(carte.officer_roadmap_votes)
             ? carte.officer_roadmap_votes
             : []
@@ -799,8 +821,9 @@ const authenticated = async (req: Request) => {
             monVote: votes.find((vote: any) => vote.profile_id === profile.id)?.vote_type || "",
             publiee: !!carte.announcement_id,
             annonceId: carte.announcement_id || null,
+            media: await mediaRoadmapClient(carte),
           }
-        }),
+        })),
       }
     }
 
@@ -1260,16 +1283,42 @@ const authenticated = async (req: Request) => {
         return json(await tachesOfficiersClient())
       case "recupererRoadmapOfficiers":
         return json(await roadmapOfficiersClient())
+      case "preparerMediaRoadmap": {
+        requireSeniorOfficer()
+        const nomOriginal = texte(payload.nomFichier)
+        const mime = texte(payload.mime).toLowerCase()
+        const taille = nombre(payload.taille)
+        const typesAutorises: Record<string, string> = {
+          "image/jpeg": "IMAGE", "image/png": "IMAGE", "image/webp": "IMAGE", "image/avif": "IMAGE",
+          "image/gif": "GIF", "video/mp4": "VIDEO", "video/webm": "VIDEO", "video/quicktime": "VIDEO",
+        }
+        if (!nomOriginal || !typesAutorises[mime]) throw new Error("Format non accepté. Utilisez une image, un GIF, un MP4, un WebM ou un MOV.")
+        if (!taille || taille > 26214400) throw new Error("Le fichier doit peser au maximum 25 Mo.")
+        const extension = nomOriginal.includes(".") ? nomOriginal.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") : ""
+        const nomSain = nomOriginal.replace(/\.[^.]+$/, "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zA-Z0-9_-]/g, "-").replace(/-+/g, "-").slice(0, 60) || "media"
+        const chemin = `${profile.id}/${crypto.randomUUID()}-${nomSain}${extension ? `.${extension}` : ""}`
+        const { data, error } = await admin.storage.from("roadmap-media").createSignedUploadUrl(chemin)
+        if (error) throw error
+        return json({ success: true, chemin, jeton: data.token, typeMedia: typesAutorises[mime] })
+      }
       case "creerCarteRoadmapOfficiers": {
         requireSeniorOfficer()
         const titre = texte(payload.titre)
         const corps = texte(payload.texte)
         const icone = texte(payload.icone).toLowerCase() || "objective"
         const date = texte(payload.date)
+        const mediaUrl = texte(payload.mediaUrl)
+        const mediaPath = texte(payload.mediaPath)
+        const mediaType = normalise(payload.mediaType)
         if (!titre || titre.length > 120) throw new Error("Le titre doit contenir entre 1 et 120 caractères.")
         if (corps.length > 3000) throw new Error("Le texte ne peut pas dépasser 3 000 caractères.")
         if (!ICONES_ANNONCES.has(icone)) throw new Error("Icône Roadmap invalide.")
         if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Date Roadmap invalide.")
+        if (mediaUrl && mediaPath) throw new Error("Choisissez un fichier ou un lien, pas les deux.")
+        if ((mediaUrl || mediaPath) && !["IMAGE", "GIF", "VIDEO"].includes(mediaType)) throw new Error("Type de média invalide.")
+        if (mediaUrl && (!/^https?:\/\//i.test(mediaUrl) || mediaUrl.length > 2000)) throw new Error("Lien de média invalide.")
+        if (mediaPath && !mediaPath.startsWith(`${profile.id}/`)) throw new Error("Fichier Roadmap invalide.")
         const { data: derniere } = await admin.from("officer_roadmap_cards")
           .select("z_index").eq("archived", false).order("z_index", { ascending: false }).limit(1).maybeSingle()
         const niveau = Math.min(1000000, Math.max(1, nombre(derniere?.z_index) + 1))
@@ -1285,6 +1334,9 @@ const authenticated = async (req: Request) => {
           z_index: niveau,
           created_by_profile_id: profile.id,
           created_by_snapshot: actorName,
+          media_url: mediaUrl || null,
+          media_path: mediaPath || null,
+          media_type: mediaUrl || mediaPath ? mediaType : null,
         }).select("id").single()
         if (error) throw error
         await audit("Carte Roadmap ajoutée", titre)
@@ -1296,11 +1348,12 @@ const authenticated = async (req: Request) => {
         const carteId = nombre(payload.carteId)
         if (!carteId) throw new Error("Carte Roadmap invalide.")
         const { data: existante, error: existanteError } = await admin.from("officer_roadmap_cards")
-          .select("id,title,announcement_id").eq("id", carteId).eq("archived", false).maybeSingle()
+          .select("id,title,announcement_id,media_path").eq("id", carteId).eq("archived", false).maybeSingle()
         if (existanteError) throw existanteError
         if (!existante) throw new Error("Carte Roadmap introuvable.")
         const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
-        const contenuModifie = payload.titre !== undefined || payload.texte !== undefined || payload.icone !== undefined || payload.date !== undefined
+        const contenuModifie = payload.titre !== undefined || payload.texte !== undefined || payload.icone !== undefined || payload.date !== undefined ||
+          payload.mediaUrl !== undefined || payload.mediaPath !== undefined || payload.mediaType !== undefined
         if (payload.titre !== undefined) {
           const titre = texte(payload.titre)
           if (!titre || titre.length > 120) throw new Error("Le titre doit contenir entre 1 et 120 caractères.")
@@ -1321,6 +1374,19 @@ const authenticated = async (req: Request) => {
           if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Date Roadmap invalide.")
           patch.target_date = date || null
         }
+        const mediaModifie = payload.mediaUrl !== undefined || payload.mediaPath !== undefined || payload.mediaType !== undefined
+        if (mediaModifie) {
+          const mediaUrl = texte(payload.mediaUrl)
+          const mediaPath = texte(payload.mediaPath)
+          const mediaType = normalise(payload.mediaType)
+          if (mediaUrl && mediaPath) throw new Error("Choisissez un fichier ou un lien, pas les deux.")
+          if ((mediaUrl || mediaPath) && !["IMAGE", "GIF", "VIDEO"].includes(mediaType)) throw new Error("Type de média invalide.")
+          if (mediaUrl && (!/^https?:\/\//i.test(mediaUrl) || mediaUrl.length > 2000)) throw new Error("Lien de média invalide.")
+          if (mediaPath && !mediaPath.startsWith(`${profile.id}/`)) throw new Error("Fichier Roadmap invalide.")
+          patch.media_url = mediaUrl || null
+          patch.media_path = mediaPath || null
+          patch.media_type = mediaUrl || mediaPath ? mediaType : null
+        }
         if (payload.x !== undefined) patch.position_x = Math.max(0, Math.min(5000, Math.round(nombre(payload.x))))
         if (payload.y !== undefined) patch.position_y = Math.max(0, Math.min(5000, Math.round(nombre(payload.y))))
         if (payload.largeur !== undefined) patch.width = Math.max(220, Math.min(900, Math.round(nombre(payload.largeur))))
@@ -1328,6 +1394,13 @@ const authenticated = async (req: Request) => {
         if (payload.niveau !== undefined) patch.z_index = Math.max(1, Math.min(1000000, Math.round(nombre(payload.niveau))))
         const { error } = await admin.from("officer_roadmap_cards").update(patch).eq("id", carteId)
         if (error) throw error
+        if (mediaModifie && existante.media_path && existante.media_path !== patch.media_path) {
+          const { error: suppressionMediaError } = await admin.storage.from("roadmap-media").remove([existante.media_path])
+          if (suppressionMediaError) console.warn("Ancien média Roadmap non supprimé :", suppressionMediaError.message)
+        }
+        if (mediaModifie && existante.announcement_id) {
+          await diffuserChangementAnnonces(admin, "roadmap-media")
+        }
         if (contenuModifie && existante.announcement_id) {
           const annoncePatch: Record<string, unknown> = {}
           if (patch.title !== undefined) annoncePatch.title = patch.title
@@ -1348,7 +1421,7 @@ const authenticated = async (req: Request) => {
         requireSeniorOfficer()
         const carteId = nombre(payload.carteId)
         const { data: carte, error: lectureError } = await admin.from("officer_roadmap_cards")
-          .select("id,title,announcement_id").eq("id", carteId).eq("archived", false).maybeSingle()
+          .select("id,title,announcement_id,media_path").eq("id", carteId).eq("archived", false).maybeSingle()
         if (lectureError) throw lectureError
         if (!carte) throw new Error("Carte Roadmap introuvable.")
         if (carte.announcement_id) {
@@ -1357,6 +1430,10 @@ const authenticated = async (req: Request) => {
         }
         const { error } = await admin.from("officer_roadmap_cards").delete().eq("id", carte.id)
         if (error) throw error
+        if (carte.media_path) {
+          const { error: suppressionMediaError } = await admin.storage.from("roadmap-media").remove([carte.media_path])
+          if (suppressionMediaError) console.warn("Média Roadmap non supprimé :", suppressionMediaError.message)
+        }
         await audit("Carte Roadmap supprimée", carte.title)
         await diffuserChangementRoadmap(admin, "suppression")
         if (carte.announcement_id) await diffuserChangementAnnonces(admin, "roadmap-suppression")

@@ -9,6 +9,7 @@
   let interactionRoadmap = false;
   let canalRoadmap = null;
   let carteEditee = null;
+  let mediaEditionRoadmap = { fichier: null, url: "", type: "", sale: false, apercu: "" };
 
   function echapperRoadmap(valeur) {
     return String(valeur == null ? "" : valeur)
@@ -32,6 +33,29 @@
 
   function couleurIconeRoadmap(code) {
     return window.GDA_ICONES?.parCode?.[code]?.couleur || "bleu";
+  }
+
+  function mediaRoadmapHTML(media, classe) {
+    if (!media?.url) return "";
+    const type = String(media.type || "").toUpperCase();
+    const url = echapperRoadmap(media.url);
+    if (type === "VIDEO") {
+      return `<div class="roadmap-media ${classe || ""}"><video src="${url}" controls preload="metadata" playsinline></video></div>`;
+    }
+    return `<div class="roadmap-media ${classe || ""}"><img src="${url}" alt="Média de la carte" loading="lazy"></div>`;
+  }
+
+  function typeMediaDepuisMime(mime) {
+    if (mime === "image/gif") return "GIF";
+    if (String(mime || "").startsWith("video/")) return "VIDEO";
+    return "IMAGE";
+  }
+
+  function typeMediaDepuisLien(url) {
+    const valeur = String(url || "").split(/[?#]/)[0].toLowerCase();
+    if (/\.(mp4|webm|mov|m4v)$/.test(valeur)) return "VIDEO";
+    if (/\.gif$/.test(valeur)) return "GIF";
+    return "IMAGE";
   }
 
   function formaterDateRoadmap(date) {
@@ -67,6 +91,7 @@
         </header>
         <div class="roadmap-carte-contenu">
           ${carte.date ? `<time datetime="${echapperRoadmap(carte.date)}">📅 ${echapperRoadmap(formaterDateRoadmap(carte.date))}</time>` : ""}
+          ${mediaRoadmapHTML(carte.media, "roadmap-carte-media")}
           <p>${echapperRoadmap(carte.texte || "Aucun détail.")}</p>
         </div>
         <footer>
@@ -143,6 +168,20 @@
             <input id="roadmapIcone" type="hidden" value="objective">
             <div id="roadmapIconeApercu" class="roadmap-icone-apercu"></div>
             <div id="roadmapIcones" class="roadmap-icones">${optionsIconesRoadmap("objective")}</div>
+          </fieldset>
+          <fieldset class="roadmap-dialogue-large roadmap-media-edition">
+            <legend>Photo, GIF ou vidéo</legend>
+            <div id="roadmapDepotMedia" class="roadmap-depot-media" tabindex="0" role="button">
+              <input id="roadmapFichierMedia" type="file" hidden accept="image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime">
+              <strong>Déposez votre fichier ici</strong>
+              <span>ou cliquez pour le choisir · 25 Mo maximum</span>
+            </div>
+            <div class="roadmap-media-lien">
+              <label><span>Lien direct facultatif</span><input id="roadmapLienMedia" type="url" maxlength="2000" placeholder="https://…/photo.gif ou video.mp4"></label>
+              <label><span>Type du lien</span><select id="roadmapTypeMedia"><option value="IMAGE">Image</option><option value="GIF">GIF</option><option value="VIDEO">Vidéo</option></select></label>
+            </div>
+            <div id="roadmapApercuMedia" class="roadmap-apercu-media"></div>
+            <button id="roadmapRetirerMedia" class="roadmap-retirer-media" type="button" hidden>Retirer le média</button>
           </fieldset>
           <footer class="roadmap-dialogue-large">
             <button id="roadmapSupprimer" class="roadmap-supprimer" type="button" hidden>Supprimer</button>
@@ -255,6 +294,16 @@
     document.getElementById("roadmapTexte").value = carte?.texte || "";
     document.getElementById("roadmapSupprimer").hidden = !carte;
     selectionnerIconeRoadmap(carte?.icone || "objective");
+    mediaEditionRoadmap = {
+      fichier: null,
+      url: "",
+      type: carte?.media?.type || "IMAGE",
+      sale: false,
+      apercu: carte?.media?.url || ""
+    };
+    document.getElementById("roadmapLienMedia").value = "";
+    document.getElementById("roadmapTypeMedia").value = mediaEditionRoadmap.type || "IMAGE";
+    mettreAJourApercuMediaRoadmap();
     dialogue.showModal();
     document.getElementById("roadmapTitre").focus();
   }
@@ -262,6 +311,40 @@
   function fermerDialogueRoadmap() {
     document.getElementById("roadmapDialogue")?.close();
     carteEditee = null;
+    if (mediaEditionRoadmap.apercu?.startsWith("blob:")) URL.revokeObjectURL(mediaEditionRoadmap.apercu);
+  }
+
+  function mettreAJourApercuMediaRoadmap() {
+    const apercu = document.getElementById("roadmapApercuMedia");
+    const retirer = document.getElementById("roadmapRetirerMedia");
+    if (!apercu) return;
+    const url = mediaEditionRoadmap.apercu || mediaEditionRoadmap.url;
+    apercu.innerHTML = url ? mediaRoadmapHTML({ url: url, type: mediaEditionRoadmap.type }, "roadmap-media-dialogue") : "";
+    apercu.hidden = !url;
+    if (retirer) retirer.hidden = !url;
+  }
+
+  async function televerserMediaRoadmap(fichier) {
+    const demande = new URLSearchParams({
+      action: "preparerMediaRoadmap",
+      nomFichier: fichier.name,
+      mime: fichier.type,
+      taille: String(fichier.size)
+    });
+    const reponse = await fetch(API_ROADMAP + "?action=preparerMediaRoadmap", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: demande.toString(),
+      cache: "no-store"
+    });
+    const resultat = await reponse.json();
+    if (!reponse.ok || !resultat.success) throw new Error(resultat.message || "Préparation du fichier impossible.");
+    const client = window.gdaSupabase?.client;
+    if (!client) throw new Error("Stockage Supabase indisponible.");
+    const { error } = await client.storage.from("roadmap-media")
+      .uploadToSignedUrl(resultat.chemin, resultat.jeton, fichier, { contentType: fichier.type, cacheControl: "3600" });
+    if (error) throw error;
+    return { mediaPath: resultat.chemin, mediaUrl: "", mediaType: resultat.typeMedia };
   }
 
   function initialiserDialogueRoadmap() {
@@ -271,14 +354,75 @@
       const bouton = evenement.target.closest("[data-icone]");
       if (bouton) selectionnerIconeRoadmap(bouton.dataset.icone);
     });
-    document.getElementById("roadmapFormulaire")?.addEventListener("submit", function(evenement) {
+    const depotMedia = document.getElementById("roadmapDepotMedia");
+    const fichierMedia = document.getElementById("roadmapFichierMedia");
+    const choisirFichier = function() { fichierMedia?.click(); };
+    depotMedia?.addEventListener("click", choisirFichier);
+    depotMedia?.addEventListener("keydown", function(evenement) {
+      if (evenement.key === "Enter" || evenement.key === " ") { evenement.preventDefault(); choisirFichier(); }
+    });
+    ["dragenter", "dragover"].forEach(function(type) {
+      depotMedia?.addEventListener(type, function(evenement) { evenement.preventDefault(); depotMedia.classList.add("est-survole"); });
+    });
+    ["dragleave", "drop"].forEach(function(type) {
+      depotMedia?.addEventListener(type, function(evenement) { evenement.preventDefault(); depotMedia.classList.remove("est-survole"); });
+    });
+    function choisirMedia(fichier) {
+      if (!fichier) return;
+      if (fichier.size > 26214400) return notifierRoadmap("Le fichier dépasse 25 Mo.", "erreur");
+      if (!/^(image\/(jpeg|png|webp|gif|avif)|video\/(mp4|webm|quicktime))$/i.test(fichier.type)) {
+        return notifierRoadmap("Format non accepté.", "erreur");
+      }
+      if (mediaEditionRoadmap.apercu?.startsWith("blob:")) URL.revokeObjectURL(mediaEditionRoadmap.apercu);
+      mediaEditionRoadmap = { fichier: fichier, url: "", type: typeMediaDepuisMime(fichier.type), sale: true, apercu: URL.createObjectURL(fichier) };
+      document.getElementById("roadmapLienMedia").value = "";
+      document.getElementById("roadmapTypeMedia").value = mediaEditionRoadmap.type;
+      mettreAJourApercuMediaRoadmap();
+    }
+    fichierMedia?.addEventListener("change", function() { choisirMedia(fichierMedia.files?.[0]); });
+    depotMedia?.addEventListener("drop", function(evenement) { choisirMedia(evenement.dataTransfer?.files?.[0]); });
+    document.getElementById("roadmapLienMedia")?.addEventListener("input", function(evenement) {
+      const url = evenement.currentTarget.value.trim();
+      if (mediaEditionRoadmap.apercu?.startsWith("blob:")) URL.revokeObjectURL(mediaEditionRoadmap.apercu);
+      const type = typeMediaDepuisLien(url);
+      mediaEditionRoadmap = { fichier: null, url: url, type: type, sale: true, apercu: url };
+      document.getElementById("roadmapTypeMedia").value = type;
+      mettreAJourApercuMediaRoadmap();
+    });
+    document.getElementById("roadmapTypeMedia")?.addEventListener("change", function(evenement) {
+      mediaEditionRoadmap.type = evenement.currentTarget.value;
+      mediaEditionRoadmap.sale = true;
+      mettreAJourApercuMediaRoadmap();
+    });
+    document.getElementById("roadmapRetirerMedia")?.addEventListener("click", function() {
+      if (mediaEditionRoadmap.apercu?.startsWith("blob:")) URL.revokeObjectURL(mediaEditionRoadmap.apercu);
+      mediaEditionRoadmap = { fichier: null, url: "", type: "", sale: true, apercu: "" };
+      document.getElementById("roadmapLienMedia").value = "";
+      if (fichierMedia) fichierMedia.value = "";
+      mettreAJourApercuMediaRoadmap();
+    });
+    document.getElementById("roadmapFormulaire")?.addEventListener("submit", async function(evenement) {
       evenement.preventDefault();
+      const boutonEnregistrer = document.getElementById("roadmapEnregistrer");
+      boutonEnregistrer.disabled = true;
       const donnees = {
         titre: document.getElementById("roadmapTitre").value.trim(),
         date: document.getElementById("roadmapDate").value,
         texte: document.getElementById("roadmapTexte").value.trim(),
         icone: document.getElementById("roadmapIcone").value
       };
+      try {
+        if (mediaEditionRoadmap.fichier) {
+          Object.assign(donnees, await televerserMediaRoadmap(mediaEditionRoadmap.fichier));
+        } else if (mediaEditionRoadmap.sale) {
+          donnees.mediaUrl = mediaEditionRoadmap.url;
+          donnees.mediaPath = "";
+          donnees.mediaType = mediaEditionRoadmap.url ? mediaEditionRoadmap.type : "";
+        }
+      } catch (erreur) {
+        boutonEnregistrer.disabled = false;
+        return notifierRoadmap(erreur.message || "Envoi du média impossible.", "erreur");
+      }
       if (carteEditee) {
         donnees.carteId = carteEditee.id;
         envoyerMutationRoadmap("modifierCarteRoadmapOfficiers", donnees, document.getElementById("roadmapEnregistrer"), true);

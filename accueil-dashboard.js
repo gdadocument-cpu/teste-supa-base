@@ -44,6 +44,14 @@
     return typeof window.iconeGDA === "function" ? window.iconeGDA(code, classe) : `<span class="gda-icone">●</span>`;
   }
 
+  function mediaAnnonceRoadmap(media) {
+    if (!media?.url) return "";
+    const url = h(media.url);
+    return String(media.type || "").toUpperCase() === "VIDEO"
+      ? `<div class="accueil-annonce-media"><video src="${url}" controls preload="metadata" playsinline></video></div>`
+      : `<div class="accueil-annonce-media"><img src="${url}" alt="Média de la proposition" loading="lazy"></div>`;
+  }
+
   function iconeDisponibilites(pourcentage) {
     const niveau = Math.max(0, Math.min(100, Number(pourcentage) || 0));
     return `<span class="accueil-statistique-icone accueil-bouclier-jauge"
@@ -81,6 +89,7 @@
       ${depliable ? 'data-annonce-depliable="true" tabindex="0" role="button" aria-expanded="false"' : ""}>
       ${icone(a.icone || "info", "accueil-annonce-icone")}
       <div><header><strong>${h(a.titre)}</strong><small>${libelleType}</small></header><p>${h(a.description)}</p>
+        ${mediaAnnonceRoadmap(a.roadmap?.media)}
         ${depliable ? `<div class="accueil-annonce-details">${h(details)}</div><em class="accueil-annonce-indice">Afficher le message complet⌄</em>` : ""}
         ${voteRoadmap}
         <span>${auteurEtDate}</span></div>

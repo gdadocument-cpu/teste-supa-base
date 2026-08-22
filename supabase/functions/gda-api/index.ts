@@ -589,12 +589,21 @@ const authenticated = async (req: Request) => {
 
     const annoncesAccueilClient = async () => {
       const maintenant = Date.now()
-      const { data, error } = await admin.from("home_announcements")
-        .select("id,title,body,announcement_type,icon_code,created_by_profile_id,created_by_snapshot,automated,defcon_level,expires_at,created_at")
-        .eq("active", true)
-        .order("created_at", { ascending: false })
-        .limit(100)
-      if (error) throw error
+      const [annoncesResultat, roadmapResultat] = await Promise.all([
+        admin.from("home_announcements")
+          .select("id,title,body,announcement_type,icon_code,created_by_profile_id,created_by_snapshot,automated,defcon_level,expires_at,created_at")
+          .eq("active", true)
+          .order("created_at", { ascending: false })
+          .limit(100),
+        admin.from("officer_roadmap_cards")
+          .select("id,announcement_id,officer_roadmap_votes(profile_id,vote_type)")
+          .not("announcement_id", "is", null)
+          .eq("archived", false),
+      ])
+      if (annoncesResultat.error) throw annoncesResultat.error
+      if (roadmapResultat.error) throw roadmapResultat.error
+      const roadmapParAnnonce = new Map((roadmapResultat.data ?? []).map((carte: any) => [Number(carte.announcement_id), carte]))
+      const data = annoncesResultat.data
       return (data ?? [])
         .filter((row: any) => !row.expires_at || new Date(row.expires_at).getTime() > maintenant)
         .map((row: any) => {
@@ -602,6 +611,9 @@ const authenticated = async (req: Request) => {
           const resume = parties.shift() || texte(row.body)
           const details = parties.join("\n\n").trim()
           const estDefconAutomatique = row.automated === true && row.defcon_level !== null
+          const carteRoadmap: any = roadmapParAnnonce.get(Number(row.id))
+          const votesRoadmap = Array.isArray(carteRoadmap?.officer_roadmap_votes) ? carteRoadmap.officer_roadmap_votes : []
+          const monVoteRoadmap = votesRoadmap.find((vote: any) => vote.profile_id === profile.id)?.vote_type || ""
           return ({
           id: row.id,
           titre: row.title,
@@ -614,7 +626,16 @@ const authenticated = async (req: Request) => {
           niveauDefcon: row.defcon_level,
           expireLe: row.expires_at || "",
           creeLe: row.created_at,
-          peutSupprimer: officer && (officierSuperieur || row.created_by_profile_id === profile.id),
+          peutSupprimer: carteRoadmap
+            ? officierSuperieur
+            : officer && (officierSuperieur || row.created_by_profile_id === profile.id),
+          roadmap: carteRoadmap ? {
+            carteId: carteRoadmap.id,
+            votesPour: votesRoadmap.filter((vote: any) => vote.vote_type === "UP").length,
+            votesContre: votesRoadmap.filter((vote: any) => vote.vote_type === "DOWN").length,
+            monVote: monVoteRoadmap,
+            peutVoter: !visitor,
+          } : null,
         })})
     }
 
@@ -746,7 +767,7 @@ const authenticated = async (req: Request) => {
       if (!visitor) requireSeniorOfficer()
       const { data, error } = await admin
         .from("officer_roadmap_cards")
-        .select("id,title,body,icon_code,target_date,position_x,position_y,width,height,z_index,created_by_snapshot,created_at,updated_at,officer_roadmap_votes(profile_id)")
+        .select("id,title,body,icon_code,target_date,position_x,position_y,width,height,z_index,announcement_id,created_by_snapshot,created_at,updated_at,officer_roadmap_votes(profile_id,vote_type)")
         .eq("archived", false)
         .order("z_index", { ascending: true })
         .order("id", { ascending: true })
@@ -773,8 +794,11 @@ const authenticated = async (req: Request) => {
             auteur: carte.created_by_snapshot || "Officier supérieur",
             creeLe: carte.created_at,
             modifieLe: carte.updated_at,
-            votes: votes.length,
-            aVote: votes.some((vote: any) => vote.profile_id === profile.id),
+            votesPour: votes.filter((vote: any) => vote.vote_type === "UP").length,
+            votesContre: votes.filter((vote: any) => vote.vote_type === "DOWN").length,
+            monVote: votes.find((vote: any) => vote.profile_id === profile.id)?.vote_type || "",
+            publiee: !!carte.announcement_id,
+            annonceId: carte.announcement_id || null,
           }
         }),
       }
@@ -1212,6 +1236,10 @@ const authenticated = async (req: Request) => {
       case "supprimerAnnonceAccueil": {
         requireOfficer()
         const annonceId = nombre(payload.annonceId)
+        const { data: carteRoadmapLiee, error: roadmapLieeError } = await admin.from("officer_roadmap_cards")
+          .select("id").eq("announcement_id", annonceId).maybeSingle()
+        if (roadmapLieeError) throw roadmapLieeError
+        if (carteRoadmapLiee) requireSeniorOfficer()
         const { data: annonce, error: lectureError } = await admin.from("home_announcements")
           .select("id,title,created_by_profile_id")
           .eq("id", annonceId)
@@ -1225,6 +1253,7 @@ const authenticated = async (req: Request) => {
         if (error) throw error
         await audit("Annonce d’accueil supprimée", annonce.title)
         await diffuserChangementAnnonces(admin, "suppression")
+        if (carteRoadmapLiee) await diffuserChangementRoadmap(admin, "depublication")
         return json(await tableauAccueilClient("Annonce supprimée."))
       }
       case "recupererTachesOfficiers":
@@ -1267,7 +1296,7 @@ const authenticated = async (req: Request) => {
         const carteId = nombre(payload.carteId)
         if (!carteId) throw new Error("Carte Roadmap invalide.")
         const { data: existante, error: existanteError } = await admin.from("officer_roadmap_cards")
-          .select("id,title").eq("id", carteId).eq("archived", false).maybeSingle()
+          .select("id,title,announcement_id").eq("id", carteId).eq("archived", false).maybeSingle()
         if (existanteError) throw existanteError
         if (!existante) throw new Error("Carte Roadmap introuvable.")
         const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -1299,6 +1328,18 @@ const authenticated = async (req: Request) => {
         if (payload.niveau !== undefined) patch.z_index = Math.max(1, Math.min(1000000, Math.round(nombre(payload.niveau))))
         const { error } = await admin.from("officer_roadmap_cards").update(patch).eq("id", carteId)
         if (error) throw error
+        if (contenuModifie && existante.announcement_id) {
+          const annoncePatch: Record<string, unknown> = {}
+          if (patch.title !== undefined) annoncePatch.title = patch.title
+          if (patch.body !== undefined) annoncePatch.body = texte(patch.body).slice(0, 1200)
+          if (patch.icon_code !== undefined) annoncePatch.icon_code = patch.icon_code
+          if (Object.keys(annoncePatch).length) {
+            const { error: annonceError } = await admin.from("home_announcements")
+              .update(annoncePatch).eq("id", existante.announcement_id)
+            if (annonceError) throw annonceError
+            await diffuserChangementAnnonces(admin, "roadmap-modification")
+          }
+        }
         if (contenuModifie) await audit("Carte Roadmap modifiée", texte(patch.title) || existante.title)
         await diffuserChangementRoadmap(admin, contenuModifie ? "modification" : "deplacement")
         return json(await roadmapOfficiersClient("Carte Roadmap enregistrée."))
@@ -1307,35 +1348,101 @@ const authenticated = async (req: Request) => {
         requireSeniorOfficer()
         const carteId = nombre(payload.carteId)
         const { data: carte, error: lectureError } = await admin.from("officer_roadmap_cards")
-          .select("id,title").eq("id", carteId).eq("archived", false).maybeSingle()
+          .select("id,title,announcement_id").eq("id", carteId).eq("archived", false).maybeSingle()
         if (lectureError) throw lectureError
         if (!carte) throw new Error("Carte Roadmap introuvable.")
+        if (carte.announcement_id) {
+          const { error: annonceError } = await admin.from("home_announcements").delete().eq("id", carte.announcement_id)
+          if (annonceError) throw annonceError
+        }
         const { error } = await admin.from("officer_roadmap_cards").delete().eq("id", carte.id)
         if (error) throw error
         await audit("Carte Roadmap supprimée", carte.title)
         await diffuserChangementRoadmap(admin, "suppression")
+        if (carte.announcement_id) await diffuserChangementAnnonces(admin, "roadmap-suppression")
         return json(await roadmapOfficiersClient(`Carte « ${carte.title} » supprimée.`))
       }
-      case "voterCarteRoadmapOfficiers": {
+      case "publierCarteRoadmapOfficiers": {
         requireSeniorOfficer()
         const carteId = nombre(payload.carteId)
+        const { data: carte, error: lectureError } = await admin.from("officer_roadmap_cards")
+          .select("id,title,body,icon_code,announcement_id").eq("id", carteId).eq("archived", false).maybeSingle()
+        if (lectureError) throw lectureError
+        if (!carte) throw new Error("Carte Roadmap introuvable.")
+        if (!carte.announcement_id) {
+          const { data: annonce, error: annonceError } = await admin.from("home_announcements").insert({
+            title: carte.title,
+            body: (carte.body || "Proposition soumise au vote des membres GDA.").slice(0, 1200),
+            announcement_type: "INFO",
+            icon_code: carte.icon_code || "objective",
+            created_by_profile_id: profile.id,
+            created_by_snapshot: actorName,
+          }).select("id").single()
+          if (annonceError) throw annonceError
+          const { error: liaisonError } = await admin.from("officer_roadmap_cards")
+            .update({ announcement_id: annonce.id, updated_at: new Date().toISOString() }).eq("id", carte.id)
+          if (liaisonError) {
+            await admin.from("home_announcements").delete().eq("id", annonce.id)
+            throw liaisonError
+          }
+        }
+        await audit("Carte Roadmap publiée dans les annonces", carte.title)
+        await Promise.all([
+          diffuserChangementRoadmap(admin, "publication"),
+          diffuserChangementAnnonces(admin, "roadmap-publication"),
+        ])
+        return json(await roadmapOfficiersClient(`Carte « ${carte.title} » publiée dans les annonces.`))
+      }
+      case "retirerCarteRoadmapAnnonce": {
+        requireSeniorOfficer()
+        const carteId = nombre(payload.carteId)
+        const { data: carte, error: lectureError } = await admin.from("officer_roadmap_cards")
+          .select("id,title,announcement_id").eq("id", carteId).eq("archived", false).maybeSingle()
+        if (lectureError) throw lectureError
+        if (!carte) throw new Error("Carte Roadmap introuvable.")
+        if (carte.announcement_id) {
+          const { error } = await admin.from("home_announcements").delete().eq("id", carte.announcement_id)
+          if (error) throw error
+        }
+        await audit("Carte Roadmap retirée des annonces", carte.title)
+        await Promise.all([
+          diffuserChangementRoadmap(admin, "depublication"),
+          diffuserChangementAnnonces(admin, "roadmap-depublication"),
+        ])
+        return json(await roadmapOfficiersClient(`Carte « ${carte.title} » retirée des annonces.`))
+      }
+      case "voterCarteRoadmapOfficiers": {
+        if (visitor) throw new Error("Le mode visiteur permet uniquement la consultation.")
+        const carteId = nombre(payload.carteId)
+        const choix = normalise(payload.vote)
+        if (!["UP", "DOWN"].includes(choix)) throw new Error("Choix de vote invalide.")
         const { data: carte, error: carteError } = await admin.from("officer_roadmap_cards")
-          .select("id").eq("id", carteId).eq("archived", false).maybeSingle()
+          .select("id,announcement_id").eq("id", carteId).eq("archived", false).maybeSingle()
         if (carteError) throw carteError
         if (!carte) throw new Error("Carte Roadmap introuvable.")
+        if (!carte.announcement_id && !officierSuperieur) {
+          throw new Error("Cette proposition n’est pas encore ouverte au vote de tous les GDA.")
+        }
         const { data: vote, error: voteError } = await admin.from("officer_roadmap_votes")
-          .select("card_id").eq("card_id", carteId).eq("profile_id", profile.id).maybeSingle()
+          .select("card_id,vote_type").eq("card_id", carteId).eq("profile_id", profile.id).maybeSingle()
         if (voteError) throw voteError
-        if (vote) {
+        let messageVote = "Vote enregistré."
+        if (vote?.vote_type === choix) {
           const { error } = await admin.from("officer_roadmap_votes").delete()
             .eq("card_id", carteId).eq("profile_id", profile.id)
           if (error) throw error
+          messageVote = "Vote retiré."
+        } else if (vote) {
+          const { error } = await admin.from("officer_roadmap_votes").update({ vote_type: choix })
+            .eq("card_id", carteId).eq("profile_id", profile.id)
+          if (error) throw error
         } else {
-          const { error } = await admin.from("officer_roadmap_votes").insert({ card_id: carteId, profile_id: profile.id })
+          const { error } = await admin.from("officer_roadmap_votes").insert({ card_id: carteId, profile_id: profile.id, vote_type: choix })
           if (error) throw error
         }
         await diffuserChangementRoadmap(admin, "vote")
-        return json(await roadmapOfficiersClient(vote ? "Vote retiré." : "Vote ajouté."))
+        if (carte.announcement_id) await diffuserChangementAnnonces(admin, "roadmap-vote")
+        return json({ success: true, message: messageVote })
       }
       case "recupererMaTacheOfficier":
         return json(await maTacheOfficierClient())

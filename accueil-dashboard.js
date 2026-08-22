@@ -68,11 +68,21 @@
     const auteurEtDate = a.auteur
       ? `Par ${h(a.auteur)} · ${h(relatif(a.creeLe))}`
       : h(relatif(a.creeLe));
+    const voteRoadmap = a.roadmap ? `<div class="accueil-annonce-votes" aria-label="Vote sur cette proposition">
+      <span>Votre avis :</span>
+      <button type="button" data-roadmap-vote="UP" data-carte-id="${h(a.roadmap.carteId)}"
+        class="accueil-vote-pour${a.roadmap.monVote === "UP" ? " est-actif" : ""}" ${a.roadmap.peutVoter ? "" : "disabled"}
+        aria-pressed="${a.roadmap.monVote === "UP" ? "true" : "false"}">👍 <b>${Number(a.roadmap.votesPour || 0)}</b></button>
+      <button type="button" data-roadmap-vote="DOWN" data-carte-id="${h(a.roadmap.carteId)}"
+        class="accueil-vote-contre${a.roadmap.monVote === "DOWN" ? " est-actif" : ""}" ${a.roadmap.peutVoter ? "" : "disabled"}
+        aria-pressed="${a.roadmap.monVote === "DOWN" ? "true" : "false"}">👎 <b>${Number(a.roadmap.votesContre || 0)}</b></button>
+    </div>` : "";
     return `<article class="accueil-annonce accueil-annonce-${h((a.type || "INFO").toLowerCase())}${depliable ? " est-depliable" : ""}"
       ${depliable ? 'data-annonce-depliable="true" tabindex="0" role="button" aria-expanded="false"' : ""}>
       ${icone(a.icone || "info", "accueil-annonce-icone")}
       <div><header><strong>${h(a.titre)}</strong><small>${libelleType}</small></header><p>${h(a.description)}</p>
         ${depliable ? `<div class="accueil-annonce-details">${h(details)}</div><em class="accueil-annonce-indice">Afficher le message complet⌄</em>` : ""}
+        ${voteRoadmap}
         <span>${auteurEtDate}</span></div>
       ${a.peutSupprimer ? `<button class="accueil-annonce-supprimer" data-id="${h(a.id)}" type="button" title="Supprimer cette annonce" aria-label="Supprimer cette annonce">×</button>` : ""}
     </article>`;
@@ -142,7 +152,7 @@
         if (indice) indice.textContent = ouvert ? "Masquer le message complet⌃" : "Afficher le message complet⌄";
       }
       element.addEventListener("click", function (evenement) {
-        if (evenement.target.closest(".accueil-annonce-supprimer")) return;
+        if (evenement.target.closest(".accueil-annonce-supprimer,[data-roadmap-vote]")) return;
         basculer();
       });
       element.addEventListener("keydown", function (evenement) {
@@ -155,6 +165,12 @@
       bouton.addEventListener("click", function (evenement) {
         evenement.stopPropagation();
         if (confirm("Supprimer cette annonce ?")) envoyer("supprimerAnnonceAccueil", { annonceId: bouton.dataset.id });
+      });
+    });
+    document.querySelectorAll("[data-roadmap-vote]").forEach(function (bouton) {
+      bouton.addEventListener("click", function (evenement) {
+        evenement.stopPropagation();
+        envoyer("voterCarteRoadmapOfficiers", { carteId: bouton.dataset.carteId, vote: bouton.dataset.roadmapVote });
       });
     });
     document.getElementById("formAnnonceAccueil")?.addEventListener("submit", function (event) {
@@ -186,7 +202,8 @@
       const reponse = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: body.toString(), cache: "no-store" });
       const resultat = await reponse.json();
       if (!resultat.success) throw new Error(resultat.message || "Action impossible.");
-      donnees = resultat; rendre();
+      if (action === "voterCarteRoadmapOfficiers") await actualiser(true);
+      else { donnees = resultat; rendre(); }
       if (typeof afficherNotificationGDA === "function") afficherNotificationGDA(resultat.message, "succes");
     } catch (e) {
       if (typeof afficherNotificationGDA === "function") afficherNotificationGDA(e.message, "erreur");

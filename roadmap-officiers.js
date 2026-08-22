@@ -71,11 +71,24 @@
         </div>
         <footer>
           <small>Par ${echapperRoadmap(carte.auteur || "Officier supérieur")}</small>
-          <button class="roadmap-vote${carte.aVote ? " est-actif" : ""}" type="button"
-                  data-action="voter" ${peutModifier ? "" : "disabled"}
-                  aria-pressed="${carte.aVote ? "true" : "false"}">
-            👍 <span>${Number(carte.votes || 0)}</span>
-          </button>
+          <div class="roadmap-carte-actions">
+            ${peutModifier ? `<button class="roadmap-publication${carte.publiee ? " est-publiee" : ""}" type="button"
+                    data-action="publication" title="${carte.publiee ? "Retirer des annonces" : "Publier dans les annonces"}">
+              ${carte.publiee ? "📣 Publiée" : "📣 Publier"}
+            </button>` : ""}
+            <div class="roadmap-votes" aria-label="Votes">
+              <button class="roadmap-vote roadmap-vote-pour${carte.monVote === "UP" ? " est-actif" : ""}" type="button"
+                      data-action="voter" data-vote="UP" ${peutModifier ? "" : "disabled"}
+                      aria-label="Voter pour" aria-pressed="${carte.monVote === "UP" ? "true" : "false"}">
+                👍 <span>${Number(carte.votesPour || 0)}</span>
+              </button>
+              <button class="roadmap-vote roadmap-vote-contre${carte.monVote === "DOWN" ? " est-actif" : ""}" type="button"
+                      data-action="voter" data-vote="DOWN" ${peutModifier ? "" : "disabled"}
+                      aria-label="Voter contre" aria-pressed="${carte.monVote === "DOWN" ? "true" : "false"}">
+                👎 <span>${Number(carte.votesContre || 0)}</span>
+              </button>
+            </div>
+          </div>
         </footer>
         ${peutModifier ? '<span class="roadmap-redimensionner" role="button" tabindex="0" aria-label="Redimensionner la carte"></span>' : ""}
       </article>`;
@@ -128,6 +141,7 @@
           <fieldset class="roadmap-dialogue-large">
             <legend>Icône</legend>
             <input id="roadmapIcone" type="hidden" value="objective">
+            <div id="roadmapIconeApercu" class="roadmap-icone-apercu"></div>
             <div id="roadmapIcones" class="roadmap-icones">${optionsIconesRoadmap("objective")}</div>
           </fieldset>
           <footer class="roadmap-dialogue-large">
@@ -160,7 +174,8 @@
         <div class="roadmap-legende">
           <span>⠿ Déplacement par l’en-tête</span>
           <span>◢ Redimensionnement par le coin</span>
-          <span>👍 Un vote par officier supérieur</span>
+          <span>👍 / 👎 Un seul choix de vote par personne</span>
+          <span>📣 Une carte publiée devient visible et votable sur l’accueil</span>
         </div>
         <div class="roadmap-tableau-defilement">
           <div id="roadmapTableau" class="roadmap-tableau" style="min-width:${LARGEUR_MINIMALE_TABLEAU}px;height:${hauteurTableauRoadmap()}px">
@@ -191,7 +206,18 @@
     espace.querySelectorAll("[data-action='voter']").forEach(function(bouton) {
       bouton.addEventListener("click", function() {
         const id = bouton.closest(".roadmap-carte")?.dataset.carteId;
-        envoyerMutationRoadmap("voterCarteRoadmapOfficiers", { carteId: id }, bouton);
+        envoyerMutationRoadmap("voterCarteRoadmapOfficiers", { carteId: id, vote: bouton.dataset.vote }, bouton, false, true);
+      });
+    });
+    espace.querySelectorAll("[data-action='publication']").forEach(function(bouton) {
+      bouton.addEventListener("click", function() {
+        const carte = trouverCarteRoadmap(bouton.closest(".roadmap-carte")?.dataset.carteId);
+        if (!carte) return;
+        const action = carte.publiee ? "retirerCarteRoadmapAnnonce" : "publierCarteRoadmapOfficiers";
+        const question = carte.publiee
+          ? "Retirer cette proposition des annonces ? Les votes déjà reçus seront conservés."
+          : "Publier cette proposition dans les annonces afin que tous les GDA puissent voter ?";
+        if (window.confirm(question)) envoyerMutationRoadmap(action, { carteId: carte.id }, bouton);
       });
     });
     if (donneesRoadmap.peutModifier) {
@@ -212,6 +238,11 @@
     document.querySelectorAll("#roadmapIcones [data-icone]").forEach(function(bouton) {
       bouton.classList.toggle("est-selectionnee", bouton.dataset.icone === code);
     });
+    const apercu = document.getElementById("roadmapIconeApercu");
+    const definition = window.GDA_ICONES?.parCode?.[code];
+    if (apercu) {
+      apercu.innerHTML = `${iconeRoadmap(code, "roadmap-apercu-icone")}<div><small>Icône sélectionnée</small><strong>${echapperRoadmap(definition?.libelle || code)}</strong></div>`;
+    }
   }
 
   function ouvrirDialogueRoadmap(carte) {
@@ -327,7 +358,7 @@
     window.addEventListener("pointercancel", terminer, { once: true });
   }
 
-  async function envoyerMutationRoadmap(action, champs, bouton, fermerApres) {
+  async function envoyerMutationRoadmap(action, champs, bouton, fermerApres, rechargerApres) {
     if (bouton) bouton.disabled = true;
     try {
       const donnees = new URLSearchParams({ action: action });
@@ -342,9 +373,13 @@
       });
       const resultat = await reponse.json();
       if (!reponse.ok || !resultat.success) throw new Error(resultat.message || "Modification de la Roadmap impossible.");
-      donneesRoadmap = resultat;
+      if (rechargerApres) {
+        await chargerRoadmapOfficiers(true, true);
+      } else {
+        donneesRoadmap = resultat;
+      }
       if (fermerApres) fermerDialogueRoadmap();
-      afficherRoadmapOfficiers();
+      if (!rechargerApres) afficherRoadmapOfficiers();
       if (resultat.message) notifierRoadmap(resultat.message, "succes");
     } catch (erreur) {
       notifierRoadmap(erreur.message || "Modification de la Roadmap impossible.", "erreur");

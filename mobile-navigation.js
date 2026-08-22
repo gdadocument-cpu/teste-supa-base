@@ -20,6 +20,7 @@
   };
   const descriptionsModules = {
     tachesOfficiersButton: "Attribuer les responsabilités hebdomadaires",
+    roadmapOfficiersButton: "Planifier, déplacer et faire voter les prochaines idées",
     effectifButton: "Consulter et gérer l’effectif officier",
     recommandationsObservationsButton: "Suivre les recommandations de la semaine",
     disponibilitesButton: "Consulter les disponibilités et les absences",

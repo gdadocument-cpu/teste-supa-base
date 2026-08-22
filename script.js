@@ -322,6 +322,7 @@ function formaterDateHeureGDA(valeur, valeurVide) {
 
 const officiersSuperieursButton = document.getElementById("officiersSuperieursButton");
 const tachesOfficiersButton = document.getElementById("tachesOfficiersButton");
+const roadmapOfficiersButton = document.getElementById("roadmapOfficiersButton");
 const retourOfficiersSuperieursButton = document.getElementById("retourOfficiersSuperieursButton");
 const officierGdaButton = document.getElementById("officierGdaButton");
 const retourOfficierButton = document.getElementById("retourOfficierButton");
@@ -355,6 +356,13 @@ if (tachesOfficiersButton) {
   tachesOfficiersButton.addEventListener("click", function() {
     if (typeof window.ouvrirTachesOfficiersGDA === "function") {
       window.ouvrirTachesOfficiersGDA();
+    }
+  });
+}
+if (roadmapOfficiersButton) {
+  roadmapOfficiersButton.addEventListener("click", function() {
+    if (typeof window.ouvrirRoadmapOfficiersGDA === "function") {
+      window.ouvrirRoadmapOfficiersGDA();
     }
   });
 }
@@ -521,6 +529,7 @@ function extraireActionCorpsRequeteGDA(options) {
 const ACTIONS_LECTURE_GDA = new Set([
   "recupererTableauAccueil",
   "recupererTachesOfficiers",
+  "recupererRoadmapOfficiers",
   "recupererMaTacheOfficier",
   "recupererEffectif",
   "recupererRecommandationsObservations",
@@ -569,6 +578,10 @@ const INVALIDATIONS_CACHE_GDA = {
   supprimerAnnonceAccueil: ["recupererTableauAccueil"],
   definirDefcon: ["recupererTableauAccueil"],
   enregistrerTacheOfficier: ["recupererTachesOfficiers", "recupererMaTacheOfficier", "recupererNotifications"],
+  creerCarteRoadmapOfficiers: ["recupererRoadmapOfficiers"],
+  modifierCarteRoadmapOfficiers: ["recupererRoadmapOfficiers"],
+  supprimerCarteRoadmapOfficiers: ["recupererRoadmapOfficiers"],
+  voterCarteRoadmapOfficiers: ["recupererRoadmapOfficiers"],
   prendreConnaissanceTacheOfficier: ["recupererMaTacheOfficier", "recupererNotifications"],
   appliquerGestionPersonnel: ["recupererGestionPersonnel", "recupererEffectif", "recupererEffectifPublic", "recupererDeparts"],
   modifierLogGestionPersonnel: ["recupererGestionPersonnel"],
@@ -689,6 +702,14 @@ async function actualiserModuleVisibleGDA(evenement) {
       executer: function () {
         return typeof window.chargerTachesOfficiersGDA === "function"
           ? window.chargerTachesOfficiersGDA(true)
+          : null;
+      }
+    },
+    "roadmap-officiers": {
+      action: "recupererRoadmapOfficiers",
+      executer: function () {
+        return typeof window.chargerRoadmapOfficiersGDA === "function"
+          ? window.chargerRoadmapOfficiersGDA(true, true)
           : null;
       }
     },
@@ -2242,12 +2263,16 @@ function appliquerVisibiliteModulesGDA() {
 
   const entreeOfficiersSuperieurs = document.getElementById("officiersSuperieursButton");
   const tachesOfficiers = document.getElementById("tachesOfficiersButton");
+  const roadmapOfficiers = document.getElementById("roadmapOfficiersButton");
   const retourOfficiersSuperieurs = document.getElementById("retourOfficiersSuperieursButton");
   if (entreeOfficiersSuperieurs) {
     entreeOfficiersSuperieurs.hidden = !accesOfficiersSuperieurs || sousMenuOuvert;
   }
   if (tachesOfficiers) {
     tachesOfficiers.hidden = !accesOfficiersSuperieurs || !menuOfficiersSuperieursOuvert;
+  }
+  if (roadmapOfficiers) {
+    roadmapOfficiers.hidden = !accesOfficiersSuperieurs || !menuOfficiersSuperieursOuvert;
   }
   if (retourOfficiersSuperieurs) {
     retourOfficiersSuperieurs.hidden = !accesOfficiersSuperieurs || !menuOfficiersSuperieursOuvert;
@@ -2415,7 +2440,7 @@ function ouvrirMenuOfficiersSuperieursGDA() {
   appliquerVisibiliteModulesGDA();
   afficherAccueilMenuGDA(
     "Espace Officiers supérieurs",
-    "Sélectionnez Tâches officiers dans le menu de gauche."
+    "Sélectionnez Tâches officiers ou Roadmap dans le menu de gauche."
   );
 }
 

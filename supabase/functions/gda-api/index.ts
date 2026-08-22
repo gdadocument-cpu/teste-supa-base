@@ -104,6 +104,22 @@ const diffuserChangementAnnonces = async (admin: any, origine: string) => {
   }
 }
 
+const diffuserChangementRoadmap = async (admin: any, origine: string) => {
+  const canal = admin.channel("gda-roadmap-global")
+  try {
+    const statut = await canal.send({
+      type: "broadcast",
+      event: "roadmap-change",
+      payload: { origine, modifieLe: new Date().toISOString() },
+    })
+    if (statut !== "ok") console.warn("Diffusion Realtime de la Roadmap non confirmée :", statut)
+  } catch (erreur) {
+    console.warn("Diffusion Realtime de la Roadmap indisponible :", erreur)
+  } finally {
+    await admin.removeChannel(canal)
+  }
+}
+
 const texte = (value: unknown) => String(value ?? "").trim()
 const nombre = (value: unknown) => Number(value || 0) || 0
 const bool = (value: unknown) => value === true || ["1", "true", "oui"].includes(texte(value).toLowerCase())
@@ -726,6 +742,44 @@ const authenticated = async (req: Request) => {
       }
     }
 
+    const roadmapOfficiersClient = async (message = "") => {
+      if (!visitor) requireSeniorOfficer()
+      const { data, error } = await admin
+        .from("officer_roadmap_cards")
+        .select("id,title,body,icon_code,target_date,position_x,position_y,width,height,z_index,created_by_snapshot,created_at,updated_at,officer_roadmap_votes(profile_id)")
+        .eq("archived", false)
+        .order("z_index", { ascending: true })
+        .order("id", { ascending: true })
+      if (error) throw error
+      return {
+        success: true,
+        message,
+        peutModifier: officierSuperieur,
+        cartes: (data ?? []).map((carte: any) => {
+          const votes = Array.isArray(carte.officer_roadmap_votes)
+            ? carte.officer_roadmap_votes
+            : []
+          return {
+            id: carte.id,
+            titre: carte.title,
+            texte: carte.body || "",
+            icone: carte.icon_code || "objective",
+            date: carte.target_date || "",
+            x: nombre(carte.position_x),
+            y: nombre(carte.position_y),
+            largeur: nombre(carte.width),
+            hauteur: nombre(carte.height),
+            niveau: nombre(carte.z_index),
+            auteur: carte.created_by_snapshot || "Officier supérieur",
+            creeLe: carte.created_at,
+            modifieLe: carte.updated_at,
+            votes: votes.length,
+            aVote: votes.some((vote: any) => vote.profile_id === profile.id),
+          }
+        }),
+      }
+    }
+
     const maTacheOfficierClient = async (message = "") => {
       if (!profile.member_id) return { success: true, message, tache: null }
       const semaine = debutSemaineParis()
@@ -1175,6 +1229,114 @@ const authenticated = async (req: Request) => {
       }
       case "recupererTachesOfficiers":
         return json(await tachesOfficiersClient())
+      case "recupererRoadmapOfficiers":
+        return json(await roadmapOfficiersClient())
+      case "creerCarteRoadmapOfficiers": {
+        requireSeniorOfficer()
+        const titre = texte(payload.titre)
+        const corps = texte(payload.texte)
+        const icone = texte(payload.icone).toLowerCase() || "objective"
+        const date = texte(payload.date)
+        if (!titre || titre.length > 120) throw new Error("Le titre doit contenir entre 1 et 120 caractères.")
+        if (corps.length > 3000) throw new Error("Le texte ne peut pas dépasser 3 000 caractères.")
+        if (!ICONES_ANNONCES.has(icone)) throw new Error("Icône Roadmap invalide.")
+        if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Date Roadmap invalide.")
+        const { data: derniere } = await admin.from("officer_roadmap_cards")
+          .select("z_index").eq("archived", false).order("z_index", { ascending: false }).limit(1).maybeSingle()
+        const niveau = Math.min(1000000, Math.max(1, nombre(derniere?.z_index) + 1))
+        const { data: carte, error } = await admin.from("officer_roadmap_cards").insert({
+          title: titre,
+          body: corps,
+          icon_code: icone,
+          target_date: date || null,
+          position_x: Math.max(0, Math.min(5000, Math.round(nombre(payload.x) || 24))),
+          position_y: Math.max(0, Math.min(5000, Math.round(nombre(payload.y) || 24))),
+          width: 300,
+          height: 220,
+          z_index: niveau,
+          created_by_profile_id: profile.id,
+          created_by_snapshot: actorName,
+        }).select("id").single()
+        if (error) throw error
+        await audit("Carte Roadmap ajoutée", titre)
+        await diffuserChangementRoadmap(admin, "creation")
+        return json(await roadmapOfficiersClient(`Carte « ${titre} » ajoutée.`))
+      }
+      case "modifierCarteRoadmapOfficiers": {
+        requireSeniorOfficer()
+        const carteId = nombre(payload.carteId)
+        if (!carteId) throw new Error("Carte Roadmap invalide.")
+        const { data: existante, error: existanteError } = await admin.from("officer_roadmap_cards")
+          .select("id,title").eq("id", carteId).eq("archived", false).maybeSingle()
+        if (existanteError) throw existanteError
+        if (!existante) throw new Error("Carte Roadmap introuvable.")
+        const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+        const contenuModifie = payload.titre !== undefined || payload.texte !== undefined || payload.icone !== undefined || payload.date !== undefined
+        if (payload.titre !== undefined) {
+          const titre = texte(payload.titre)
+          if (!titre || titre.length > 120) throw new Error("Le titre doit contenir entre 1 et 120 caractères.")
+          patch.title = titre
+        }
+        if (payload.texte !== undefined) {
+          const corps = texte(payload.texte)
+          if (corps.length > 3000) throw new Error("Le texte ne peut pas dépasser 3 000 caractères.")
+          patch.body = corps
+        }
+        if (payload.icone !== undefined) {
+          const icone = texte(payload.icone).toLowerCase()
+          if (!ICONES_ANNONCES.has(icone)) throw new Error("Icône Roadmap invalide.")
+          patch.icon_code = icone
+        }
+        if (payload.date !== undefined) {
+          const date = texte(payload.date)
+          if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Date Roadmap invalide.")
+          patch.target_date = date || null
+        }
+        if (payload.x !== undefined) patch.position_x = Math.max(0, Math.min(5000, Math.round(nombre(payload.x))))
+        if (payload.y !== undefined) patch.position_y = Math.max(0, Math.min(5000, Math.round(nombre(payload.y))))
+        if (payload.largeur !== undefined) patch.width = Math.max(220, Math.min(900, Math.round(nombre(payload.largeur))))
+        if (payload.hauteur !== undefined) patch.height = Math.max(170, Math.min(900, Math.round(nombre(payload.hauteur))))
+        if (payload.niveau !== undefined) patch.z_index = Math.max(1, Math.min(1000000, Math.round(nombre(payload.niveau))))
+        const { error } = await admin.from("officer_roadmap_cards").update(patch).eq("id", carteId)
+        if (error) throw error
+        if (contenuModifie) await audit("Carte Roadmap modifiée", texte(patch.title) || existante.title)
+        await diffuserChangementRoadmap(admin, contenuModifie ? "modification" : "deplacement")
+        return json(await roadmapOfficiersClient("Carte Roadmap enregistrée."))
+      }
+      case "supprimerCarteRoadmapOfficiers": {
+        requireSeniorOfficer()
+        const carteId = nombre(payload.carteId)
+        const { data: carte, error: lectureError } = await admin.from("officer_roadmap_cards")
+          .select("id,title").eq("id", carteId).eq("archived", false).maybeSingle()
+        if (lectureError) throw lectureError
+        if (!carte) throw new Error("Carte Roadmap introuvable.")
+        const { error } = await admin.from("officer_roadmap_cards").delete().eq("id", carte.id)
+        if (error) throw error
+        await audit("Carte Roadmap supprimée", carte.title)
+        await diffuserChangementRoadmap(admin, "suppression")
+        return json(await roadmapOfficiersClient(`Carte « ${carte.title} » supprimée.`))
+      }
+      case "voterCarteRoadmapOfficiers": {
+        requireSeniorOfficer()
+        const carteId = nombre(payload.carteId)
+        const { data: carte, error: carteError } = await admin.from("officer_roadmap_cards")
+          .select("id").eq("id", carteId).eq("archived", false).maybeSingle()
+        if (carteError) throw carteError
+        if (!carte) throw new Error("Carte Roadmap introuvable.")
+        const { data: vote, error: voteError } = await admin.from("officer_roadmap_votes")
+          .select("card_id").eq("card_id", carteId).eq("profile_id", profile.id).maybeSingle()
+        if (voteError) throw voteError
+        if (vote) {
+          const { error } = await admin.from("officer_roadmap_votes").delete()
+            .eq("card_id", carteId).eq("profile_id", profile.id)
+          if (error) throw error
+        } else {
+          const { error } = await admin.from("officer_roadmap_votes").insert({ card_id: carteId, profile_id: profile.id })
+          if (error) throw error
+        }
+        await diffuserChangementRoadmap(admin, "vote")
+        return json(await roadmapOfficiersClient(vote ? "Vote retiré." : "Vote ajouté."))
+      }
       case "recupererMaTacheOfficier":
         return json(await maTacheOfficierClient())
       case "enregistrerTacheOfficier": {

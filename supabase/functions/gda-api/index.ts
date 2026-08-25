@@ -3127,13 +3127,20 @@ const authenticated = async (req: Request) => {
           const instructeurNom = texte(payload.instructeur) || row.instructor_snapshot
           const profilInstructeur = await profilActifParMatricule(instructeurNom)
           if (!profilInstructeur) throw new Error("Le profil de l’instructeur choisi est introuvable.")
+          const nouveauMatricule = texte(payload.matricule) || row.matricule_snapshot
+          if (row.member_id && normalise(nouveauMatricule) !== normalise(row.matricule_snapshot)) {
+            const homonyme = (members ?? []).find((member: any) =>
+              member.id !== row.member_id && normalise(member.matricule) === normalise(nouveauMatricule)
+            )
+            if (homonyme) throw new Error("Ce nom ou matricule est déjà utilisé dans l’effectif.")
+          }
           const gerantNom = texte(payload.gerant) || row.manager_snapshot
           const profilGerant = gerantNom ? await profilActifParMatricule(matriculeDepuisLibelleGerant(gerantNom)) : null
           const sanction = ["P1", "P2"].includes(normalise(payload.sanction)) ? normalise(payload.sanction) : "Rien"
           const dateFinInitiale = isoDate(row.initial_end_on) || ajouterJoursIso(row.end_on, -joursSanctionSuivi(row.sanction)) || ajouterJoursIso(aujourdHui(), 7)
           const dateFin = ajouterJoursIso(dateFinInitiale, joursSanctionSuivi(sanction))
           const { error: updateError } = await admin.from("training_followups").update({
-            matricule_snapshot: texte(payload.matricule) || row.matricule_snapshot, steam_id: texte(payload.steamId) || null,
+            matricule_snapshot: nouveauMatricule, steam_id: texte(payload.steamId) || null,
             discord_id: texte(payload.discordId) || null,
             service_count: Math.max(0, nombre(payload.prisesService)), instructor_profile_id: profilInstructeur.id,
             instructor_snapshot: instructeurNom, manager_profile_id: profilGerant?.id ?? row.manager_profile_id,

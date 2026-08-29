@@ -138,7 +138,7 @@ function afficherPostItsInstructeurGDA(workspace, suivis) {
   ) return;
   const etaitOuvert = panneauExistant?.classList.contains("est-ouvert") === true;
   panneauExistant?.remove();
-  accueil.insertAdjacentHTML("beforeend", `
+  const contenuPanneau = `
     <aside class="post-its-instructeur-gda${etaitOuvert ? " est-ouvert" : ""}" aria-label="GDA placés sous ma surveillance">
       <button class="post-its-instructeur-resume" type="button" aria-expanded="${etaitOuvert}">
         <span aria-hidden="true">📌</span>
@@ -150,7 +150,10 @@ function afficherPostItsInstructeurGDA(workspace, suivis) {
         ${liste.map(creerPostItInstructeurGDA).join("")}
       </div>
     </aside>
-  `);
+  `;
+  const annonces = accueil.querySelector(".accueil-annonces");
+  if (annonces) annonces.insertAdjacentHTML("beforebegin", contenuPanneau);
+  else accueil.insertAdjacentHTML("beforeend", contenuPanneau);
   signaturePostItsInstructeur = nouvelleSignature;
   installerPostItsInstructeurGDA();
 }

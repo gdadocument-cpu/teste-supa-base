@@ -119,7 +119,7 @@
       sessionStorage.getItem("gradeUtilisateur") || "Grade non renseigné";
     const nom = sessionStorage.getItem("nomUtilisateur") || "Utilisateur";
     const lignes = [
-      "# Roulement des taches semestrielle",
+      "# Roulement des taches Hebdomadaire",
       "",
       "**`Courrier à l'attention de :`**  <@&1272570947102179444>",
       "**`CC :`**  <@&1274098953100460133>",

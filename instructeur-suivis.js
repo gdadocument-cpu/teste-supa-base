@@ -137,6 +137,10 @@ function modifierCachePostItInstructeurGDA(id, modifications) {
   enregistrerCachePostItsInstructeurGDA(suivis);
 }
 
+function accueilPostItsInstructeurDisponible(workspace) {
+  return !!workspace?.querySelector("#welcomePanel, #accueilDashboardGDA");
+}
+
 async function chargerPostItsInstructeurGDA() {
   const workspace = document.getElementById("workspace");
   if (!workspace) return;
@@ -150,8 +154,7 @@ async function chargerPostItsInstructeurGDA() {
     menuAdministrationOuvert ||
     moduleGdaActif
   ) return;
-  const accueil = workspace.querySelector("#welcomePanel");
-  if (!accueil) return;
+  if (!accueilPostItsInstructeurDisponible(workspace)) return;
   const cache = lireCachePostItsInstructeurGDA();
   if (cache.length) afficherPostItsInstructeurGDA(workspace, cache);
   if (cachePostItsInstructeurValide) return;
@@ -168,7 +171,7 @@ async function chargerPostItsInstructeurGDA() {
     if (
       numeroChargement !== chargementPostItsInstructeur ||
       !document.body.contains(workspace) ||
-      !workspace.querySelector("#welcomePanel") ||
+      !accueilPostItsInstructeurDisponible(workspace) ||
       menuOfficierOuvert || menuEspaceGdaOuvert || menuSpecialisationsOuvert ||
       menuLiensUtilesOuvert || menuAdministrationOuvert || moduleGdaActif
     ) return;
@@ -185,7 +188,7 @@ async function chargerPostItsInstructeurGDA() {
     if (
       nombreRelancesPostItsInstructeur < 2 &&
       !relancePostItsInstructeur &&
-      workspace.querySelector("#welcomePanel")
+      accueilPostItsInstructeurDisponible(workspace)
     ) {
       nombreRelancesPostItsInstructeur++;
       relancePostItsInstructeur = window.setTimeout(function () {
@@ -210,11 +213,16 @@ window.addEventListener("focus", function () {
   chargerPostItsInstructeurGDA();
 });
 
+document.addEventListener("gda:workspace-change", function () {
+  if (!sessionStorage.getItem("sessionTokenDiscord")) return;
+  window.setTimeout(chargerPostItsInstructeurGDA, 0);
+});
+
 window.setInterval(function () {
   if (
     document.visibilityState !== "visible" ||
     !sessionStorage.getItem("sessionTokenDiscord") ||
-    !document.querySelector("#workspace #welcomePanel")
+    !document.querySelector("#workspace #welcomePanel, #workspace #accueilDashboardGDA")
   ) return;
   cachePostItsInstructeurValide = false;
   chargerPostItsInstructeurGDA();

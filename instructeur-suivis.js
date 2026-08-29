@@ -17,6 +17,7 @@ const CACHE_POST_ITS_INSTRUCTEUR = "gdaPostItsInstructeurV2:";
 const DUREE_CACHE_POST_ITS_INSTRUCTEUR = 2 * 60 * 1000;
 let cachePostItsInstructeurValide = false;
 let cachePostItsInstructeurDate = 0;
+let signaturePostItsInstructeur = "";
 
 window.invaliderCacheSuivisInstructeurGDA = function() {
   try {
@@ -119,13 +120,38 @@ function enregistrerCachePostItsInstructeurGDA(suivis) {
 }
 
 function afficherPostItsInstructeurGDA(workspace, suivis) {
-  workspace.querySelector(".post-its-instructeur-gda")?.remove();
-  if (!Array.isArray(suivis) || !suivis.length) return;
-  workspace.insertAdjacentHTML("beforeend", `
-    <aside class="post-its-instructeur-gda" aria-label="GDA placés sous ma surveillance">
-      ${suivis.map(creerPostItInstructeurGDA).join("")}
+  const accueil = workspace.querySelector("#accueilDashboardGDA, #welcomePanel");
+  const panneauExistant = workspace.querySelector(".post-its-instructeur-gda");
+  const liste = Array.isArray(suivis) ? suivis : [];
+  const nouvelleSignature = JSON.stringify(liste.map(function (suivi) {
+    return [suivi.id, suivi.matricule, Number(suivi.nombreRapports || 0), Number(suivi.prisesService || 0), suivi.commentaire || ""];
+  }));
+  if (!accueil || !liste.length) {
+    panneauExistant?.remove();
+    signaturePostItsInstructeur = "";
+    return;
+  }
+  if (panneauExistant && nouvelleSignature === signaturePostItsInstructeur) return;
+  if (
+    panneauExistant &&
+    (panneauExistant.contains(document.activeElement) || panneauExistant.querySelector('[data-post-it-modifie="true"]'))
+  ) return;
+  const etaitOuvert = panneauExistant?.classList.contains("est-ouvert") === true;
+  panneauExistant?.remove();
+  accueil.insertAdjacentHTML("beforeend", `
+    <aside class="post-its-instructeur-gda${etaitOuvert ? " est-ouvert" : ""}" aria-label="GDA placés sous ma surveillance">
+      <button class="post-its-instructeur-resume" type="button" aria-expanded="${etaitOuvert}">
+        <span aria-hidden="true">📌</span>
+        <strong>Suivis de formation</strong>
+        <small>${liste.length} GDA à suivre</small>
+        <b aria-hidden="true">⌄</b>
+      </button>
+      <div class="post-its-instructeur-liste">
+        ${liste.map(creerPostItInstructeurGDA).join("")}
+      </div>
     </aside>
   `);
+  signaturePostItsInstructeur = nouvelleSignature;
   installerPostItsInstructeurGDA();
 }
 
@@ -144,7 +170,6 @@ function accueilPostItsInstructeurDisponible(workspace) {
 async function chargerPostItsInstructeurGDA() {
   const workspace = document.getElementById("workspace");
   if (!workspace) return;
-  workspace.querySelector(".post-its-instructeur-gda")?.remove();
   if (
     !sessionStorage.getItem("sessionTokenDiscord") ||
     menuOfficierOuvert ||
@@ -218,16 +243,6 @@ document.addEventListener("gda:workspace-change", function () {
   window.setTimeout(chargerPostItsInstructeurGDA, 0);
 });
 
-window.setInterval(function () {
-  if (
-    document.visibilityState !== "visible" ||
-    !sessionStorage.getItem("sessionTokenDiscord") ||
-    !document.querySelector("#workspace #welcomePanel, #workspace #accueilDashboardGDA")
-  ) return;
-  cachePostItsInstructeurValide = false;
-  chargerPostItsInstructeurGDA();
-}, 30000);
-
 function creerPostItInstructeurGDA(suivi) {
   return `<article class="post-it-instructeur-gda" data-post-it-suivi="${echapperRapportInstructeur(suivi.id)}">
     <header>
@@ -257,7 +272,17 @@ function creerPostItInstructeurGDA(suivi) {
 }
 
 function installerPostItsInstructeurGDA() {
+  const panneau = document.querySelector(".post-its-instructeur-gda");
+  panneau?.querySelector(".post-its-instructeur-resume")?.addEventListener("click", function () {
+    const ouvert = panneau.classList.toggle("est-ouvert");
+    this.setAttribute("aria-expanded", String(ouvert));
+  });
   document.querySelectorAll("[data-post-it-suivi]").forEach(function (postIt) {
+    postIt.querySelectorAll("input, textarea").forEach(function (champ) {
+      champ.addEventListener("input", function () {
+        postIt.dataset.postItModifie = "true";
+      });
+    });
     postIt.querySelector("[data-post-it-enregistrer]")?.addEventListener("click", async function () {
       const bouton = this;
       const commentaire = postIt.querySelector("[data-post-it-commentaire]").value;
@@ -280,6 +305,7 @@ function installerPostItsInstructeurGDA() {
           commentaire: commentaire,
           prisesService: prisesService
         });
+        delete postIt.dataset.postItModifie;
         afficherRetourPostItInstructeurGDA(postIt, "Suivi enregistré.", false);
       } catch (erreur) {
         afficherRetourPostItInstructeurGDA(postIt, erreur.message || "Échec de l’enregistrement.", true);

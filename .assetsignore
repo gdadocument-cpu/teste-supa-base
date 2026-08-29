@@ -1,6 +1,10 @@
 **/node_modules
 **/.git
 **/.github
+.wrangler
+.wrangler/**
+**/.wrangler
+**/.wrangler/**
 supabase
 src
 .env*

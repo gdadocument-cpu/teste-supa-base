@@ -602,6 +602,7 @@ const INVALIDATIONS_CACHE_GDA = {
   traiterDemandeAbsence: ["recupererMesDemandesAbsence", "recupererDisponibilites", "recupererNotifications", "recupererEffectif", "recupererEffectifPublic"],
   ajouterDepart: ["recupererDeparts", "recupererEffectif", "recupererEffectifPublic", "recupererGestionPersonnel", "recupererAdministration"],
   modifierDepart: ["recupererDeparts"],
+  modifierMedaillesDepart: ["recupererDeparts"],
   supprimerDepart: ["recupererDeparts"],
   ajouterRapport: ["recupererRapports", "recupererEffectif", "recupererSuivisFormationInstructeur", "recupererMesSuivisInstructeur"],
   ajouterRapportDiscord: ["recupererRapports", "recupererEffectif", "recupererSuivisFormationInstructeur", "recupererMesSuivisInstructeur"],

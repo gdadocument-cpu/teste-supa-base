@@ -964,6 +964,58 @@
   color: #c8d0da;
 }
 
+.depart-bouton-medailles {
+  background: rgba(105, 76, 12, .58);
+  border: 1px solid rgba(230, 190, 80, .42);
+  border-radius: 9px;
+  color: #fff2bf;
+  cursor: pointer;
+  font-weight: 700;
+  margin-top: 13px;
+  padding: 9px 12px;
+}
+
+.depart-medailles-editeur {
+  border-top: 1px solid rgba(230, 190, 80, .22);
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.depart-medailles-cases {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.depart-medailles-cases label {
+  align-items: center;
+  background: rgba(15, 23, 31, .62);
+  border: 1px solid rgba(230, 190, 80, .2);
+  border-radius: 9px;
+  cursor: pointer;
+  display: flex;
+  gap: 9px;
+  padding: 9px 10px;
+}
+
+.depart-medailles-cases input { accent-color: #d6ad45; }
+.depart-medailles-cases span { color: #f2dfaa; font-size: 12px; }
+
+.depart-medailles-actions {
+  align-items: center;
+  display: flex;
+  gap: 9px;
+  justify-content: flex-end;
+  margin-top: 13px;
+}
+
+.depart-medailles-actions small { color: #ff9da5; margin-right: auto; }
+
+@media (max-width: 700px) {
+  .depart-medailles-cases { grid-template-columns: 1fr; }
+  .depart-medailles-actions { flex-wrap: wrap; }
+}
+
 
 /* ==================================================
    FORMULAIRE

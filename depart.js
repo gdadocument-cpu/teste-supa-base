@@ -16,6 +16,8 @@ let registreLicenciements = [];
 let registreBlacklists = [];
 let membresDepart = [];
 let departPeutGerer = false;
+let departPeutGererMedailles = false;
+let medaillesDisponiblesDepart = [];
 let departsCharges = false;
 
 let categorieDepartOuverte = null;
@@ -137,6 +139,12 @@ function appliquerDonneesDeparts(resultat, avecMembres) {
   }
   if (typeof resultat.peutGerer === "boolean") {
     departPeutGerer = resultat.peutGerer;
+  }
+  if (typeof resultat.peutGererMedailles === "boolean") {
+    departPeutGererMedailles = resultat.peutGererMedailles;
+  }
+  if (Array.isArray(resultat.medaillesDisponibles)) {
+    medaillesDisponiblesDepart = resultat.medaillesDisponibles;
   }
   departsCharges = true;
 }
@@ -1262,7 +1270,7 @@ ${creerChampCopiableDepart(
 
       </div>
 
-      <div class="depart-details-medailles">
+      <div class="depart-details-medailles" data-zone-medailles-depart="${entree.ligne}">
 
         <span>
           Médailles obtenues durant le service
@@ -1273,6 +1281,14 @@ ${creerChampCopiableDepart(
             entree.medailles
           )}
         </div>
+
+        ${departPeutGererMedailles ? `<button
+          class="depart-bouton-medailles"
+          type="button"
+          data-action="modifier-medailles-depart"
+          data-ligne="${entree.ligne}"
+          data-categorie="${categorie}"
+        >🏅 Modifier les médailles</button>` : ""}
 
       </div>
 
@@ -1540,7 +1556,85 @@ document
     );
   });
 
+document
+  .querySelectorAll('[data-action="modifier-medailles-depart"]')
+  .forEach(function (bouton) {
+    bouton.addEventListener("click", function (evenement) {
+      evenement.stopPropagation();
+      ouvrirEditionMedaillesDepart(Number(bouton.dataset.ligne), bouton.dataset.categorie);
+    });
+  });
+
       installerEvenementsCopieDepart();
+}
+
+function listeMedaillesEntreeDepart(entree) {
+  return String(entree?.medailles || "")
+    .split(/[,;\n]+/)
+    .map(function (medaille) { return medaille.trim(); })
+    .filter(Boolean);
+}
+
+function ouvrirEditionMedaillesDepart(ligne, categorie) {
+  if (!departPeutGererMedailles) return;
+  const entree = trouverDossierDepart(ligne, categorie);
+  const zone = document.querySelector(`[data-zone-medailles-depart="${ligne}"]`);
+  if (!entree || !zone) return;
+  const actuelles = new Set(listeMedaillesEntreeDepart(entree));
+  zone.querySelector(".depart-medailles-editeur")?.remove();
+  zone.insertAdjacentHTML("beforeend", `
+    <form class="depart-medailles-editeur" data-formulaire-medailles-depart>
+      <div class="depart-medailles-cases">
+        ${medaillesDisponiblesDepart.map(function (medaille) {
+          return `<label><input type="checkbox" value="${echapperHTML(medaille)}" ${actuelles.has(medaille) ? "checked" : ""}><span>${echapperHTML(medaille)}</span></label>`;
+        }).join("")}
+      </div>
+      <div class="depart-medailles-actions">
+        <small data-retour-medailles-depart aria-live="polite"></small>
+        <button type="button" class="depart-bouton-secondaire" data-annuler-medailles-depart>Annuler</button>
+        <button type="submit" class="depart-bouton-principal">Enregistrer</button>
+      </div>
+    </form>
+  `);
+  const formulaire = zone.querySelector("[data-formulaire-medailles-depart]");
+  formulaire.querySelector("[data-annuler-medailles-depart]")?.addEventListener("click", function () {
+    formulaire.remove();
+  });
+  formulaire.addEventListener("submit", function (evenement) {
+    enregistrerMedaillesDepart(evenement, entree, categorie);
+  });
+}
+
+async function enregistrerMedaillesDepart(evenement, entree, categorie) {
+  evenement.preventDefault();
+  const formulaire = evenement.currentTarget;
+  const bouton = formulaire.querySelector('button[type="submit"]');
+  const retour = formulaire.querySelector("[data-retour-medailles-depart]");
+  const medailles = Array.from(formulaire.querySelectorAll('input[type="checkbox"]:checked'))
+    .map(function (champ) { return champ.value; });
+  bouton.disabled = true;
+  bouton.textContent = "Enregistrement...";
+  try {
+    const parametres = new URLSearchParams({
+      action: "modifierMedaillesDepart",
+      identifiant: sessionStorage.getItem("identifiantUtilisateur") || "",
+      ligne: String(entree.ligne),
+      medailles: medailles.join(";")
+    });
+    const reponse = await fetch(DEPART_API_URL + "?" + parametres.toString());
+    const resultat = await reponse.json();
+    if (!resultat.success) throw new Error(resultat.message || "Impossible de modifier les médailles.");
+    appliquerDonneesDeparts(resultat, false);
+    categorieDepartOuverte = categorie;
+    personneDepartOuverte = entree.ligne;
+    afficherCategorieDepart();
+    afficherNotificationGDA(resultat.message || "Médailles enregistrées.", "succes");
+  } catch (erreur) {
+    retour.textContent = erreur.message || "Impossible de modifier les médailles.";
+    retour.classList.add("erreur");
+    bouton.disabled = false;
+    bouton.textContent = "Enregistrer";
+  }
 }
 
 

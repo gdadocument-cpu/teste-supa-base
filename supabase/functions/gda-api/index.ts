@@ -961,6 +961,8 @@ const authenticated = async (req: Request) => {
         licenciements: entries.filter((e: any) => e.typeNormalise === "LICENCIEMENT"),
         blacklists: entries.filter((e: any) => e.typeNormalise === "BLACKLIST"),
         peutGerer: has("departs_gerer"),
+        peutGererMedailles: has("departs_medailles_gerer"),
+        medaillesDisponibles: MEDAILLES,
       }
     }
 
@@ -2101,6 +2103,20 @@ const authenticated = async (req: Request) => {
         }
         await audit(action === "supprimerDepart" ? "Dossier de départ supprimé" : "Dossier de départ modifié", String(id))
         return json(await departsDonnees(action === "supprimerDepart" ? "Dossier supprimé." : "Dossier modifié."))
+      }
+      case "modifierMedaillesDepart": {
+        requirePermission("departs_medailles_gerer")
+        const id = nombre(payload.ligne)
+        const demandees = texte(payload.medailles).split(";").map(texte).filter(Boolean)
+        const medailles = demandees.map((medaille) => valeurReferentiel(medaille, MEDAILLES, "Médaille invalide."))
+        const { data: dossier, error: dossierError } = await admin.from("departures")
+          .update({ medals_snapshot: [...new Set(medailles)] })
+          .eq("id", id)
+          .select("matricule_snapshot")
+          .single()
+        if (dossierError) throw dossierError
+        await audit("Médailles du départ modifiées", dossier.matricule_snapshot || String(id), medailles.join(", ") || "Aucune")
+        return json(await departsDonnees("Médailles enregistrées."))
       }
       case "recupererRecommandationsObservations": {
         requireOfficerRead()

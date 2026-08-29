@@ -329,7 +329,8 @@ const administrationGroupesPermissions = [
     permissions: [
       "absences_gerer",
       "disponibilites_modifier_supprimer",
-      "departs_gerer"
+      "departs_gerer",
+      "departs_medailles_gerer"
     ]
   },
   {

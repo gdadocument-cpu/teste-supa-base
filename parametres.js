@@ -199,6 +199,7 @@ function afficherParametresSiteGDA() {
         <button type="submit">Enregistrer les paramètres</button>
         <output class="parametres-retour" aria-live="polite"></output>
       </form>
+      ${creerSynchronisationGoogleSheetsParametresGDA()}
       ${creerSecuriteSessionsParametresGDA()}
       ${creerSelectionThemesParametresGDA()}
       ${creerParametresAnnoncesDefconGDA()}
@@ -246,6 +247,19 @@ function creerSecuriteSessionsParametresGDA() {
       <p>Force tous les utilisateurs, vous compris, à se reconnecter afin de charger la dernière version du site.</p>
     </div>
     <button id="parametresDeconnecterTous" class="danger" type="button">⏻ Déconnecter tout le monde</button>
+    <output class="parametres-retour" aria-live="polite"></output>
+  </section>`;
+}
+
+function creerSynchronisationGoogleSheetsParametresGDA() {
+  if (typeof utilisateurAPermission !== "function" ||
+      !utilisateurAPermission("administration_permissions")) return "";
+  return `<section class="parametres-bloc parametres-synchronisation-sheets">
+    <div>
+      <h4>📊 Google Sheets</h4>
+      <p>Force la réécriture propre de l’effectif dans le document mémoire, puis sa copie complète dans le document Officiers.</p>
+    </div>
+    <button id="parametresSynchroniserSheets" type="button">↻ Forcer l’actualisation Google Sheets</button>
     <output class="parametres-retour" aria-live="polite"></output>
   </section>`;
 }
@@ -324,6 +338,7 @@ function brancherParametresSiteGDA() {
   document.getElementById("parametresActualiser")?.addEventListener("click", ouvrirParametresSiteGDA);
   document.getElementById("parametresGenerauxFormulaire")?.addEventListener("submit", enregistrerParametresGenerauxGDA);
   document.getElementById("parametresDeconnecterTous")?.addEventListener("click", deconnecterTousUtilisateursGDA);
+  document.getElementById("parametresSynchroniserSheets")?.addEventListener("click", synchroniserGoogleSheetsParametresGDA);
   document.querySelectorAll("[data-activer-theme]").forEach(function(bouton) {
     bouton.addEventListener("click", activerThemeParametresGDA);
   });
@@ -350,6 +365,50 @@ function brancherParametresSiteGDA() {
       afficherParametresSiteGDA();
     });
   });
+}
+
+async function synchroniserGoogleSheetsParametresGDA(evenement) {
+  const bouton = evenement.currentTarget;
+  const section = bouton.closest(".parametres-synchronisation-sheets");
+  const retour = section?.querySelector(".parametres-retour");
+  bouton.disabled = true;
+  bouton.textContent = "Synchronisation en cours…";
+  if (retour) {
+    retour.classList.remove("erreur");
+    retour.textContent = "Mise à jour du document mémoire et du document Officiers…";
+  }
+  try {
+    const reponse = await fetch(
+      PARAMETRES_SITE_API_URL + "?action=synchroniserGoogleSheets",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+        gdaTimeoutMs: 130000
+      }
+    );
+    const resultat = await reponse.json();
+    if (!reponse.ok || !resultat.success) {
+      throw new Error(resultat.message || "Synchronisation impossible.");
+    }
+    if (retour) {
+      retour.textContent =
+        "Synchronisation terminée : " + Number(resultat.effectif || 0) +
+        " membres, " + Number(resultat.absences || 0) + " absences et " +
+        Number(resultat.departs || 0) + " départs.";
+    }
+    if (typeof afficherNotificationGDA === "function") {
+      afficherNotificationGDA("Les deux documents Google Sheets ont été actualisés.", "succes");
+    }
+  } catch (erreur) {
+    if (retour) {
+      retour.classList.add("erreur");
+      retour.textContent = erreur.message || "Synchronisation impossible.";
+    }
+  } finally {
+    bouton.disabled = false;
+    bouton.textContent = "↻ Forcer l’actualisation Google Sheets";
+  }
 }
 
 async function deconnecterTousUtilisateursGDA(evenement) {

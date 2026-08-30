@@ -1904,6 +1904,9 @@ function synchroniserGoogleSheetsDepuisSupabase_(chargeUtile) {
   }
   try {
     const resultatEffectif = synchroniserEffectifSupabaseSheets_(chargeUtile.effectif);
+    // Force Google Sheets à terminer l'écriture et la mise en forme du document
+    // mémoire avant d'en prendre la copie destinée au document Officiers.
+    SpreadsheetApp.flush();
     // La fonction est définie dans « copie effectif.gs ». Elle recopie la
     // feuille complète vers le document Officiers (données, formules,
     // présentation, largeurs et hauteurs) sans reprendre le verrou déjà détenu.

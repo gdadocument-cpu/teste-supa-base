@@ -430,6 +430,31 @@ const authenticated = async (req: Request) => {
       })
     }
 
+    const planifierSynchronisationEffectifGoogleSheets = () => {
+      const tache = fetch(`${supabaseUrl}/functions/v1/sync-google-sheets`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
+        },
+        body: JSON.stringify({
+          source: "effectif-officier-change",
+          requestedBy: profile.display_name,
+        }),
+      }).then(async (reponse) => {
+        if (reponse.ok) return
+        const detail = await reponse.text()
+        throw new Error(`Synchronisation Google Sheets refusée (${reponse.status}) : ${detail}`)
+      }).catch((erreur) => {
+        console.error("Synchronisation Google Sheets après modification de l’effectif :", erreur)
+      })
+
+      const runtime = (globalThis as any).EdgeRuntime
+      if (runtime?.waitUntil) runtime.waitUntil(tache)
+      else void tache
+    }
+
     const synchroniserPresenceMembre = async (memberId: number | null | undefined) => {
       if (!memberId) return
       const today = aujourdHui()
@@ -1749,6 +1774,7 @@ const authenticated = async (req: Request) => {
         const { data: updated, error } = await admin.from("members").update(patch).eq("id", member.id).select("*").single()
         if (error) throw error
         await audit(action === "enregistrerNote" ? "Note modifiée" : "Effectif officier modifié", updated.matricule)
+        planifierSynchronisationEffectifGoogleSheets()
         const auteurModifie = profile.member_id === member.id
         return json({
           success: true,
@@ -1773,6 +1799,7 @@ const authenticated = async (req: Request) => {
         })
         if (error) throw error
         await audit("Membre ajouté", matricule)
+        planifierSynchronisationEffectifGoogleSheets()
         return json({ success: true, message: "Membre ajouté dans l’effectif officier." })
       }
       case "recupererRapports":

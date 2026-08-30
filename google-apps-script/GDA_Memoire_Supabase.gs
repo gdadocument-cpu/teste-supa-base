@@ -1904,13 +1904,9 @@ function synchroniserGoogleSheetsDepuisSupabase_(chargeUtile) {
   }
   try {
     const resultatEffectif = synchroniserEffectifSupabaseSheets_(chargeUtile.effectif);
-    // Force Google Sheets à terminer l'écriture et la mise en forme du document
-    // mémoire avant d'en prendre la copie destinée au document Officiers.
-    SpreadsheetApp.flush();
-    // La fonction est définie dans « copie effectif.gs ». Elle recopie la
-    // feuille complète vers le document Officiers (données, formules,
-    // présentation, largeurs et hauteurs) sans reprendre le verrou déjà détenu.
-    const resultatEffectifOfficier = synchroniserEffectifGlobal(true);
+    const resultatEffectifOfficier = synchroniserEffectifOfficierSupabaseSheets_(
+      chargeUtile.effectif
+    );
     const resultatAbsences = synchroniserAbsencesSupabaseSheets_(chargeUtile.absences);
     const resultatDeparts = synchroniserDepartsSupabaseSheets_(chargeUtile.departs);
     PropertiesService.getScriptProperties().setProperty(
@@ -1930,12 +1926,6 @@ function synchroniserGoogleSheetsDepuisSupabase_(chargeUtile) {
   }
 }
 
-/**
- * Met a jour le document Officiers sans supprimer de lignes et sans ecraser
- * les formules eventuellement presentes. Les formats, listes deroulantes et
- * references de cellules existantes restent ainsi intacts.
- */
-
 function synchroniserEffectifOfficierSupabaseSheets_(membres) {
   const c = SYNCHRONISATION_SUPABASE_SHEETS;
   const classeur = SpreadsheetApp.openById(c.EFFECTIF_OFFICIER_SPREADSHEET_ID);
@@ -1946,72 +1936,25 @@ function synchroniserEffectifOfficierSupabaseSheets_(membres) {
     );
   }
 
-  const membresPropres = normaliserMembresEffectifOfficier_(membres);
-  const ligneModele = trouverLigneModeleEffectifOfficier_(feuille);
-  if (!ligneModele) {
-    throw new Error('Aucune ligne membre modele n’est disponible dans l’effectif Officier.');
+  const classeurMemoire = SpreadsheetApp.openById(CONFIG.STOCKAGE.SPREADSHEET_ID);
+  const modeleMemoire = classeurMemoire.getSheetByName(c.EFFECTIF_TEMPLATE);
+  if (!modeleMemoire) {
+    throw new Error('Le modèle propre Effectif Global est introuvable dans le document mémoire.');
   }
 
-  // On reserve les emplacements du bas vers le haut. L’insertion de nouvelles
-  // lignes ne change donc jamais les entetes qui restent a traiter.
-  c.GRADES.slice().reverse().forEach(function (grade) {
-    const membresGrade = membresPropres.filter(function (membre) {
-      return normaliser_(membre.grade) === normaliser_(grade);
-    });
-    assurerEmplacementsGradeEffectifOfficier_(
+  const modeleTemporaire = modeleMemoire.copyTo(classeur);
+  modeleTemporaire.setName(
+    '__MODELE_EFFECTIF_OFFICIERS_' + Utilities.getUuid().replace(/-/g, '').slice(0, 10)
+  );
+  try {
+    return synchroniserEffectifDansFeuilleSupabaseSheets_(
+      membres,
       feuille,
-      grade,
-      membresGrade.length,
-      ligneModele
+      modeleTemporaire
     );
-  });
-
-  let lignesEcrites = 0;
-  let lignesNettoyees = 0;
-  c.GRADES.forEach(function (grade) {
-    const membresGrade = membresPropres.filter(function (membre) {
-      return normaliser_(membre.grade) === normaliser_(grade);
-    });
-    const bloc = trouverBlocGradeEffectifOfficier_(feuille, grade);
-    if (!bloc) {
-      if (membresGrade.length) {
-        throw new Error('Entete du grade « ' + grade + ' » introuvable dans l’effectif Officier.');
-      }
-      return;
-    }
-
-    const nombreLignes = Math.max(0, bloc.fin - bloc.debut + 1);
-    if (nombreLignes < membresGrade.length) {
-      throw new Error('Pas assez d’emplacements pour le grade « ' + grade + ' ».');
-    }
-    if (nombreLignes) {
-      const valeurs = [];
-      for (let index = 0; index < nombreLignes; index++) {
-        const membre = membresGrade[index];
-        valeurs.push(membre ? ligneEffectifOfficier_(membre) : new Array(15).fill(''));
-      }
-      ecrirePlageSansEcraserFormulesEffectifOfficier_(
-        feuille.getRange(bloc.debut, 2, nombreLignes, 15),
-        valeurs
-      );
-      lignesEcrites += membresGrade.length;
-      lignesNettoyees += Math.max(0, nombreLignes - membresGrade.length);
-    }
-    actualiserCompteurEnteteSansFormuleEffectifOfficier_(
-      feuille,
-      bloc.entete,
-      grade,
-      membresGrade.length
-    );
-  });
-
-  actualiserCompteursCategoriesEffectifSynchronisation_(feuille, membresPropres);
-  return {
-    total: membresPropres.length,
-    lignesEcrites: lignesEcrites,
-    emplacementsVides: lignesNettoyees,
-    mode: 'non-destructif-sans-suppression'
-  };
+  } finally {
+    classeur.deleteSheet(modeleTemporaire);
+  }
 }
 
 function normaliserMembresEffectifOfficier_(membres) {
@@ -2218,6 +2161,11 @@ function synchroniserEffectifSupabaseSheets_(membres) {
   const c = SYNCHRONISATION_SUPABASE_SHEETS;
   const feuille = feuille_(CONFIG.EFFECTIF.SHEET);
   const modele = assurerModeleSynchronisationSheet_(feuille, c.EFFECTIF_TEMPLATE);
+  return synchroniserEffectifDansFeuilleSupabaseSheets_(membres, feuille, modele);
+}
+
+function synchroniserEffectifDansFeuilleSupabaseSheets_(membres, feuille, modele) {
+  const c = SYNCHRONISATION_SUPABASE_SHEETS;
   assurerColonnesSynchronisationSheet_(feuille, c.EFFECTIF_ID_COLUMN);
   feuille.hideColumns(c.EFFECTIF_ID_COLUMN);
 

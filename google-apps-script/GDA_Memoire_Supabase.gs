@@ -1904,9 +1904,10 @@ function synchroniserGoogleSheetsDepuisSupabase_(chargeUtile) {
   }
   try {
     const resultatEffectif = synchroniserEffectifSupabaseSheets_(chargeUtile.effectif);
-    const resultatEffectifOfficier = synchroniserEffectifOfficierSupabaseSheets_(
-      chargeUtile.effectif
-    );
+    // La fonction est définie dans « copie effectif.gs ». Elle recopie la
+    // feuille complète vers le document Officiers (données, formules,
+    // présentation, largeurs et hauteurs) sans reprendre le verrou déjà détenu.
+    const resultatEffectifOfficier = synchroniserEffectifGlobal(true);
     const resultatAbsences = synchroniserAbsencesSupabaseSheets_(chargeUtile.absences);
     const resultatDeparts = synchroniserDepartsSupabaseSheets_(chargeUtile.departs);
     PropertiesService.getScriptProperties().setProperty(

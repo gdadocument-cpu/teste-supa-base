@@ -1854,6 +1854,7 @@ function dateGoogleFormSupabase_(valeur, format) {
 
 const SYNCHRONISATION_SUPABASE_SHEETS = Object.freeze({
   SECRET_PROPERTY: 'GDA_SUPABASE_SHEETS_SECRET',
+  EFFECTIF_FINGERPRINT_PROPERTY: 'GDA_SUPABASE_SHEETS_EFFECTIF_EMPREINTE_V1',
   EFFECTIF_OFFICIER_SPREADSHEET_ID: '1IfPHHVFWeXva00F8innTY6a2wq8fj_PCwY2x2cljvj0',
   EFFECTIF_OFFICIER_SHEET: 'Effectif Global',
   EFFECTIF_TEMPLATE: '__MODELE_EFFECTIF_SUPABASE',
@@ -1903,13 +1904,26 @@ function synchroniserGoogleSheetsDepuisSupabase_(chargeUtile) {
     throw new Error('Une autre synchronisation Google Sheets est déjà en cours.');
   }
   try {
-    const resultatEffectif = synchroniserEffectifSupabaseSheets_(chargeUtile.effectif);
-    const resultatEffectifOfficier = synchroniserEffectifOfficierSupabaseSheets_(
-      chargeUtile.effectif
-    );
+    const proprietes = PropertiesService.getScriptProperties();
+    const empreinteEffectif = empreinteEffectifSupabaseSheets_(chargeUtile.effectif);
+    const effectifInchange = !chargeUtile.forcerEffectif &&
+      proprietes.getProperty(SYNCHRONISATION_SUPABASE_SHEETS.EFFECTIF_FINGERPRINT_PROPERTY) ===
+        empreinteEffectif;
+    const resultatEffectif = effectifInchange
+      ? { ignore: true, raison: 'effectif-inchange' }
+      : synchroniserEffectifSupabaseSheets_(chargeUtile.effectif);
+    const resultatEffectifOfficier = effectifInchange
+      ? { ignore: true, raison: 'effectif-inchange' }
+      : synchroniserEffectifOfficierSupabaseSheets_(chargeUtile.effectif);
+    if (!effectifInchange) {
+      proprietes.setProperty(
+        SYNCHRONISATION_SUPABASE_SHEETS.EFFECTIF_FINGERPRINT_PROPERTY,
+        empreinteEffectif
+      );
+    }
     const resultatAbsences = synchroniserAbsencesSupabaseSheets_(chargeUtile.absences);
     const resultatDeparts = synchroniserDepartsSupabaseSheets_(chargeUtile.departs);
-    PropertiesService.getScriptProperties().setProperty(
+    proprietes.setProperty(
       'GDA_SUPABASE_SHEETS_DERNIERE_SYNCHRONISATION',
       new Date().toISOString()
     );
@@ -1957,6 +1971,16 @@ function synchroniserEffectifOfficierSupabaseSheets_(membres) {
   }
 }
 
+function empreinteEffectifSupabaseSheets_(membres) {
+  const contenu = JSON.stringify(membres || []);
+  const octets = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    contenu,
+    Utilities.Charset.UTF_8
+  );
+  return Utilities.base64EncodeWebSafe(octets);
+}
+
 function normaliserMembresEffectifOfficier_(membres) {
   const c = SYNCHRONISATION_SUPABASE_SHEETS;
   const gradesConnus = {};
@@ -1975,7 +1999,7 @@ function normaliserMembresEffectifOfficier_(membres) {
       ordreGrade: gradesConnus[gradeNormalise].ordre,
       steamId: propre_(membre.steamId),
       discordId: propre_(membre.discordId),
-      presence: propre_(membre.presence),
+      presence: propre_(membre.presence) || 'Présent',
       rapports: Number(membre.rapports) || 0,
       observation: propre_(membre.observation),
       datePromotion: propre_(membre.datePromotion),
@@ -2185,7 +2209,7 @@ function synchroniserEffectifDansFeuilleSupabaseSheets_(membres, feuille, modele
       ordreGrade: gradesConnus[gradeNormalise].ordre,
       steamId: propre_(membre.steamId),
       discordId: propre_(membre.discordId),
-      presence: propre_(membre.presence),
+      presence: propre_(membre.presence) || 'Présent',
       rapports: Number(membre.rapports) || 0,
       observation: propre_(membre.observation),
       datePromotion: propre_(membre.datePromotion),
@@ -2217,32 +2241,49 @@ function synchroniserEffectifDansFeuilleSupabaseSheets_(membres, feuille, modele
     throw new Error('Aucune ligne membre n’est disponible dans le modèle Effectif Global.');
   }
 
-  supprimerLignesMembresEffectifSynchronisation_(feuille, c.GRADES);
-
-  const lignesEntetes = {};
-  c.GRADES.forEach(function (grade) {
-    const ligneEntete = trouverLigneEnteteGradeSynchronisation_(feuille, grade);
-    if (ligneEntete) lignesEntetes[normaliser_(grade)] = ligneEntete;
+  const idsAttendus = {};
+  membresPropres.forEach(function (membre) {
+    idsAttendus['membre:' + membre.id] = true;
   });
+  const lignesSupprimees = supprimerMembresAbsentsEffectifSynchronisation_(
+    feuille,
+    idsAttendus,
+    c.EFFECTIF_ID_COLUMN
+  );
+  let lignesAjoutees = 0;
+  let lignesDeplacees = 0;
+  let lignesActualisees = 0;
 
-  c.GRADES.slice().reverse().forEach(function (grade) {
+  c.GRADES.forEach(function (grade) {
     const membresGrade = membresPropres.filter(function (membre) {
       return normaliser_(membre.grade) === normaliser_(grade);
     });
-    // Les insertions se font du bas vers le haut : les positions des en-têtes
-    // encore à traiter ne sont ainsi jamais décalées par les nouvelles lignes.
-    const ligneEntete = lignesEntetes[normaliser_(grade)] || 0;
+    let ligneEntete = trouverLigneEnteteGradeSynchronisation_(feuille, grade);
     if (!ligneEntete) return;
     actualiserCompteurEnteteSynchronisation_(feuille, ligneEntete, grade, membresGrade.length);
-    if (!membresGrade.length) return;
-
-    feuille.insertRowsAfter(ligneEntete, membresGrade.length);
     const ligneModele = trouverLigneMembreModeleSynchronisation_(modele, grade) ||
       trouverPremiereLigneMembreModeleSynchronisation_(modele, c.GRADES);
     membresGrade.forEach(function (membre, index) {
-      const ligneCible = ligneEntete + index + 1;
-      copierPresentationLigneSynchronisation_(modele, ligneModele, feuille, ligneCible, 1, 16);
-      feuille.getRange(ligneCible, 2, 1, 15).setValues([[
+      const id = 'membre:' + membre.id;
+      let ligneCible = ligneEntete + index + 1;
+      const ligneActuelle = trouverLigneMembreParIdSynchronisation_(
+        feuille,
+        id,
+        c.EFFECTIF_ID_COLUMN
+      );
+      if (ligneActuelle !== ligneCible) {
+        if (ligneActuelle) {
+          feuille.deleteRow(ligneActuelle);
+          lignesDeplacees++;
+        } else {
+          lignesAjoutees++;
+        }
+        ligneEntete = trouverLigneEnteteGradeSynchronisation_(feuille, grade);
+        ligneCible = ligneEntete + index + 1;
+        feuille.insertRowBefore(ligneCible);
+        copierPresentationLigneSynchronisation_(modele, ligneModele, feuille, ligneCible, 1, 16);
+      }
+      const valeursAttendues = [
         sigleGradeSynchronisation_(membre.grade),
         membre.matricule,
         membre.grade,
@@ -2258,15 +2299,26 @@ function synchroniserEffectifDansFeuilleSupabaseSheets_(membres, feuille, modele
         membre.notes,
         membre.specialisations,
         membre.medailles
-      ]]);
-      feuille.getRange(ligneCible, c.EFFECTIF_ID_COLUMN).setValue('membre:' + membre.id);
+      ];
+      const plage = feuille.getRange(ligneCible, 2, 1, 15);
+      if (!valeursEffectifSynchronisationEgales_(plage.getValues()[0], valeursAttendues)) {
+        plage.setValues([valeursAttendues]);
+        lignesActualisees++;
+      }
+      if (propre_(feuille.getRange(ligneCible, c.EFFECTIF_ID_COLUMN).getValue()) !== id) {
+        feuille.getRange(ligneCible, c.EFFECTIF_ID_COLUMN).setValue(id);
+      }
     });
   });
 
   actualiserCompteursCategoriesEffectifSynchronisation_(feuille, membresPropres);
   return {
     total: membresPropres.length,
-    versionTri: 'entetes-exacts-v2'
+    ajoutees: lignesAjoutees,
+    deplacees: lignesDeplacees,
+    actualisees: lignesActualisees,
+    supprimees: lignesSupprimees,
+    versionTri: 'incremental-v1'
   };
 }
 
@@ -2501,6 +2553,47 @@ function supprimerLignesMembresEffectifSynchronisation_(feuille, grades) {
   }
 }
 
+function supprimerMembresAbsentsEffectifSynchronisation_(feuille, idsAttendus, colonneId) {
+  const debut = CONFIG.EFFECTIF.START;
+  const fin = feuille.getLastRow();
+  if (fin < debut) return 0;
+  const ids = feuille.getRange(debut, colonneId, fin - debut + 1, 1).getDisplayValues();
+  let supprimees = 0;
+  for (let index = ids.length - 1; index >= 0; index--) {
+    const id = propre_(ids[index][0]);
+    if (id.indexOf('membre:') === 0 && !idsAttendus[id]) {
+      feuille.deleteRow(debut + index);
+      supprimees++;
+    }
+  }
+  return supprimees;
+}
+
+function trouverLigneMembreParIdSynchronisation_(feuille, id, colonneId) {
+  const debut = CONFIG.EFFECTIF.START;
+  const fin = feuille.getLastRow();
+  if (fin < debut) return 0;
+  const ids = feuille.getRange(debut, colonneId, fin - debut + 1, 1).getDisplayValues();
+  for (let index = 0; index < ids.length; index++) {
+    if (propre_(ids[index][0]) === id) return debut + index;
+  }
+  return 0;
+}
+
+function valeursEffectifSynchronisationEgales_(actuelles, attendues) {
+  if (actuelles.length !== attendues.length) return false;
+  for (let index = 0; index < attendues.length; index++) {
+    const actuelle = actuelles[index];
+    const attendue = attendues[index];
+    if (actuelle instanceof Date || attendue instanceof Date) {
+      if (cleDateSynchronisation_(actuelle) !== cleDateSynchronisation_(attendue)) return false;
+    } else if (propre_(actuelle) !== propre_(attendue)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function trouverLigneEnteteGradeSynchronisation_(feuille, grade) {
   const debut = 4;
   const fin = feuille.getLastRow();
@@ -2558,7 +2651,7 @@ function actualiserCompteurEnteteSynchronisation_(feuille, ligne, grade, nombre)
       const nouveau = /\d+\s*\/\s*[^\s]+/.test(texte)
         ? texte.replace(/\d+\s*\/\s*([^\s]+)/, nombre + '/$1')
         : grade + ' - ' + nombre;
-      feuille.getRange(ligne, index + 2).setValue(nouveau);
+      if (nouveau !== texte) feuille.getRange(ligne, index + 2).setValue(nouveau);
       return;
     }
   }
@@ -2586,11 +2679,10 @@ function actualiserCompteursCategoriesEffectifSynchronisation_(feuille, membres)
         if (groupe.mots.some(function (mot) { return normaliser_(texte).indexOf(mot) !== -1; })) {
           const cellule = feuille.getRange(ligne + 1, colonne + 2);
           if (!cellule.getFormula()) {
-            cellule.setValue(
-              /\d+\s*\/\s*[^\s]+/.test(texte)
-                ? texte.replace(/\d+\s*\/\s*([^\s]+)/, nombre + '/$1')
-                : texte
-            );
+            const nouveau = /\d+\s*\/\s*[^\s]+/.test(texte)
+              ? texte.replace(/\d+\s*\/\s*([^\s]+)/, nombre + '/$1')
+              : texte;
+            if (nouveau !== texte) cellule.setValue(nouveau);
           }
           trouve = true;
           break;

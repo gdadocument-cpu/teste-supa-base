@@ -1795,7 +1795,7 @@ const authenticated = async (req: Request) => {
         const { error } = await admin.from("members").insert({
           matricule, grade: texte(payload.grade) || "Caporal", steam_id: texte(payload.steamId) || null,
           discord_id: texte(payload.discordId) || null, joined_on: isoDate(payload.dateEntree),
-          sanction: texte(payload.sanction) || "Clean",
+          sanction: texte(payload.sanction) || "Clean", presence: "Présent",
         })
         if (error) throw error
         await audit("Membre ajouté", matricule)

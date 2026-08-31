@@ -29,6 +29,8 @@ Deno.serve(async (req: Request) => {
   try {
     if (req.method !== "POST") return json({ success: false, message: "Méthode refusée." }, 405)
 
+    const demande = await req.json().catch(() => ({})) as Record<string, unknown>
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? ""
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     const admin = createClient(supabaseUrl, serviceRoleKey, {
@@ -76,7 +78,7 @@ Deno.serve(async (req: Request) => {
         grade: row.grade,
         steamId: row.steam_id ?? "",
         discordId: row.discord_id ?? "",
-        presence: row.presence ?? "",
+        presence: String(row.presence ?? "").trim() || "Présent",
         rapports: row.reports_count ?? 0,
         observation: row.observation ?? "",
         datePromotion: isoDate(row.promotion_changed_on),
@@ -128,6 +130,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         action: "synchroniserGoogleSheetsDepuisSupabase",
         secret: sharedSecret,
+        forcerEffectif: demande.source === "administration",
         effectif,
         absences,
         departs,

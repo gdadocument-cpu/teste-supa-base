@@ -471,6 +471,7 @@ const authenticated = async (req: Request) => {
         .update({ presence: (count ?? 0) > 0 ? "Absent" : "Présent" })
         .eq("id", memberId)
       if (updateError) throw updateError
+      planifierSynchronisationEffectifGoogleSheets()
     }
 
     const membreClient = (member: any, publicOnly = false, compteurRapportsLu?: number) => {
@@ -2130,6 +2131,7 @@ const authenticated = async (req: Request) => {
           if (error) throw error
         }
         await audit(action === "supprimerDepart" ? "Dossier de départ supprimé" : "Dossier de départ modifié", String(id))
+        planifierSynchronisationEffectifGoogleSheets()
         return json(await departsDonnees(action === "supprimerDepart" ? "Dossier supprimé." : "Dossier modifié."))
       }
       case "modifierMedaillesDepart": {
@@ -2144,6 +2146,7 @@ const authenticated = async (req: Request) => {
           .single()
         if (dossierError) throw dossierError
         await audit("Médailles du départ modifiées", dossier.matricule_snapshot || String(id), medailles.join(", ") || "Aucune")
+        planifierSynchronisationEffectifGoogleSheets()
         return json(await departsDonnees("Médailles enregistrées."))
       }
       case "recupererRecommandationsObservations": {
@@ -2182,6 +2185,7 @@ const authenticated = async (req: Request) => {
         ])
         await admin.from("members").update({ recommendation: String(recs ?? 0), observation: String(obs ?? 0) }).eq("id", member.id)
         await audit(type === "OBSERVATION" ? "Observation enregistrée" : "Recommandation enregistrée", member.matricule)
+        planifierSynchronisationEffectifGoogleSheets()
         return json({ success: true, message: "Élément enregistré." })
       }
       case "purgerRecommandationsObservations": {
@@ -2190,6 +2194,7 @@ const authenticated = async (req: Request) => {
         if (error) throw error
         await admin.from("members").update({ recommendation: "0", observation: "0" }).eq("active", true)
         await audit("Nouvelle semaine recommandations/observations")
+        planifierSynchronisationEffectifGoogleSheets()
         return json({ success: true, message: "Les compteurs ont été remis à zéro." })
       }
       case "recupererGestionPersonnel": {
@@ -3038,6 +3043,7 @@ const authenticated = async (req: Request) => {
             throw updateError
           }
           await audit("Période probatoire démarrée", matricule, `Rapport Formation ${formation.id}`)
+          planifierSynchronisationEffectifGoogleSheets()
           return json({ success: true, message: `La période probatoire de ${matricule} a été démarrée et le membre a été ajouté à l’effectif comme Caporal.` })
         }
         const matricule = texte(payload.matricule)
@@ -3080,6 +3086,7 @@ const authenticated = async (req: Request) => {
           await admin.from("members").delete().eq("id", membreCree.id)
           throw error
         }
+        planifierSynchronisationEffectifGoogleSheets()
         return json({ success: true, message: `Le suivi de ${matricule} a été ajouté et le membre est entré dans l’effectif comme Caporal.` })
       }
       case "modifierSuiviFormationInstructeur":

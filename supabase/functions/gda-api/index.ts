@@ -2104,6 +2104,7 @@ const authenticated = async (req: Request) => {
           throw retraitError
         }
         await audit("Dossier de départ ajouté", member.matricule, type)
+        planifierSynchronisationEffectifGoogleSheets()
         const donnees = await departsDonnees(`Dossier enregistré et ${member.matricule} retiré de l’effectif.`)
         const { data: membresActifs, error: membresError } = await admin.from("members")
           .select("*").eq("active", true).order("id", { ascending: true })
@@ -2310,6 +2311,7 @@ const authenticated = async (req: Request) => {
           throw historyError
         }
         await audit(type, member.matricule, choixJournal)
+        planifierSynchronisationEffectifGoogleSheets()
         const gestion = await gestionPersonnelDonnees("Action enregistrée.")
         const departs = await departsDonnees()
         const { data: membresActualises, error: membresActualisesError } = await admin
@@ -3160,6 +3162,7 @@ const authenticated = async (req: Request) => {
             throw decisionError
           }
           await audit(decision === "ACCEPTE" ? "Période probatoire acceptée" : "Période probatoire refusée", row.matricule_snapshot, raison)
+          if (decision === "REFUSE") planifierSynchronisationEffectifGoogleSheets()
           return json({
             success: true,
             message: decision === "ACCEPTE"

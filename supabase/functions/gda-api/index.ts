@@ -295,7 +295,13 @@ const authenticated = async (req: Request) => {
     const staff = !owner && !coOwner && permissions.has("role_staff_total")
     const visitor = !owner && !coOwner && !staff && permissions.has("role_visiteur")
     const property = owner || coOwner
-    const officer = !visitor && (property || staff || profile.access_level === "officer")
+    const membreProfilActuel = (members ?? []).find((member: any) => member.id === profile.member_id)
+    const gradeProfilActuel = normalise(membreProfilActuel?.grade).replace(/[^A-Z]/g, "")
+    const gradeDonneAccesOfficier = [
+      "LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT", "CAPITAINE",
+      "LIEUTENANT", "SOUSLIEUTENANT", "ASPIRANT",
+    ].includes(gradeProfilActuel)
+    const officer = !visitor && (property || staff || profile.access_level === "officer" || gradeDonneAccesOfficier)
     const canReadOfficer = officer || visitor
     const has = (permission: string) => property || staff || (!visitor && permissions.has(permission))
     const requireOfficer = () => { if (!officer) throw new Error("Accès réservé aux officiers.") }
@@ -323,8 +329,8 @@ const authenticated = async (req: Request) => {
         throw new Error("Prise en charge réservée à la propriété et aux responsables Instructeur.")
       }
     }
-    const actorName = ownDelayed?.matricule ?? ownMember?.matricule ?? profile.display_name
-    const actorGrade = ownDelayed?.grade ?? ownMember?.grade ?? "Visiteur"
+    const actorName = ownMember?.matricule ?? ownDelayed?.matricule ?? profile.display_name
+    const actorGrade = ownMember?.grade ?? ownDelayed?.grade ?? "Visiteur"
     const actorGradeNormalise = normalise(actorGrade).replace(/[^A-Z]/g, "")
     const rangGrade = (grade: unknown) => GRADES.findIndex((item) => normalise(item) === normalise(grade))
     const valeurReferentiel = (valeur: unknown, referentiel: string[], message: string) => {
@@ -455,6 +461,19 @@ const authenticated = async (req: Request) => {
       else void tache
     }
 
+    const synchroniserNiveauAccesAvecGrade = async (memberId: number, grade: unknown) => {
+      const gradeNormalise = normalise(grade).replace(/[^A-Z]/g, "")
+      const niveau = [
+        "LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT", "CAPITAINE",
+        "LIEUTENANT", "SOUSLIEUTENANT", "ASPIRANT",
+      ].includes(gradeNormalise) ? "officer" : "member"
+      const { error } = await admin.from("profiles")
+        .update({ access_level: niveau })
+        .eq("member_id", memberId)
+        .in("access_level", ["member", "officer"])
+      if (error) throw error
+    }
+
     const synchroniserPresenceMembre = async (memberId: number | null | undefined) => {
       if (!memberId) return
       const today = aujourdHui()
@@ -480,7 +499,7 @@ const authenticated = async (req: Request) => {
       const base = publicOnly ? (roster ?? member) : member
       return {
         nom: base.matricule,
-        grade: publicOnly ? gradeGda : gradeGda,
+        grade: publicOnly ? gradeGda : member.grade,
         gradeEffectifGDA: gradeGda,
         gradeEffectifOfficier: member.grade,
         steamId: base.steam_id ?? "",
@@ -1774,6 +1793,7 @@ const authenticated = async (req: Request) => {
         }
         const { data: updated, error } = await admin.from("members").update(patch).eq("id", member.id).select("*").single()
         if (error) throw error
+        if (patch.grade !== undefined) await synchroniserNiveauAccesAvecGrade(member.id, updated.grade)
         await audit(action === "enregistrerNote" ? "Note modifiée" : "Effectif officier modifié", updated.matricule)
         planifierSynchronisationEffectifGoogleSheets()
         const auteurModifie = profile.member_id === member.id
@@ -2298,6 +2318,7 @@ const authenticated = async (req: Request) => {
         } else if (Object.keys(patch).length) {
           const { error } = await admin.from("members").update(patch).eq("id", member.id).eq("active", true)
           if (error) throw error
+          if (patch.grade !== undefined) await synchroniserNiveauAccesAvecGrade(member.id, patch.grade)
         }
         const { error: historyError } = await admin.from("personnel_history").insert({
           member_id: member.id, matricule_snapshot: member.matricule,

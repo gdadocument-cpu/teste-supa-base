@@ -10,6 +10,12 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: corsHeaders })
 
+const normalise = (value: unknown) => String(value ?? "")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .trim()
+  .toUpperCase()
+
 const authenticated = async (req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? ""
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? ""
@@ -61,7 +67,7 @@ const authenticated = async (req: Request) => {
 
   let memberQuery = admin
     .from("members")
-    .select("id,matricule,grade,discord_id")
+    .select("id,matricule,grade,steam_id,discord_id,sanction,specializations")
     .eq("active", true)
   memberQuery = existing?.member_id
     ? memberQuery.eq("id", existing.member_id)
@@ -93,7 +99,10 @@ const authenticated = async (req: Request) => {
         member_id: activeMember?.id ?? null,
         display_name: activeMember?.matricule ?? allowed?.login_identifier,
         discord_id: discordId,
-        access_level: activeMember ? "member" : "visitor",
+        access_level: activeMember && [
+          "LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT", "CAPITAINE",
+          "LIEUTENANT", "SOUSLIEUTENANT", "ASPIRANT",
+        ].includes(normalise(activeMember.grade).replace(/[^A-Z]/g, "")) ? "officer" : activeMember ? "member" : "visitor",
         active: true,
         last_login_at: new Date().toISOString(),
       })
@@ -105,12 +114,19 @@ const authenticated = async (req: Request) => {
     if (profile.auth_user_id && profile.auth_user_id !== authData.user.id) {
       return json({ success: false, error: "Ce profil est déjà lié à un autre compte Discord." }, 409)
     }
+    const niveauSelonGrade = activeMember && ["member", "officer"].includes(profile.access_level)
+      ? ([
+          "LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT", "CAPITAINE",
+          "LIEUTENANT", "SOUSLIEUTENANT", "ASPIRANT",
+        ].includes(normalise(activeMember.grade).replace(/[^A-Z]/g, "")) ? "officer" : "member")
+      : profile.access_level
     const { data: updated, error: updateError } = await admin
       .from("profiles")
       .update({
         auth_user_id: authData.user.id,
         member_id: activeMember?.id ?? profile.member_id,
         display_name: activeMember?.matricule ?? allowed?.login_identifier ?? profile.display_name,
+        access_level: niveauSelonGrade,
         active: true,
         last_login_at: new Date().toISOString(),
       })
@@ -141,12 +157,12 @@ const authenticated = async (req: Request) => {
     success: true,
     profile: {
       id: profile.id,
-      matricule: rosterMember?.matricule ?? profile.display_name,
-      grade: rosterMember?.grade ?? "Visiteur",
+      matricule: activeMember?.matricule ?? rosterMember?.matricule ?? profile.display_name,
+      grade: activeMember?.grade ?? rosterMember?.grade ?? "Visiteur",
       discordId,
-      steamId: rosterMember?.steam_id ?? null,
-      sanction: rosterMember?.sanction || "Clean",
-      specialisations: rosterMember?.specializations ?? [],
+      steamId: activeMember?.steam_id ?? rosterMember?.steam_id ?? null,
+      sanction: activeMember?.sanction ?? rosterMember?.sanction ?? "Clean",
+      specialisations: activeMember?.specializations ?? rosterMember?.specializations ?? [],
       accessLevel,
       coproprietaire: isCoOwner,
       permissions: permissionCodes,

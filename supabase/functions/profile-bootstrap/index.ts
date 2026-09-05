@@ -72,17 +72,29 @@ const authenticated = async (req: Request) => {
   memberQuery = existing?.member_id
     ? memberQuery.eq("id", existing.member_id)
     : memberQuery.eq("discord_id", discordId)
-  const [{ data: allowed, error: whitelistError }, { data: activeMember, error: memberError }] = await Promise.all([
+  let rosterQuery = admin
+    .from("current_gda_roster")
+    .select("member_id,matricule,grade,steam_id,discord_id,sanction,specializations")
+  rosterQuery = existing?.member_id
+    ? rosterQuery.eq("member_id", existing.member_id)
+    : rosterQuery.eq("discord_id", discordId)
+  const [
+    { data: allowed, error: whitelistError },
+    { data: activeMember, error: memberError },
+    { data: rosterMember, error: rosterError },
+  ] = await Promise.all([
     admin.from("whitelist")
       .select("login_identifier,discord_id")
       .eq("discord_id", discordId)
       .eq("active", true)
       .maybeSingle(),
     memberQuery.maybeSingle(),
+    rosterQuery.maybeSingle(),
   ])
   if (whitelistError) return json({ success: false, error: "Impossible de vérifier la liste blanche." }, 500)
   if (memberError) return json({ success: false, error: "Impossible de vérifier l’effectif officier." }, 500)
-  if (!allowed && !activeMember) {
+  if (rosterError) return json({ success: false, error: "Impossible de vérifier l’effectif GDA." }, 500)
+  if (!allowed && !activeMember && !rosterMember) {
     if (existing?.id) await admin.from("profiles").update({ active: false }).eq("id", existing.id)
     return json({
       success: false,
@@ -96,13 +108,13 @@ const authenticated = async (req: Request) => {
       .from("profiles")
       .insert({
         auth_user_id: authData.user.id,
-        member_id: activeMember?.id ?? null,
-        display_name: activeMember?.matricule ?? allowed?.login_identifier,
+        member_id: activeMember?.id ?? rosterMember?.member_id ?? null,
+        display_name: rosterMember?.matricule ?? activeMember?.matricule ?? allowed?.login_identifier,
         discord_id: discordId,
-        access_level: activeMember && [
+        access_level: rosterMember && [
           "LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT", "CAPITAINE",
           "LIEUTENANT", "SOUSLIEUTENANT", "ASPIRANT",
-        ].includes(normalise(activeMember.grade).replace(/[^A-Z]/g, "")) ? "officer" : activeMember ? "member" : "visitor",
+        ].includes(normalise(rosterMember.grade).replace(/[^A-Z]/g, "")) ? "officer" : (activeMember || rosterMember) ? "member" : "visitor",
         active: true,
         last_login_at: new Date().toISOString(),
       })
@@ -114,18 +126,18 @@ const authenticated = async (req: Request) => {
     if (profile.auth_user_id && profile.auth_user_id !== authData.user.id) {
       return json({ success: false, error: "Ce profil est déjà lié à un autre compte Discord." }, 409)
     }
-    const niveauSelonGrade = activeMember && ["member", "officer"].includes(profile.access_level)
+    const niveauSelonGrade = rosterMember && ["member", "officer"].includes(profile.access_level)
       ? ([
           "LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT", "CAPITAINE",
           "LIEUTENANT", "SOUSLIEUTENANT", "ASPIRANT",
-        ].includes(normalise(activeMember.grade).replace(/[^A-Z]/g, "")) ? "officer" : "member")
+        ].includes(normalise(rosterMember.grade).replace(/[^A-Z]/g, "")) ? "officer" : "member")
       : profile.access_level
     const { data: updated, error: updateError } = await admin
       .from("profiles")
       .update({
         auth_user_id: authData.user.id,
-        member_id: activeMember?.id ?? profile.member_id,
-        display_name: activeMember?.matricule ?? allowed?.login_identifier ?? profile.display_name,
+        member_id: activeMember?.id ?? rosterMember?.member_id ?? profile.member_id,
+        display_name: rosterMember?.matricule ?? activeMember?.matricule ?? allowed?.login_identifier ?? profile.display_name,
         access_level: niveauSelonGrade,
         active: true,
         last_login_at: new Date().toISOString(),
@@ -137,10 +149,9 @@ const authenticated = async (req: Request) => {
     profile = updated
   }
 
-  const [{ data: grants }, { data: allPermissions }, { data: rosterMember }, { data: defcon }] = await Promise.all([
+  const [{ data: grants }, { data: allPermissions }, { data: defcon }] = await Promise.all([
     admin.from("profile_permissions").select("permission_code").eq("profile_id", profile.id),
     admin.from("permissions").select("code"),
-    admin.from("current_gda_roster").select("matricule,grade,steam_id,discord_id,sanction,specializations").eq("discord_id", discordId).maybeSingle(),
     admin.from("defcon_state").select("level").eq("singleton", true).maybeSingle(),
   ])
 
@@ -157,12 +168,12 @@ const authenticated = async (req: Request) => {
     success: true,
     profile: {
       id: profile.id,
-      matricule: activeMember?.matricule ?? rosterMember?.matricule ?? profile.display_name,
-      grade: activeMember?.grade ?? rosterMember?.grade ?? "Visiteur",
+      matricule: rosterMember?.matricule ?? activeMember?.matricule ?? profile.display_name,
+      grade: rosterMember?.grade ?? "Visiteur",
       discordId,
-      steamId: activeMember?.steam_id ?? rosterMember?.steam_id ?? null,
-      sanction: activeMember?.sanction ?? rosterMember?.sanction ?? "Clean",
-      specialisations: activeMember?.specializations ?? rosterMember?.specializations ?? [],
+      steamId: rosterMember?.steam_id ?? null,
+      sanction: rosterMember?.sanction ?? "Clean",
+      specialisations: rosterMember?.specializations ?? [],
       accessLevel,
       coproprietaire: isCoOwner,
       permissions: permissionCodes,

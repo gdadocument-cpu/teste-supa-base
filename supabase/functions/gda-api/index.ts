@@ -289,30 +289,29 @@ const authenticated = async (req: Request) => {
       }, 401)
     }
 
+    const memberById = new Map((members ?? []).map((member: any) => [member.id, member]))
+    const delayedById = new Map((delayed ?? []).filter((member: any) => member.member_id).map((member: any) => [member.member_id, member]))
+    const delayedByName = new Map((delayed ?? []).map((member: any) => [normalise(member.matricule), member]))
+    const ownMember = profile.member_id ? memberById.get(profile.member_id) : null
+    const ownDelayed = profile.member_id ? delayedById.get(profile.member_id) : delayedByName.get(normalise(profile.display_name))
     const permissions = new Set((grants ?? []).map((grant: any) => grant.permission_code))
     const owner = normalise(profile.display_name) === "MILO" || profile.access_level === "owner"
     const coOwner = !owner && permissions.has("role_coproprietaire")
     const staff = !owner && !coOwner && permissions.has("role_staff_total")
     const visitor = !owner && !coOwner && !staff && permissions.has("role_visiteur")
     const property = owner || coOwner
-    const membreProfilActuel = (members ?? []).find((member: any) => member.id === profile.member_id)
-    const gradeProfilActuel = normalise(membreProfilActuel?.grade).replace(/[^A-Z]/g, "")
+    const gradeProfilPublie = normalise(ownDelayed?.grade).replace(/[^A-Z]/g, "")
     const gradeDonneAccesOfficier = [
       "LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT", "CAPITAINE",
       "LIEUTENANT", "SOUSLIEUTENANT", "ASPIRANT",
-    ].includes(gradeProfilActuel)
-    const officer = !visitor && (property || staff || profile.access_level === "officer" || gradeDonneAccesOfficier)
+    ].includes(gradeProfilPublie)
+    const officer = !visitor && (property || staff || gradeDonneAccesOfficier)
     const canReadOfficer = officer || visitor
     const has = (permission: string) => property || staff || (!visitor && permissions.has(permission))
     const requireOfficer = () => { if (!officer) throw new Error("Accès réservé aux officiers.") }
     const requireOfficerRead = () => { if (!canReadOfficer) throw new Error("Consultation réservée aux officiers et aux visiteurs.") }
     const requirePermission = (permission: string) => { if (!has(permission)) throw new Error("Permission insuffisante.") }
     const requireReadPermission = (permission: string) => { if (!visitor && !has(permission)) throw new Error("Permission de consultation insuffisante.") }
-    const memberById = new Map((members ?? []).map((member: any) => [member.id, member]))
-    const delayedById = new Map((delayed ?? []).filter((member: any) => member.member_id).map((member: any) => [member.member_id, member]))
-    const delayedByName = new Map((delayed ?? []).map((member: any) => [normalise(member.matricule), member]))
-    const ownMember = profile.member_id ? memberById.get(profile.member_id) : null
-    const ownDelayed = profile.member_id ? delayedById.get(profile.member_id) : delayedByName.get(normalise(profile.display_name))
     const specialisationsAuteur = normalise((ownMember?.specializations ?? []).join("; "))
     const roleGestionInstructeur = specialisationsAuteur.includes("RESPONSABLE INST") ||
       specialisationsAuteur.includes("INSTRUCTEUR EN CHEF")
@@ -329,8 +328,8 @@ const authenticated = async (req: Request) => {
         throw new Error("Prise en charge réservée à la propriété et aux responsables Instructeur.")
       }
     }
-    const actorName = ownMember?.matricule ?? ownDelayed?.matricule ?? profile.display_name
-    const actorGrade = ownMember?.grade ?? ownDelayed?.grade ?? "Visiteur"
+    const actorName = ownDelayed?.matricule ?? ownMember?.matricule ?? profile.display_name
+    const actorGrade = ownDelayed?.grade ?? ownMember?.grade ?? "Visiteur"
     const actorGradeNormalise = normalise(actorGrade).replace(/[^A-Z]/g, "")
     const rangGrade = (grade: unknown) => GRADES.findIndex((item) => normalise(item) === normalise(grade))
     const valeurReferentiel = (valeur: unknown, referentiel: string[], message: string) => {
@@ -459,19 +458,6 @@ const authenticated = async (req: Request) => {
       const runtime = (globalThis as any).EdgeRuntime
       if (runtime?.waitUntil) runtime.waitUntil(tache)
       else void tache
-    }
-
-    const synchroniserNiveauAccesAvecGrade = async (memberId: number, grade: unknown) => {
-      const gradeNormalise = normalise(grade).replace(/[^A-Z]/g, "")
-      const niveau = [
-        "LIEUTENANTCOLONEL", "COMMANDANT", "VICECOMMANDANT", "CAPITAINE",
-        "LIEUTENANT", "SOUSLIEUTENANT", "ASPIRANT",
-      ].includes(gradeNormalise) ? "officer" : "member"
-      const { error } = await admin.from("profiles")
-        .update({ access_level: niveau })
-        .eq("member_id", memberId)
-        .in("access_level", ["member", "officer"])
-      if (error) throw error
     }
 
     const synchroniserPresenceMembre = async (memberId: number | null | undefined) => {
@@ -1793,7 +1779,6 @@ const authenticated = async (req: Request) => {
         }
         const { data: updated, error } = await admin.from("members").update(patch).eq("id", member.id).select("*").single()
         if (error) throw error
-        if (patch.grade !== undefined) await synchroniserNiveauAccesAvecGrade(member.id, updated.grade)
         await audit(action === "enregistrerNote" ? "Note modifiée" : "Effectif officier modifié", updated.matricule)
         planifierSynchronisationEffectifGoogleSheets()
         const auteurModifie = profile.member_id === member.id
@@ -2318,7 +2303,6 @@ const authenticated = async (req: Request) => {
         } else if (Object.keys(patch).length) {
           const { error } = await admin.from("members").update(patch).eq("id", member.id).eq("active", true)
           if (error) throw error
-          if (patch.grade !== undefined) await synchroniserNiveauAccesAvecGrade(member.id, patch.grade)
         }
         const { error: historyError } = await admin.from("personnel_history").insert({
           member_id: member.id, matricule_snapshot: member.matricule,

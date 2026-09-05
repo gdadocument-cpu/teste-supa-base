@@ -1576,6 +1576,7 @@ async function tenterRestaurationDiscord() {
           : "",
         sessionToken: session.access_token,
         permissions: Array.isArray(profil.permissions) ? profil.permissions : [],
+        accessLevel: profil.accessLevel,
         proprietaire: profil.accessLevel === "owner",
         coproprietaire: profil.coproprietaire === true,
         defcon: resultatProfil.defcon
@@ -1761,6 +1762,7 @@ function terminerConnexionDiscord(resultat, identifiant) {
     "permissionsUtilisateur",
     JSON.stringify(Array.isArray(resultat.permissions) ? resultat.permissions : [])
   );
+  sessionStorage.setItem("niveauAccesUtilisateur", resultat.accessLevel || "");
   sessionStorage.setItem(
     "proprietaireUtilisateur",
     resultat.proprietaire === true ? "true" : "false"
@@ -2066,6 +2068,7 @@ new MutationObserver(function () {
 function utilisateurEstOfficierGDA() {
   if (utilisateurEstVisiteurGDA()) return true;
   if (utilisateurPossedeRoleDirectGDA("role_staff_total")) return true;
+  if (sessionStorage.getItem("niveauAccesUtilisateur") === "officer") return true;
   const grade = String(sessionStorage.getItem("gradeUtilisateur") || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")

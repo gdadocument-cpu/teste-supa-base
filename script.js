@@ -53,6 +53,8 @@ let minuteurNotificationsAbsence = null;
 let notificationsAbsenceGDA = [];
 let minuteurPolitiqueSessionGDA = null;
 let deconnexionForceeEnCoursGDA = false;
+let abonnementPublicationEffectifGDA = null;
+let actualisationProfilPublicationEnCoursGDA = false;
 
 const PREFIXE_BROUILLON_FORMULAIRE_GDA = "gdaBrouillonFormulaireV1:";
 const DUREE_BROUILLON_FORMULAIRE_GDA = 30 * 24 * 60 * 60 * 1000;
@@ -1373,6 +1375,10 @@ function sessionConnexionGDAEstExpiree() {
 }
 
 async function deconnecterUtilisateurGDA(rechargerPage) {
+  if (abonnementPublicationEffectifGDA) {
+    abonnementPublicationEffectifGDA.unsubscribe();
+    abonnementPublicationEffectifGDA = null;
+  }
   if (minuteurPolitiqueSessionGDA) {
     clearInterval(minuteurPolitiqueSessionGDA);
     minuteurPolitiqueSessionGDA = null;
@@ -1792,8 +1798,55 @@ function terminerConnexionDiscord(resultat, identifiant) {
   if (typeof chargerPostItsInstructeurGDA === "function") {
     chargerPostItsInstructeurGDA();
   }
+  demarrerSurveillancePublicationEffectifGDA();
   lancerChargement();
 }
+
+async function actualiserProfilApresPublicationEffectifGDA() {
+  if (actualisationProfilPublicationEnCoursGDA || !window.gdaSupabase) return;
+  actualisationProfilPublicationEnCoursGDA = true;
+  try {
+    const resultat = await window.gdaSupabase.profil();
+    const profil = resultat?.profile;
+    if (!profil) return;
+    sessionStorage.setItem("nomUtilisateur", profil.matricule || "");
+    sessionStorage.setItem("identifiantUtilisateur", profil.matricule || "");
+    sessionStorage.setItem("gradeUtilisateur", profil.grade || "");
+    sessionStorage.setItem("gradeEffectifPublicUtilisateur", profil.grade || "");
+    sessionStorage.setItem("niveauAccesUtilisateur", profil.accessLevel || "");
+    sessionStorage.setItem(
+      "specialisationUtilisateur",
+      Array.isArray(profil.specialisations) ? profil.specialisations.join(", ") : ""
+    );
+    sessionStorage.setItem(
+      "permissionsUtilisateur",
+      JSON.stringify(Array.isArray(profil.permissions) ? profil.permissions : [])
+    );
+    sessionStorage.setItem("proprietaireUtilisateur", profil.accessLevel === "owner" ? "true" : "false");
+    sessionStorage.setItem("coproprietaireUtilisateur", profil.coproprietaire === true ? "true" : "false");
+    afficherUtilisateur();
+    appliquerVisibiliteModulesGDA();
+    sessionPrechargeeGDA = null;
+    prechargerDonneesGDA();
+  } catch (erreur) {
+    console.warn("Actualisation dynamique du profil indisponible :", erreur);
+  } finally {
+    actualisationProfilPublicationEnCoursGDA = false;
+  }
+}
+
+function demarrerSurveillancePublicationEffectifGDA() {
+  if (!window.gdaSupabase?.surveillerPublicationsEffectif || abonnementPublicationEffectifGDA) return;
+  abonnementPublicationEffectifGDA = window.gdaSupabase.surveillerPublicationsEffectif(function() {
+    window.setTimeout(actualiserProfilApresPublicationEffectifGDA, 1200);
+  });
+}
+
+document.addEventListener("visibilitychange", function() {
+  if (document.visibilityState === "visible" && abonnementPublicationEffectifGDA) {
+    actualiserProfilApresPublicationEffectifGDA();
+  }
+});
 
 
 // Écran rouge fixe en cas de refus

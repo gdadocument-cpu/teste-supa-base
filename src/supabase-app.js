@@ -28,6 +28,21 @@ window.gdaSupabase = Object.freeze({
     })
     return data.subscription
   },
+  surveillerPublicationsEffectif(callback) {
+    const canal = client
+      .channel("publications-effectif-gda")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "gda_roster_versions" },
+        callback,
+      )
+      .subscribe()
+    return {
+      unsubscribe() {
+        return client.removeChannel(canal)
+      },
+    }
+  },
   async connexionDiscord(redirectTo) {
     const { data, error } = await client.auth.signInWithOAuth({
       provider: "discord",

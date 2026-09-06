@@ -5,9 +5,11 @@
 .compact-horaire output{font-size:10px}
 .effectif-compact .effectif-member>.compact-compteurs{display:flex;position:absolute;right:24px;top:50%;transform:translateY(-50%);gap:16px;align-items:center}
 .compact-compteurs>span{display:flex;gap:6px;align-items:center;font-size:14px;max-width:80px;overflow:hidden}
-.compact-compteurs .gda-icon{width:24px;height:24px}
+.compact-compteurs .gda-icone{width:26px;height:26px;flex:0 0 26px}
 .compact-details{padding:12px 18px;margin:0 0 8px;border:1px solid #63809d66;border-radius:0 0 14px 14px;background:rgba(127,150,175,.06)}
-.compact-details .effectif-header{margin-bottom:10px;padding:0;gap:10px}
+.compact-details .effectif-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding:10px 14px;gap:16px;min-height:48px;box-sizing:border-box}
+.compact-details .effectif-header-actions{display:flex;align-items:center;gap:10px;margin-left:auto}
+.compact-details .effectif-header-actions button{min-height:36px;padding:8px 16px;margin:0}
 .compact-details .effectif-header-title{font-size:16px;margin:0}
 .compact-details .effectif-header-subtitle{display:none}
 .compact-details .effectif-fiche{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}

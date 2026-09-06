@@ -1753,9 +1753,10 @@ const authenticated = async (req: Request) => {
         await audit("Effectif GDA actualisé")
         return json({ success: true, membres: rows.map((row: any) => ({ ...membreClient(memberById.get(row.member_id), true), grade: row.grade })), ...metadonneesEffectifGda(version.published_at, heurePublicationEffectif), peutActualiser: true, actualisationForcee: true })
       }
+      case "enregistrerHoraire":
       case "enregistrerNote":
       case "modifierMembreEffectif": { // effectif officier instantané uniquement
-        if (action === "enregistrerNote") requireOfficer()
+        if (action === "enregistrerNote" || action === "enregistrerHoraire") requireOfficer()
         else requirePermission("effectif_modifier")
         const cible = texte(payload.personne || payload.nom || payload.matricule)
         const member = (members ?? []).find((item: any) => normalise(item.matricule) === normalise(cible))
@@ -1764,7 +1765,8 @@ const authenticated = async (req: Request) => {
           throw new Error("Vous pouvez ajouter une note uniquement à une personne strictement moins gradée que vous.")
         }
         const patch: Record<string, unknown> = {}
-        if (action === "enregistrerNote") patch.notes = texte(payload.note || payload.notes)
+        if (action === "enregistrerHoraire") patch.hours_note = texte(payload.horaire).slice(0, 80)
+        else if (action === "enregistrerNote") patch.notes = texte(payload.note || payload.notes)
         else {
           const nouveauMatricule = texte(payload.nom) || member.matricule
           const homonyme = (members ?? []).find((item: any) => item.id !== member.id && normalise(item.matricule) === normalise(nouveauMatricule))

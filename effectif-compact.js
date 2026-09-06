@@ -14,7 +14,7 @@
   creerLigneMembre = function (membre, index) {
     const html = originale(membre, index);
     const stats = [['report', 'Rapports', membre.nombreRapports], ['objective', 'Recommandations', membre.recommandation], ['surveillance', 'Observations', membre.observation]];
-    return html.replace('</article>', `<label class="compact-horaire"><span>Horaire</span><input maxlength="80" aria-label="Horaire de ${echapperHTML(membre.nom)}" placeholder="" value="${echapperHTML(membre.horaire || '')}" ${effectifPeutModifier ? '' : 'readonly'}><output aria-live="polite"></output></label></article>`)
+    return html.replace('</article>', `<label class="compact-horaire"><span>Horaire</span><input maxlength="80" aria-label="Horaire de ${echapperHTML(membre.nom)}" placeholder="" value="${echapperHTML(membre.horaire || '')}" ${(utilisateurEstOfficierGDA() && !utilisateurEstVisiteurGDA()) ? '' : 'readonly'}><output aria-live="polite"></output></label></article>`)
       .replace('</article>', `<div class="compact-compteurs">${stats.map(([icone, titre, valeur]) => `<span title="${titre} : ${echapperHTML(String(valeur || 0))}" aria-label="${titre} : ${echapperHTML(String(valeur || 0))}">${window.iconeGDA ? iconeGDA(icone) : titre}<b>${echapperHTML(String(valeur || 0))}</b></span>`).join('')}</div></article>`);
   };
   function fermer() {
@@ -75,13 +75,13 @@
   }, true);
   document.addEventListener('change', async function (event) {
     const input = event.target.closest('.compact-horaire input');
-    if (!input || !effectifPeutModifier) return;
+    if (!input || !utilisateurEstOfficierGDA() || utilisateurEstVisiteurGDA()) return;
     const membre = effectifMembres[Number(input.closest('.effectif-member').dataset.index)];
     const sortie = input.parentElement.querySelector('output');
     input.disabled = true;
     sortie.textContent = 'Enregistrement…';
     try {
-      const body = new URLSearchParams({action: 'modifierMembreEffectif', personne: membre.nom, horaire: input.value, identifiant: sessionStorage.getItem('identifiantUtilisateur') || ''});
+      const body = new URLSearchParams({action: 'enregistrerHoraire', personne: membre.nom, horaire: input.value, identifiant: sessionStorage.getItem('identifiantUtilisateur') || ''});
       const response = await fetch(EFFECTIF_API_URL, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString()});
       const resultat = await response.json();
       if (!resultat.success) throw new Error(resultat.message || 'Enregistrement impossible');

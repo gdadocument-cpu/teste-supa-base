@@ -1,4 +1,8 @@
 .compact-horaire,.compact-compteurs{display:none}
+.parametres-bloc.compact-option-globale{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:14px 18px;min-height:0}
+.compact-option-globale p{margin:4px 0 0;font-size:12px}
+.compact-option-globale label{display:flex!important;align-items:center;gap:10px;width:auto!important;margin:0;flex:0 0 auto}
+.compact-option-globale input[type=checkbox]{width:20px!important;height:20px;min-width:20px;margin:0;accent-color:#36b4ed;cursor:pointer}
 .effectif-compact .effectif-member{position:relative}
 .effectif-compact .effectif-member>.compact-horaire{display:flex;position:absolute;left:24px;top:50%;transform:translateY(-50%);width:125px;flex-direction:column;gap:4px;font-size:11px}
 .compact-horaire input{width:100%;box-sizing:border-box;background:rgba(127,150,175,.1);color:inherit;border:1px solid #63809d66;border-radius:8px;padding:6px 8px;font:inherit;font-size:13px}

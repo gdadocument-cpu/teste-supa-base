@@ -36,6 +36,7 @@ function utilisateurPeutGererParametresSiteGDA() {
 
 function appliquerConfigurationSiteGDA(resultat) {
   const configuration = resultat && resultat.configuration || {};
+  if (window.appliquerEffectifCompactGlobalGDA) window.appliquerEffectifCompactGlobalGDA(configuration.effectifCompact === true);
   parametresSiteConfiguration = {
     maximumGda: Math.max(1, Number(configuration.maximumGda || 35)),
     heureActualisation: String(configuration.heureActualisation || "20:00").slice(0, 5),

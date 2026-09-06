@@ -2,6 +2,14 @@
   const cle = 'gdaEffectifCompact';
   const actif = () => localStorage.getItem(cle) === '1';
   document.documentElement.classList.toggle('effectif-compact', actif());
+  window.appliquerEffectifCompactGlobalGDA = function (valeur) {
+    const change = actif() !== valeur;
+    localStorage.setItem(cle, valeur ? '1' : '0');
+    document.documentElement.classList.toggle('effectif-compact', valeur);
+    const caseOption = document.getElementById('effectifCompactActivation');
+    if (caseOption) caseOption.checked = valeur;
+    if (change) fermer();
+  };
   const originale = creerLigneMembre;
   creerLigneMembre = function (membre, index) {
     const html = originale(membre, index);
@@ -82,18 +90,23 @@
     } catch (erreur) { sortie.textContent = erreur.message; }
     finally { input.disabled = false; }
   });
-  document.addEventListener('change', function (event) {
+  document.addEventListener('change', async function (event) {
     if (event.target.id !== 'effectifCompactActivation') return;
-    localStorage.setItem(cle, event.target.checked ? '1' : '0');
-    document.documentElement.classList.toggle('effectif-compact', event.target.checked);
-    fermer();
+    const controle = event.target;
+    controle.disabled = true;
+    try {
+      await requeteMutationParametresGDA('enregistrerEffectifCompact', {actif: controle.checked});
+    } catch (erreur) {
+      controle.checked = actif();
+      afficherNotificationGDA(erreur.message, 'erreur');
+    } finally { controle.disabled = false; }
   });
   const observer = new MutationObserver(function () {
     const themes = document.querySelector('.parametres-themes-section');
     if (!themes || document.getElementById('effectifCompactActivation')) return;
     const bloc = document.createElement('section');
-    bloc.className = 'parametres-bloc';
-    bloc.innerHTML = `<h4>Affichage de l’effectif officier</h4><label><input id="effectifCompactActivation" type="checkbox" ${actif() ? 'checked' : ''}> Activer le mode compact</label><p>Préférence pour ce navigateur. Désactivez pour retrouver l’affichage d’origine. Les horaires enregistrés sont conservés.</p>`;
+    bloc.className = 'parametres-bloc compact-option-globale';
+    bloc.innerHTML = `<div><strong>Effectif officier · détails dépliables</strong><p>Appliqué en direct à tous les utilisateurs.</p></div><label for="effectifCompactActivation"><span>Activer</span><input id="effectifCompactActivation" type="checkbox" ${actif() ? 'checked' : ''} ${typeof parametresSitePeutGerer !== 'undefined' && parametresSitePeutGerer ? '' : 'disabled'}></label>`;
     themes.after(bloc);
   });
   observer.observe(document.body, {childList: true, subtree: true});

@@ -1046,7 +1046,7 @@ const authenticated = async (req: Request) => {
 
     const parametresSiteDonnees = async (message = "") => {
       const [{ data: configuration, error: configurationError }, { data: liens, error: liensError }, { data: modelesDefcon, error: modelesDefconError }] = await Promise.all([
-        admin.from("site_configuration").select("max_gda,roster_publish_time,active_theme,sessions_reset_at,updated_at").eq("singleton", true).single(),
+        admin.from("site_configuration").select("max_gda,roster_publish_time,active_theme,compact_roster,sessions_reset_at,updated_at").eq("singleton", true).single(),
         admin.from("navigation_links").select("external_id,category,label,icon,url,display_mode,sort_order,updated_at")
           .eq("active", true).order("category", { ascending: true }).order("sort_order", { ascending: true }).order("id", { ascending: true }),
         admin.from("defcon_announcement_templates").select("level,title,summary,details,updated_at").order("level", { ascending: true }),
@@ -1060,6 +1060,7 @@ const authenticated = async (req: Request) => {
         peutGerer: peutGererParametres,
         peutDeconnecterTous: property,
         configuration: {
+          effectifCompact: configuration?.compact_roster === true,
           maximumGda: Math.max(1, Math.min(200, nombre(configuration?.max_gda) || 35)),
           heureActualisation: texte(configuration?.roster_publish_time).slice(0, 5) || "20:00",
           themeActif: THEMES_SITE.some((theme) => theme.id === texte(configuration?.active_theme))
@@ -2492,8 +2493,19 @@ const authenticated = async (req: Request) => {
         await audit("Paramètres du site modifiés", "Configuration", `Maximum ${maximum} GDA · actualisation ${heure}`)
         return json(await parametresSiteDonnees("Paramètres enregistrés."))
       }
+      case "enregistrerEffectifCompact":
       case "enregistrerThemeSite": {
         if (!peutGererParametres) throw new Error("Modification réservée à la propriété et aux Gérant GDA.")
+        if (action === "enregistrerEffectifCompact") {
+          if (typeof payload.actif !== "boolean") throw new Error("Réglage invalide.")
+          const { error } = await admin.from("site_configuration").update({compact_roster: payload.actif, updated_by_profile_id: profile.id}).eq("singleton", true)
+          if (error) throw error
+          await audit("Affichage effectif modifié", payload.actif ? "Compact activé" : "Compact désactivé")
+          const canal = admin.channel("gda-theme-global")
+          try { await canal.send({type: "broadcast", event: "theme-change", payload: {}}) }
+          finally { await admin.removeChannel(canal) }
+          return json(await parametresSiteDonnees("Affichage appliqué à tous les utilisateurs."))
+        }
         const theme = texte(payload.theme)
         const themeDisponible = THEMES_SITE.find((item) => item.id === theme)
         if (!themeDisponible) throw new Error("Thème du site invalide.")

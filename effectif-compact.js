@@ -24,6 +24,25 @@
     detail.className = 'compact-details';
     ligne.after(detail);
     ouvrirFicheMembre(Number(ligne.dataset.index), detail);
+    const grille = detail.querySelector('.effectif-fiche');
+    const compteurs = document.createElement('div');
+    compteurs.className = 'compact-statistiques';
+    const definitions = [
+      ['Nombre de rapports', 'Rapports', 'report', membre.nombreRapports],
+      ['Observation', 'Observations', 'surveillance', membre.observation],
+      ['Recommandation', 'Recommandations', 'objective', membre.recommandation]
+    ];
+    definitions.forEach(([label, titre, icone, valeur]) => {
+      const champ = Array.from(grille.children).find(el => el.querySelector('.effectif-fiche-label')?.textContent.trim() === label);
+      if (!champ) return;
+      const nombre = Number(valeur);
+      const affichage = Number.isFinite(nombre) && nombre >= 0 ? String(nombre) : '—';
+      champ.classList.add('compact-statistique');
+      champ.innerHTML = `<span class="effectif-fiche-label">${echapperHTML(titre)}</span><div class="compact-statistique-valeur">${window.iconeGDA ? iconeGDA(icone) : ''}<strong>${affichage}</strong></div>`;
+      if (affichage === '—') champ.title = String(valeur || '');
+      compteurs.append(champ);
+    });
+    grille.lastElementChild.before(compteurs);
   }
   document.addEventListener('click', function (event) {
     if (!actif()) return;

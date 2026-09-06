@@ -38,11 +38,16 @@
       const nombre = Number(valeur);
       const affichage = Number.isFinite(nombre) && nombre >= 0 ? String(nombre) : '—';
       champ.classList.add('compact-statistique');
+      champ.classList.remove('effectif-fiche-champ');
+      champ.title = titre;
+      champ.setAttribute('aria-label', titre + ' : ' + affichage);
       champ.innerHTML = `<span class="effectif-fiche-label">${echapperHTML(titre)}</span><div class="compact-statistique-valeur">${window.iconeGDA ? iconeGDA(icone) : ''}<strong>${affichage}</strong></div>`;
       if (affichage === '—') champ.title = String(valeur || '');
       compteurs.append(champ);
     });
-    grille.lastElementChild.before(compteurs);
+    const sanction = Array.from(grille.children).find(el => el.querySelector('.effectif-fiche-label')?.textContent.trim() === 'Sanction');
+    if (sanction) sanction.after(compteurs);
+    else grille.lastElementChild.before(compteurs);
   }
   document.addEventListener('click', function (event) {
     if (!actif()) return;

@@ -966,7 +966,7 @@ function creerLigneMembre(membre, index) {
 }
 
 
-function ouvrirFicheMembre(index) {
+function ouvrirFicheMembre(index, conteneur = workspace) {
   const membre = effectifMembres[index];
 
   if (!membre) {
@@ -974,9 +974,9 @@ function ouvrirFicheMembre(index) {
   }
   const peutNoter = membre.peutNoter === true;
 
-  workspace.innerHTML = `
+  conteneur.innerHTML = `
     <section
-      id="effectifModule"
+      id="${conteneur === workspace ? 'effectifModule' : 'effectifFicheDepliee'}"
       data-membre-key="${echapperHTML(cleMembreEffectif(membre))}"
     >
 

@@ -22,9 +22,8 @@
     ligne.setAttribute('aria-expanded', 'true');
     const detail = document.createElement('section');
     detail.className = 'compact-details';
-    detail.innerHTML = `<div class="compact-details-grille">${[['Steam ID', membre.steamId], ['Discord ID', membre.discordId], ['Entrée', membre.dateEntree], ['Promotion', membre.datePromotionRetro], ['Sanction', membre.sanction], ['Médailles', membre.medaille], ['Notes', membre.notes]].map(([titre, valeur]) => `<div><small>${titre}</small><p>${echapperHTML(String(valeur || '—'))}</p></div>`).join('')}</div><button type="button">Ouvrir la fiche complète${effectifPeutModifier ? ' / modifier' : ''}</button>`;
-    detail.querySelector('button').onclick = () => ouvrirFicheMembre(Number(ligne.dataset.index));
     ligne.after(detail);
+    ouvrirFicheMembre(Number(ligne.dataset.index), detail);
   }
   document.addEventListener('click', function (event) {
     if (!actif()) return;

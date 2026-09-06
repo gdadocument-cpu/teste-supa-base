@@ -22,3 +22,15 @@
 .compact-details .effectif-notes-actions{margin-top:8px}
 @media(max-width:1800px){.effectif-compact .effectif-member>.compact-horaire,.effectif-compact .effectif-member>.compact-compteurs{position:static;transform:none;grid-row:auto;grid-column:auto}.compact-details .effectif-fiche{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.compact-details .effectif-fiche{grid-template-columns:1fr}}
+
+/* Small fields stay content-sized; medals have their own full-width row. */
+#effectifFicheDepliee .effectif-fiche{grid-template-columns:repeat(6,minmax(0,1fr));align-items:start;gap:8px;margin-bottom:12px}
+#effectifFicheDepliee .effectif-fiche-champ{min-height:0;height:auto;padding:9px 11px;gap:5px;box-sizing:border-box}
+#effectifFicheDepliee .effectif-fiche-champ:last-child{grid-column:1 / -1}
+#effectifFicheDepliee .effectif-fiche-label{margin:0;font-size:10px;letter-spacing:.5px}
+#effectifFicheDepliee .effectif-fiche-valeur{white-space:normal;font-size:13px;line-height:1.4;margin:0}
+#effectifFicheDepliee .effectif-grade-icone-fiche{width:26px;height:30px;flex-basis:26px;object-fit:contain}
+#effectifFicheDepliee .effectif-fiche-grade{font-size:13px;gap:8px}
+@media(max-width:1500px){#effectifFicheDepliee .effectif-fiche{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:950px){#effectifFicheDepliee .effectif-fiche{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:550px){#effectifFicheDepliee .effectif-fiche{grid-template-columns:1fr}}

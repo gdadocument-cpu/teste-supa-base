@@ -1,18 +1,22 @@
 .compact-horaire,.compact-compteurs{display:none}
-.effectif-compact .effectif-member{grid-template-columns:120px minmax(380px,2fr) minmax(160px,1fr) minmax(220px,1.3fr) 150px;gap:18px;align-items:center}
-.effectif-compact .effectif-member>.compact-horaire{grid-column:1;grid-row:1}
-.effectif-compact .effectif-member>.effectif-identite-groupe{grid-column:2;grid-row:1;display:flex;justify-content:space-around;padding-left:0;gap:24px;width:auto}
-.effectif-compact .effectif-identite-groupe>.effectif-name{width:auto;min-width:100px}
-.effectif-compact .effectif-grade-groupe{flex-shrink:0}
-.effectif-compact .effectif-member>.effectif-badges{grid-column:3;grid-row:1;transform:none}
-.effectif-compact .effectif-member>.effectif-specialisation{grid-column:4;grid-row:1;display:block}
-.effectif-compact .compact-horaire{display:flex;flex-direction:column;gap:5px;font-size:11px;color:inherit}
-.compact-horaire input{width:100%;box-sizing:border-box;background:rgba(127,150,175,.1);color:inherit;border:1px solid #63809d66;border-radius:8px;padding:8px;font:inherit;font-size:13px}
+.effectif-compact .effectif-member{position:relative}
+.effectif-compact .effectif-member>.compact-horaire{display:flex;position:absolute;left:24px;top:50%;transform:translateY(-50%);width:125px;flex-direction:column;gap:4px;font-size:11px}
+.compact-horaire input{width:100%;box-sizing:border-box;background:rgba(127,150,175,.1);color:inherit;border:1px solid #63809d66;border-radius:8px;padding:6px 8px;font:inherit;font-size:13px}
 .compact-horaire output{font-size:10px}
-.effectif-compact .effectif-member>.compact-compteurs{grid-column:5;grid-row:1;display:flex;gap:14px;align-items:center;justify-content:flex-end}
-.compact-compteurs>span{display:flex;gap:5px;align-items:center;font-size:14px;max-width:70px;overflow:hidden}
+.effectif-compact .effectif-member>.compact-compteurs{display:flex;position:absolute;right:24px;top:50%;transform:translateY(-50%);gap:16px;align-items:center}
+.compact-compteurs>span{display:flex;gap:6px;align-items:center;font-size:14px;max-width:80px;overflow:hidden}
 .compact-compteurs .gda-icon{width:24px;height:24px}
-.compact-details{padding:20px;margin:0 0 12px;border:1px solid #63809d66;border-radius:0 0 14px 14px;background:rgba(127,150,175,.06)}
+.compact-details{padding:12px 18px;margin:0 0 8px;border:1px solid #63809d66;border-radius:0 0 14px 14px;background:rgba(127,150,175,.06)}
+.compact-details .effectif-header{margin-bottom:10px;padding:0;gap:10px}
+.compact-details .effectif-header-title{font-size:16px;margin:0}
 .compact-details .effectif-header-subtitle{display:none}
-@media(max-width:1200px){.effectif-compact .effectif-member{grid-template-columns:110px minmax(260px,1fr) minmax(150px,1fr)}.effectif-compact .effectif-member>.effectif-specialisation{grid-column:2;grid-row:2}.effectif-compact .effectif-member>.compact-compteurs{grid-column:3;grid-row:2}}
-@media(max-width:650px){.effectif-compact .effectif-member{grid-template-columns:95px minmax(0,1fr)}.effectif-compact .effectif-member>.effectif-identite-groupe{flex-wrap:wrap;gap:8px}.effectif-compact .effectif-member>.effectif-badges{grid-column:1;grid-row:2}.effectif-compact .effectif-member>.compact-compteurs{grid-column:2;grid-row:3}.compact-details{padding:10px}}
+.compact-details .effectif-fiche{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.compact-details .effectif-fiche-champ{padding:10px 12px;min-height:0}
+.compact-details .effectif-fiche-label{margin-bottom:5px;font-size:11px}
+.compact-details .effectif-fiche-valeur{font-size:13px}
+.compact-details .effectif-notes{padding:12px;margin-top:10px}
+.compact-details .effectif-notes h4,.compact-details .effectif-notes p{margin:4px 0}
+.compact-details .effectif-notes textarea{min-height:75px;height:75px}
+.compact-details .effectif-notes-actions{margin-top:8px}
+@media(max-width:1800px){.effectif-compact .effectif-member>.compact-horaire,.effectif-compact .effectif-member>.compact-compteurs{position:static;transform:none;grid-row:auto;grid-column:auto}.compact-details .effectif-fiche{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.compact-details .effectif-fiche{grid-template-columns:1fr}}

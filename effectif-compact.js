@@ -6,7 +6,7 @@
   creerLigneMembre = function (membre, index) {
     const html = originale(membre, index);
     const stats = [['report', 'Rapports', membre.nombreRapports], ['objective', 'Recommandations', membre.recommandation], ['surveillance', 'Observations', membre.observation]];
-    return html.replace('<div class="effectif-identite-groupe">', `<label class="compact-horaire"><span>Horaire</span><input maxlength="80" aria-label="Horaire de ${echapperHTML(membre.nom)}" placeholder="15h sur 35h" value="${echapperHTML(membre.horaire || '')}" ${effectifPeutModifier ? '' : 'readonly'}><output aria-live="polite"></output></label><div class="effectif-identite-groupe">`)
+    return html.replace('</article>', `<label class="compact-horaire"><span>Horaire</span><input maxlength="80" aria-label="Horaire de ${echapperHTML(membre.nom)}" placeholder="15h sur 35h" value="${echapperHTML(membre.horaire || '')}" ${effectifPeutModifier ? '' : 'readonly'}><output aria-live="polite"></output></label></article>`)
       .replace('</article>', `<div class="compact-compteurs">${stats.map(([icone, titre, valeur]) => `<span title="${titre} : ${echapperHTML(String(valeur || 0))}" aria-label="${titre} : ${echapperHTML(String(valeur || 0))}">${window.iconeGDA ? iconeGDA(icone) : titre}<b>${echapperHTML(String(valeur || 0))}</b></span>`).join('')}</div></article>`);
   };
   function fermer() {

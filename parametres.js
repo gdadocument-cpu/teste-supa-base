@@ -74,6 +74,7 @@ function appliquerConfigurationSiteGDA(resultat) {
 }
 
 async function chargerConfigurationSiteGDA(forcer) {
+  initialiserThemeGlobalTempsReelGDA();
   if (parametresSiteChargement && !forcer) return parametresSiteChargement;
   if (parametresSiteCharges && !forcer) return Promise.resolve(parametresSiteConfiguration);
   parametresSiteChargement = (async function () {
@@ -216,7 +217,7 @@ function afficherParametresSiteGDA() {
 function synchroniserThemeGlobalGDA() {
   if (synchronisationThemeGlobaleGDA) return synchronisationThemeGlobaleGDA;
   synchronisationThemeGlobaleGDA = chargerConfigurationSiteGDA(true).then(function() {
-    if (moduleGdaEstActif("administration-parametres")) afficherParametresSiteGDA();
+    // The compact toggle is updated in place by appliquerConfigurationSiteGDA.
   }).catch(function(erreur) {
     console.warn("Synchronisation immédiate du thème indisponible :", erreur);
   }).finally(function() {
@@ -549,7 +550,7 @@ function normaliserParametresSite(valeur) {
 }
 
 window.addEventListener("gda-donnees-modifiees", function(evenement) {
-  if (evenement.detail?.action !== "enregistrerThemeSite") return;
+  if (!["enregistrerThemeSite", "enregistrerEffectifCompact"].includes(evenement.detail?.action)) return;
   synchroniserThemeGlobalGDA();
 });
 
@@ -560,4 +561,11 @@ window.setInterval(function() {
   synchroniserThemeGlobalGDA().catch(function(erreur) {
     console.warn("Synchronisation du thème indisponible :", erreur);
   });
-}, 30000);
+}, 10000);
+
+document.addEventListener("visibilitychange", function() {
+  if (!document.hidden && sessionStorage.getItem("sessionTokenDiscord")) synchroniserThemeGlobalGDA();
+});
+window.addEventListener("online", function() {
+  if (sessionStorage.getItem("sessionTokenDiscord")) synchroniserThemeGlobalGDA();
+});

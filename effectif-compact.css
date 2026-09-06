@@ -46,3 +46,38 @@
 @media(max-width:950px){#effectifFicheDepliee .effectif-fiche{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:550px){#effectifFicheDepliee .effectif-fiche{grid-template-columns:1fr}}
 @media(max-width:550px){.compact-statistiques{grid-column:1 / -1}}
+
+/* Layout follows the module width, including a narrow desktop workspace. */
+.effectif-compact #effectifModule{container-type:inline-size;container-name:roster;min-width:0}
+.effectif-compact #effectifModule .effectif-member{display:grid;grid-template-columns:120px minmax(280px,2fr) minmax(120px,.7fr) minmax(180px,1fr) 150px;gap:16px;align-items:center;height:auto;min-width:0;box-sizing:border-box}
+.effectif-compact #effectifModule .effectif-member>.compact-horaire{position:static;transform:none;grid-column:1;grid-row:1;width:100%;min-width:0}
+.effectif-compact #effectifModule .effectif-member>.effectif-identite-groupe{grid-column:2;grid-row:1;display:flex;justify-content:space-around;align-items:center;gap:16px;padding:0;width:auto;min-width:0}
+.effectif-compact #effectifModule .effectif-identite-groupe>.effectif-name{width:auto;min-width:0;overflow-wrap:anywhere}
+.effectif-compact #effectifModule .effectif-grade-groupe{min-width:0;flex-shrink:0}
+.effectif-compact #effectifModule .effectif-member>.effectif-badges{grid-column:3;grid-row:1;transform:none;min-width:0;flex-wrap:wrap}
+.effectif-compact #effectifModule .effectif-member>.effectif-specialisation{grid-column:4;grid-row:1;display:block;min-width:0}
+.effectif-compact #effectifModule .effectif-member>.compact-compteurs{position:static;transform:none;grid-column:5;grid-row:1;min-width:0;justify-content:flex-end;gap:10px}
+.compact-details,#effectifFicheDepliee{min-width:0;width:100%;height:auto;max-height:none;overflow:visible;box-sizing:border-box}
+#effectifFicheDepliee .effectif-fiche{grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))}
+#effectifFicheDepliee .effectif-fiche>*{min-width:0;max-width:100%;box-sizing:border-box}
+#effectifFicheDepliee .compact-statistiques{grid-column:1 / -1;display:flex;flex-wrap:wrap}
+#effectifFicheDepliee .effectif-notes{clear:both;position:static;width:100%;height:auto;max-height:none;overflow:visible;box-sizing:border-box}
+#effectifFicheDepliee .effectif-notes textarea{width:100%;max-width:100%;box-sizing:border-box;resize:vertical}
+#effectifFicheDepliee .effectif-header,#effectifFicheDepliee .effectif-header-actions,#effectifFicheDepliee .effectif-notes-actions{flex-wrap:wrap}
+@container roster (max-width:1100px){
+ .effectif-compact #effectifModule .effectif-member{grid-template-columns:110px minmax(230px,1fr) minmax(140px,.8fr)}
+ .effectif-compact #effectifModule .effectif-member>.effectif-specialisation{grid-column:2;grid-row:2}
+ .effectif-compact #effectifModule .effectif-member>.compact-compteurs{grid-column:3;grid-row:2;justify-content:flex-start}
+}
+@container roster (max-width:650px){
+ .effectif-compact #effectifModule .effectif-member{grid-template-columns:minmax(0,1fr) minmax(0,1fr);padding:12px;gap:12px}
+ .effectif-compact #effectifModule .effectif-member>.effectif-identite-groupe{grid-column:1 / -1;grid-row:1;justify-content:space-between;flex-wrap:wrap}
+ .effectif-compact #effectifModule .effectif-member>.compact-horaire{grid-column:1;grid-row:2;max-width:150px}
+ .effectif-compact #effectifModule .effectif-member>.effectif-badges{grid-column:2;grid-row:2}
+ .effectif-compact #effectifModule .effectif-member>.effectif-specialisation{grid-column:1 / -1;grid-row:3}
+ .effectif-compact #effectifModule .effectif-member>.compact-compteurs{grid-column:1 / -1;grid-row:4;justify-content:flex-start}
+ .compact-details{padding:10px}
+ #effectifFicheDepliee .effectif-header-actions{margin-left:0}
+ #effectifFicheDepliee .compact-statistiques .compact-statistique{flex:1 1 85px;width:auto;min-width:0}
+ #effectifFicheDepliee .compact-statistique>.effectif-fiche-label{font-size:11px;overflow-wrap:anywhere}
+}

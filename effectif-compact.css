@@ -1,0 +1,19 @@
+.compact-horaire,.compact-compteurs{display:none}
+.effectif-compact .effectif-member{display:grid!important;grid-template-columns:110px minmax(210px,1.5fr) minmax(90px,.65fr) minmax(130px,1fr) minmax(120px,.7fr);gap:12px!important;align-items:center;min-height:52px!important;padding:8px 14px!important;border-radius:8px!important;margin-bottom:4px!important}
+.effectif-compact .effectif-identite-groupe{display:flex!important;gap:18px!important;align-items:center;min-width:0}
+.effectif-compact .effectif-grade-groupe{gap:6px!important}
+.effectif-compact .effectif-grade-icone{width:24px!important;height:28px!important;object-fit:contain}
+.effectif-compact .effectif-grade{font-size:11px!important;padding:4px 8px!important;min-width:0!important}
+.effectif-compact .effectif-name{font-size:13px!important}
+.effectif-compact .effectif-info-label{display:none}
+.effectif-compact .compact-horaire{display:flex;flex-direction:column;gap:2px;font-size:10px;color:inherit}
+.compact-horaire input{width:100%;box-sizing:border-box;background:rgba(127,150,175,.1);color:inherit;border:1px solid #63809d66;border-radius:5px;padding:5px 6px;font:inherit;font-size:12px}
+.compact-horaire output{font-size:9px}
+.effectif-compact .compact-compteurs{display:flex;gap:12px;align-items:center;justify-content:flex-end}
+.compact-compteurs>span{display:flex;gap:4px;align-items:center;font-size:12px;max-width:90px;overflow:hidden}
+.compact-compteurs .gda-icon{width:18px;height:18px}
+.compact-details{padding:16px 20px;margin:0 0 8px;border:1px solid #63809d66;border-radius:0 0 8px 8px;background:rgba(127,150,175,.08)}
+.compact-details-grille{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.compact-details small{opacity:.65}.compact-details p{margin:4px 0;font-size:13px;overflow-wrap:anywhere;white-space:pre-wrap}
+.compact-details button{margin-top:12px;padding:8px 14px;border-radius:6px;cursor:pointer}
+@media(max-width:1000px){.effectif-compact .effectif-member{grid-template-columns:90px 1fr 100px!important}.effectif-compact .effectif-specialisation{grid-column:2}.effectif-compact .compact-compteurs{grid-column:3}.compact-details-grille{grid-template-columns:1fr 1fr}}

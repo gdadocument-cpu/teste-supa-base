@@ -1,0 +1,77 @@
+(function () {
+  const cle = 'gdaEffectifCompact';
+  const actif = () => localStorage.getItem(cle) === '1';
+  document.documentElement.classList.toggle('effectif-compact', actif());
+  const originale = creerLigneMembre;
+  creerLigneMembre = function (membre, index) {
+    const html = originale(membre, index);
+    const stats = [['report', 'Rapports', membre.nombreRapports], ['objective', 'Recommandations', membre.recommandation], ['surveillance', 'Observations', membre.observation]];
+    return html.replace('<div class="effectif-identite-groupe">', `<label class="compact-horaire"><span>Horaire</span><input maxlength="80" aria-label="Horaire de ${echapperHTML(membre.nom)}" placeholder="15h sur 35h" value="${echapperHTML(membre.horaire || '')}" ${effectifPeutModifier ? '' : 'readonly'}><output aria-live="polite"></output></label><div class="effectif-identite-groupe">`)
+      .replace('</article>', `<div class="compact-compteurs">${stats.map(([icone, titre, valeur]) => `<span title="${titre} : ${echapperHTML(String(valeur || 0))}" aria-label="${titre} : ${echapperHTML(String(valeur || 0))}">${window.iconeGDA ? iconeGDA(icone) : titre}<b>${echapperHTML(String(valeur || 0))}</b></span>`).join('')}</div></article>`);
+  };
+  function fermer() {
+    document.querySelectorAll('.compact-details').forEach(el => el.remove());
+    document.querySelectorAll('.effectif-member[aria-expanded]').forEach(el => el.setAttribute('aria-expanded', 'false'));
+  }
+  function ouvrir(ligne) {
+    const deja = ligne.getAttribute('aria-expanded') === 'true';
+    fermer();
+    if (deja) return;
+    const membre = effectifMembres[Number(ligne.dataset.index)];
+    if (!membre) return;
+    ligne.setAttribute('aria-expanded', 'true');
+    const detail = document.createElement('section');
+    detail.className = 'compact-details';
+    detail.innerHTML = `<div class="compact-details-grille">${[['Steam ID', membre.steamId], ['Discord ID', membre.discordId], ['Entrée', membre.dateEntree], ['Promotion', membre.datePromotionRetro], ['Sanction', membre.sanction], ['Médailles', membre.medaille], ['Notes', membre.notes]].map(([titre, valeur]) => `<div><small>${titre}</small><p>${echapperHTML(String(valeur || '—'))}</p></div>`).join('')}</div><button type="button">Ouvrir la fiche complète${effectifPeutModifier ? ' / modifier' : ''}</button>`;
+    detail.querySelector('button').onclick = () => ouvrirFicheMembre(Number(ligne.dataset.index));
+    ligne.after(detail);
+  }
+  document.addEventListener('click', function (event) {
+    if (!actif()) return;
+    if (event.target.closest('.compact-horaire')) { event.stopPropagation(); return; }
+    if (event.target.closest('.compact-details')) return;
+    const ligne = event.target.closest('.effectif-member');
+    if (ligne) { event.stopPropagation(); ouvrir(ligne); }
+    else fermer();
+  }, true);
+  document.addEventListener('keydown', function (event) {
+    if (!actif()) return;
+    if (event.target.closest('.compact-horaire')) { event.stopPropagation(); return; }
+    if (event.target.closest('input,textarea,button')) return;
+    if (event.key === 'Escape') fermer();
+    const ligne = event.target.closest('.effectif-member');
+    if (ligne && ['Enter', ' '].includes(event.key)) { event.preventDefault(); event.stopPropagation(); ouvrir(ligne); }
+  }, true);
+  document.addEventListener('change', async function (event) {
+    const input = event.target.closest('.compact-horaire input');
+    if (!input || !effectifPeutModifier) return;
+    const membre = effectifMembres[Number(input.closest('.effectif-member').dataset.index)];
+    const sortie = input.parentElement.querySelector('output');
+    input.disabled = true;
+    sortie.textContent = 'Enregistrement…';
+    try {
+      const body = new URLSearchParams({action: 'modifierMembreEffectif', personne: membre.nom, horaire: input.value, identifiant: sessionStorage.getItem('identifiantUtilisateur') || ''});
+      const response = await fetch(EFFECTIF_API_URL, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'}, body: body.toString()});
+      const resultat = await response.json();
+      if (!resultat.success) throw new Error(resultat.message || 'Enregistrement impossible');
+      membre.horaire = input.value;
+      sortie.textContent = 'Enregistré';
+    } catch (erreur) { sortie.textContent = erreur.message; }
+    finally { input.disabled = false; }
+  });
+  document.addEventListener('change', function (event) {
+    if (event.target.id !== 'effectifCompactActivation') return;
+    localStorage.setItem(cle, event.target.checked ? '1' : '0');
+    document.documentElement.classList.toggle('effectif-compact', event.target.checked);
+    fermer();
+  });
+  const observer = new MutationObserver(function () {
+    const themes = document.querySelector('.parametres-themes-section');
+    if (!themes || document.getElementById('effectifCompactActivation')) return;
+    const bloc = document.createElement('section');
+    bloc.className = 'parametres-bloc';
+    bloc.innerHTML = `<h4>Affichage de l’effectif officier</h4><label><input id="effectifCompactActivation" type="checkbox" ${actif() ? 'checked' : ''}> Activer le mode compact</label><p>Préférence pour ce navigateur. Désactivez pour retrouver l’affichage d’origine. Les horaires enregistrés sont conservés.</p>`;
+    themes.after(bloc);
+  });
+  observer.observe(document.body, {childList: true, subtree: true});
+})();

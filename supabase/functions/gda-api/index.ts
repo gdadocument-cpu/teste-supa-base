@@ -501,6 +501,7 @@ const authenticated = async (req: Request) => {
         recommandation: nombre(base.recommendation),
         observation: nombre(base.observation),
         notes: base.notes || "",
+        horaire: publicOnly ? "" : member.hours_note || "",
         peutNoter: !publicOnly && peutNoterMembre(member),
         enPeriodeProbatoire: probatoiresParMembre.has(member?.id) || probatoiresParMatricule.has(normalise(base.matricule)),
       }
@@ -1776,6 +1777,7 @@ const authenticated = async (req: Request) => {
           for (const [source, target] of Object.entries(fields)) if (payload[source] !== undefined) patch[target] = ["promotion_changed_on", "joined_on"].includes(target) ? isoDate(payload[source]) : payload[source]
           if (payload.specialisation !== undefined) patch.specializations = texte(payload.specialisation).split(/[;,]/).map(texte).filter(Boolean)
           if (payload.medaille !== undefined) patch.medals = texte(payload.medaille).split(";").map(texte).filter(Boolean)
+          if (payload.horaire !== undefined) patch.hours_note = texte(payload.horaire).slice(0, 80)
         }
         const { data: updated, error } = await admin.from("members").update(patch).eq("id", member.id).select("*").single()
         if (error) throw error
